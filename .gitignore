@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Entorno: nunca commitear credenciales
+.env
+.env.*
+!.env.example
+
+# Archivos de órdenes guardados en disco en desarrollo
+storage/
+
+.DS_Store
+Thumbs.db
+*.log
