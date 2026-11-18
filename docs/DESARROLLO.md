@@ -205,3 +205,26 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Decisión**: en la E3 el medio de pago "puntos" queda **preparado pero apagado** en el POS. Se activa en la E4, junto con la migración de los saldos de Fidely y la acreditación automática.
 - **Por qué**: el programa de puntos es de la E4, y habilitar el cobro sin saldos ni reglas abriría la puerta a errores.
 - **Impacto**: en la E3, el modelo `Payment` admite el tipo `points`, con un flag de configuración desactivado.
+
+### D-019 · 18/11/2026 · Cliente (grupo de WhatsApp) · branding
+- **Decisión**: los colores del sistema salen **del logo de Via Vinilo**, que usa diferentes tonos de azul. Aplican al backoffice interno y a la app de clientes por igual. El cliente manda el logo en PDF vectorial (en curvas).
+- **Por qué**: al cliente le gustan esos colores y "transmiten lo que queremos transmitir". El PDF mantiene la calidad y no se deforma.
+- **Impacto**: cuando llegue el logo, se extraen los códigos de color y se arma una sola paleta (tokens en `packages/ui`) que comparten `apps/web` y `apps/pwa`. Los íconos y el manifest de la PWA salen del mismo PDF. Hasta entonces se usa una paleta provisoria de azules, marcada como `TODO(spec): branding`.
+
+### D-020 · 18/11/2026 · Cliente (grupo de WhatsApp) · comunicación
+- **Decisión**: con el cliente se habla en español, sin anglicismos: "marca" o "identidad visual" en lugar de "branding", "panel" en lugar de "dashboard", etc.
+- **Por qué**: el contacto es español y lo pidió explícitamente ("los españoles no hablamos spanglish").
+- **Impacto**: aplica a mensajes, demos y textos que vea el cliente. Los textos de la app para los clientes finales siguen en español rioplatense (vos), según CLAUDE.md.
+
+## 5. Pendientes del cliente para arrancar la E1
+
+Actualizar cuando llegue cada cosa.
+
+| Pendiente | Para qué | Estado |
+| --- | --- | --- |
+| Logo en PDF vectorial | Paleta de colores, íconos y manifest de la PWA (D-019) | Prometido el 18/11 (por Drive) |
+| Acceso a la cuenta de Hostinger | VPS para alojar el sistema (D-007) y casillas de mail por sector | Pedido el 18/11 |
+| Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
+| Capturas del CRM de Runamatic con los estados por sector | Definir la secuencia de estados de cada sector | Pendiente (actualización §6) |
+
+**Expectativa a cuidar**: Ezequiel les dijo que "en lo posible el lunes" (23/11, inicio de la E1) vayan viendo algo. Con la regla "prometer de más en tiempo y entregar antes" (actualización §4), lo que se muestre ese día tiene que estar acotado, por ejemplo la app con la marca y el tablero vacío, y depende de tener el acceso a Hostinger y el logo antes.
