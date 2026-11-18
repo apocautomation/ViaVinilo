@@ -119,6 +119,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-09 | Proveedor de IA para revisar archivos | El contrato dice que se define con el cliente. Formato, apertura, resolución y medidas se pueden chequear sin IA; la IA solo hace falta para leer las medidas escritas en texto libre en el mail. | E1 | Abierto. Propuesta técnica: chequeos deterministas y un LLM solo para extraer las medidas del cuerpo del mail. |
 | I-10 | Máquinas por sector | El SPEC da 16 máquinas agrupadas: 4 plotters de "Sublimación + Calandrado", 7 de Gran Formato y 5 de "DTF / DTF UV". Pero hay 6 sectores: no dice qué máquinas son de Látex, cuáles de DTF y cuáles de DTF UV, ni si las calandras se cuentan como máquinas. | E1 | Abierto. El seed asume que una máquina puede atender varios sectores (Gran Formato también atiende Látex; DTF también atiende DTF UV) y usa nombres genéricos ("DTF 1"…). Pedir a Ricardo y a Verónica los nombres reales. |
 | I-11 | Secuencia de estados por sector | Las secuencias sembradas salen de la actualización §2.4 y de D-013. Faltan las capturas del CRM de Runamatic por sector para confirmarlas, por ejemplo si toda la Sublimación pasa por calandra. | E1 | Abierto. Son configurables en `SectorStage`; se ajustan con las capturas. |
+| I-12 | Teléfonos fijos vs. celulares | En Argentina, "387 466-9944" puede ser un fijo o un celular escrito sin el 15. Si se guarda tal cual, el mismo celular cargado con y sin 15 queda como dos números, y no se reconoce al cliente cuando escribe por WhatsApp. | E1 | Abierto. Por defecto todo número argentino se guarda como celular `+549…` (D-025). Confirmar con Verónica que no se cargan fijos; si se cargan, quedan con el 9 de más. |
 
 ## 4. Bitácora de decisiones
 
@@ -248,6 +249,31 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Migración**: la inicial se generó con `prisma migrate diff` y se prueba aplicándola sobre un Postgres en memoria (PGlite) en `migrations.test.ts`, sin necesitar Docker.
 - **Por qué**: en la PC de desarrollo no hay Docker. Así los tests de base de datos corren en cualquier lado y la migración se prueba sobre Postgres real.
 - **Impacto**: para correr la API y el seed hace falta un Postgres (`docker compose up -d` o el Postgres 16 local) con el `DATABASE_URL` del `.env`. Pendiente de configurar: el `prisma.config.ts` antes de pasar a Prisma 7, y los puertos por entorno, porque en la PC de Ezequiel el 3001 y el 3002 ya los usan otros proyectos.
+
+### D-024 · 18/11/2026 · Desarrollo · login del personal (paso 2 del SPEC §10)
+- **Decisión**:
+  - **Login**: el personal entra con email y contraseña (`POST /auth/login`) y recibe un token JWT que dura 12 horas, una jornada del taller. Se manda como `Authorization: Bearer`.
+  - **Contraseñas**: se guardan con scrypt, que viene con Node y no necesita dependencias nativas, y tienen mínimo 10 caracteres.
+  - **Usuario y roles al día**: en cada pedido se relee el usuario. Si lo desactivan o le cambian los roles, aplica al instante, sin esperar a que venza el token.
+  - **Roles (D-017)**: todas las rutas exigen login salvo `/health` y el login. `@Roles(...)` limita por rol y OWNER siempre pasa.
+  - **Intentos**: el login acepta 5 intentos por minuto por IP. Con email inexistente, contraseña mal o usuario inactivo responde lo mismo, para no revelar qué emails existen.
+  - **Usuario inicial**: el dueño lo crea el seed desde `SEED_OWNER_EMAIL` y `SEED_OWNER_PASSWORD`. Si ya existe, no le pisa la contraseña.
+- **Por qué**: el SPEC §7 pide contraseñas hasheadas, rate limit y auditoría. La E1 necesita login de operadores y asesores antes de la gestión completa de usuarios de la E3 (D-017).
+- **Impacto**: hace falta `JWT_SECRET` en el entorno (ver `.env.example`). La pantalla de login del backoffice y el alta y edición de usuarios desde la UI quedan para un paso siguiente; por ahora los usuarios se crean con el seed o directo en la base.
+
+### D-025 · 18/11/2026 · Desarrollo · reglas de clientes (paso 2 del SPEC §10)
+- **Decisión**:
+  - **Alta desde el backoffice**: la hace un asesor (ATTENTION u OWNER), así que el cliente queda **activo** y aprobado por ese asesor. Exige nombre, apellido, DNI, al menos un email y al menos un teléfono (actualización §2.1).
+  - **Alta pendiente** (de un mail o de la app, D-014): el asesor la aprueba con `POST /customers/:id/approve`, que exige esos mismos datos mínimos y responde qué falta.
+  - **Únicos**: DNI, cada email y cada teléfono son únicos entre clientes, y el error dice cuál choca.
+  - **Normalización** (`@viavinilo/contracts`): emails en minúsculas; DNI solo con dígitos; teléfonos en E.164, con todo número argentino en la forma de celular `+549…` (I-12).
+  - **Búsqueda**: nombre y apellido sin importar tildes, mayúsculas ni orden (columna `searchText`); número de cliente; DNI; email y teléfono.
+  - **Permisos**: todo el personal consulta. Atención y el dueño cargan, editan, aprueban, bloquean (con motivo) y desbloquean. Solo el dueño da de baja.
+  - **Baja**: es lógica (`deletedAt`). Se borran los emails y teléfonos para que se puedan volver a usar en otra alta, y quedan guardados en la auditoría.
+  - **Mínimos de un cliente activo**: no puede quedarse sin email ni sin teléfono.
+  - **Auditoría**: todo cambio (alta, edición, aprobación, bloqueo, baja, contactos) queda en `AuditLog` con quién lo hizo.
+- **Por qué**: actualización §2.1 (alta obligatoria validada por asesor, DNI como clave, notas internas) y "los clientes vienen quemados de pasar sus datos": la búsqueda tiene que encontrarlos aunque escriban distinto.
+- **Impacto**: migración `20261118120000_customer_search_text`. **Todo código que cree o edite clientes** (el worker de mails, la app y la migración desde Tango) tiene que completar `searchText` con `customerSearchText()`.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

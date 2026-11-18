@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../src/auth/password";
 import { FILE_ERROR_REASONS, MACHINES, buildSectors } from "./seed-data";
 
 /** Seed idempotente: se puede correr varias veces sin duplicar. */
@@ -46,8 +47,29 @@ async function main() {
       });
     }
 
+    // Usuario dueño inicial, solo si se definió en el entorno. Nunca se pisa la contraseña de uno existente.
+    const ownerEmail = process.env.SEED_OWNER_EMAIL?.trim().toLowerCase();
+    const ownerPassword = process.env.SEED_OWNER_PASSWORD;
+    let ownerMsg = "sin usuario dueño (definí SEED_OWNER_EMAIL y SEED_OWNER_PASSWORD)";
+    if (ownerEmail && ownerPassword) {
+      const existing = await prisma.user.findUnique({ where: { email: ownerEmail } });
+      if (!existing) {
+        await prisma.user.create({
+          data: {
+            email: ownerEmail,
+            name: process.env.SEED_OWNER_NAME ?? "Dueño",
+            roles: ["OWNER"],
+            passwordHash: await hashPassword(ownerPassword),
+          },
+        });
+        ownerMsg = `usuario dueño ${ownerEmail} creado`;
+      } else {
+        ownerMsg = `usuario dueño ${ownerEmail} ya existía (no se tocó)`;
+      }
+    }
+
     console.log(
-      `Seed OK: ${sectorIds.size} sectores, ${MACHINES.length} máquinas, ${FILE_ERROR_REASONS.length} motivos de error.`,
+      `Seed OK: ${sectorIds.size} sectores, ${MACHINES.length} máquinas, ${FILE_ERROR_REASONS.length} motivos de error; ${ownerMsg}.`,
     );
   } finally {
     await prisma.$disconnect();

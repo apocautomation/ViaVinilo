@@ -34,6 +34,22 @@ pnpm dev
 | App de clientes | http://localhost:3002 |
 | Mails capturados (MailHog) | http://localhost:8025 |
 
+Para entrar a la API hace falta un usuario: definí `JWT_SECRET`, `SEED_OWNER_EMAIL` y `SEED_OWNER_PASSWORD` en el `.env` antes del seed.
+
+## API (por ahora)
+
+| Ruta | Quién | Qué hace |
+| --- | --- | --- |
+| `POST /auth/login` | público | Email y contraseña → token (12 h). Máximo 5 intentos por minuto. |
+| `GET /auth/me` | personal | Usuario y roles. |
+| `GET /customers?search=&status=&page=` | personal | Busca por nombre (sin tildes), número de cliente, DNI, email o teléfono. |
+| `POST /customers`, `PATCH /customers/:id` | atención, dueño | Alta y edición. |
+| `POST /customers/:id/approve`, `/block`, `/unblock` | atención, dueño | Validar altas pendientes y bloquear. |
+| `POST`/`DELETE /customers/:id/emails`, `/phones` | atención, dueño | Contactos. |
+| `DELETE /customers/:id` | dueño | Baja lógica. |
+
+Para probar la API sin Docker: `cd apps/api && pnpm exec tsx test/serve-test-db.ts` levanta un Postgres en memoria con las migraciones e imprime su `DATABASE_URL`.
+
 ## Comandos
 
 | Comando | Qué hace |
