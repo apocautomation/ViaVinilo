@@ -74,6 +74,9 @@ model Customer {
   customerNumber    Int             @unique @default(autoincrement())
   firstName         String?
   lastName          String?
+  /// Nombre y apellido sin tildes y en minúsculas, para buscar. Lo mantiene el servicio con
+  /// customerSearchText() de @viavinilo/contracts; todo el que cree o edite clientes tiene que usarlo.
+  searchText        String          @default("")
   /// Clave para identificar al cliente. Opcional mientras el alta está pendiente (D-014).
   dni               String?         @unique
   status            CustomerStatus  @default(PENDING)
@@ -92,6 +95,7 @@ model Customer {
   deletedAt         DateTime?
 
   @@index([status])
+  @@index([searchText])
 }
 
 /// Un cliente tiene varios emails; con ellos se identifica al remitente de un mail.
