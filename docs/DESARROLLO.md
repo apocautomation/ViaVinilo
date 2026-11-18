@@ -120,7 +120,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-10 | Máquinas por sector | El SPEC da 16 máquinas agrupadas: 4 plotters de "Sublimación + Calandrado", 7 de Gran Formato y 5 de "DTF / DTF UV". Pero hay 6 sectores: no dice qué máquinas son de Látex, cuáles de DTF y cuáles de DTF UV, ni si las calandras se cuentan como máquinas. | E1 | Abierto. El seed asume que una máquina puede atender varios sectores (Gran Formato también atiende Látex; DTF también atiende DTF UV) y usa nombres genéricos ("DTF 1"…). Pedir a Ricardo y a Verónica los nombres reales. |
 | I-11 | Secuencia de estados por sector | Las secuencias sembradas salen de la actualización §2.4 y de D-013. Faltan las capturas del CRM de Runamatic por sector para confirmarlas, por ejemplo si toda la Sublimación pasa por calandra. | E1 | Abierto. Son configurables en `SectorStage`; se ajustan con las capturas. |
 | I-12 | Teléfonos fijos vs. celulares | En Argentina, "387 466-9944" puede ser un fijo o un celular escrito sin el 15. Si se guarda tal cual, el mismo celular cargado con y sin 15 queda como dos números, y no se reconoce al cliente cuando escribe por WhatsApp. | E1 | Abierto. Por defecto todo número argentino se guarda como celular `+549…` (D-025). Confirmar con Verónica que no se cargan fijos; si se cargan, quedan con el 9 de más. |
-| I-13 | Agente conversacional con Paperclip (D-026) | (1) El contrato pone el asistente en la **E2** y solo **dentro de la app**; que el agente **responda mails** no está en el Anexo I. (2) Arrancarlo apenas esté el VPS adelanta la E2 antes de cerrar la E1 ("una etapa por vez"). (3) El contrato dice "IA local + OpenAI de respaldo" (D-006): falta definir si Paperclip es esa IA local o una plataforma aparte, y qué costo tiene. (4) Responder mails solo, sin un humano, choca con "el asistente nunca promete ni modifica nada" (actualización 2.7): hay que acotar qué puede contestar. | E2 | Abierto. Lo define Ezequiel. Hasta entonces no se programa nada del agente. |
+| I-13 | Agente conversacional con Paperclip (D-026) | (1) El contrato pone el asistente en la **E2** y solo **dentro de la app**; que el agente **responda mails** no está en el Anexo I. (2) Arrancarlo apenas esté el VPS adelanta la E2 antes de cerrar la E1 ("una etapa por vez"). (3) El contrato dice "IA local + OpenAI de respaldo" (D-006): falta definir si Paperclip es esa IA local o una plataforma aparte, y qué costo tiene. (4) Responder mails solo, sin un humano, choca con "el asistente nunca promete ni modifica nada" (actualización 2.7): hay que acotar qué puede contestar. | E2 | **Resuelto en D-028 y D-029** (Trip como referencia: Ollama `qwen3:8b` con OpenAI de respaldo, Paperclip para gobernar a los agentes). Queda ver si el VPS del cliente tiene margen para el modelo local. |
 | I-14 | Mail de un cliente bloqueado | No está definido qué pasa si escribe a una casilla un cliente con estado "bloqueado". | E1 | Abierto. Por defecto no se crea la orden: el mail queda registrado en el log de ingesta como rechazado, para que atención lo vea. |
 | I-15 | Mails sin archivo y respuestas en el mismo hilo | (a) La actualización 2.3 dice que si falta el adjunto la orden pasa a "Archivo con error", pero la 2.5 dice que una orden nunca nace de un "hola". (b) Si el cliente responde en el mismo hilo (por ejemplo para reenviar un archivo con error), no está definido si se suma a la orden existente o crea otra. | E1 | Abierto. Por defecto: (a) un mail sin adjuntos ni links de WeTransfer o Drive no crea orden y queda en el log como "sin archivo"; (b) cada mail con archivo crea su propia orden. |
 
@@ -303,6 +303,58 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Log**: cada mail procesado queda en `MailIngestLog` con su resultado, para auditar que no se pierda ninguno (actualización §2.2). `MailboxState.lastMessageAt` queda listo para la alerta de "casilla sin mails en X horas", que todavía no está programada.
 - **Por qué**: SPEC E1.1 y su criterio de aceptación (400 órdenes por día sin duplicar ni perder mails), actualización §2.2 y D-014.
 - **Impacto**: migración `20261118150000_mail_ingest`. El worker usa el cliente de Prisma generado desde `apps/api/prisma/schema.prisma`. **No probado contra un servidor IMAP real ni con Redis**: la lectura IMAP se probó con una casilla simulada. Hace falta el acceso a Hostinger para probarla de punta a punta.
+
+### D-028 · 18/11/2026 · Ezequiel (chat de desarrollo) · agente conversacional · resuelve I-13
+- **Decisión**:
+  1. **Canales**: el agente responde a los clientes **en la app y también por mail**. Se toma como **ajuste menor sin costo** (contrato, cláusula 9.1); no se le plantea al cliente como algo adicional.
+  2. **Orden de etapas**: **primero se cierra la Etapa 1 y después se arranca la 2.** La única excepción es si el agente hace falta para entregar la E1, para poder cobrarla o para que Ezequiel vea resultados antes.
+  3. **Tecnología**:
+     - **Paperclip** es la plataforma que coordina al agente. Es la que APOC ya usa en otros desarrollos (Ezequiel mencionó "Gemi" y el de Automatía, a verificar con las carpetas que va a pasar).
+     - El modelo es una **IA local gratuita** (Llama u otra similar), con **OpenAI de respaldo**. Es coherente con el contrato (D-006).
+  4. **Alcance**: el agente responde solo, **sin revisión humana**, únicamente con información que está en el sistema:
+     - dónde está mi pedido y en qué estado;
+     - cuánto falta para la entrega;
+     - si ya se imprimió;
+     - si recibieron el archivo;
+     - las preguntas frecuentes cargadas (precios, horarios, cómo enviar archivos).
+     Todo lo demás lo deriva a un asesor, y nunca promete ni modifica nada (actualización 2.7).
+- **Por qué**: lo que más mensajes genera son justamente esas consultas de estado (el 70–90%, SPEC §1), y todas se responden con datos del sistema. Lo que no está en el sistema es donde el bot actual "se toma atribuciones".
+- **Impacto**:
+  - "Cuánto falta" necesita que la E1 complete `estimatedReadyAt` en las órdenes. Sin ese dato el agente tiene que decir que no lo sabe y derivar.
+  - Los mails que hoy no crean orden porque no traen archivo (I-15, `SKIPPED_NO_FILES`) son justamente las consultas que el agente va a contestar en la E2. Ya quedan registrados en `MailIngestLog`.
+  - Las respuestas por mail salen por SMTP con Reply-To a la casilla del sector, igual que el mail de alta (D-027).
+  - Hay que definir al arrancar la E2: qué modelo local se usa y si entra en el VPS de Hostinger del cliente (si hace falta más servidor, lo paga el cliente, según el contrato). Ver D-029.
+
+### D-029 · 19/11/2026 · Ezequiel + desarrollo · Trip como referencia del agente (verificación de D-028)
+- **Decisión**: el agente de Via Vinilo se arma **como el de Trip** (`Apoc Automation Clientes/Trip`), que es el desarrollo de APOC con IA local. Elevatex y GEMI se revisaron y no aplican (ver más abajo).
+- **Cómo está armado en Trip** (verificado en el código):
+  - **El agente que atiende clientes es código propio dentro de la API** (`apps/api/src/mensajeria/agente.ts`), no corre dentro de Paperclip:
+    - junta los mensajes que el cliente manda seguidos (unos 3,5 s);
+    - arma el contexto con la ficha del cliente y el catálogo vigente, que sale del sistema;
+    - llama al modelo con **herramientas que leen la base** (paquetes, salidas, guardar datos, pasar a un vendedor);
+    - si no sabe algo, deriva y se apaga en esa conversación.
+  - **Modelos**: Ollama local (`qwen3:8b` para responder y `qwen3:1.7b` para clasificar) y, si falla o tarda (90 s), **OpenAI por API** (`gpt-4.1-mini` por defecto). Se cambian desde el sistema sin tocar código (`apps/api/src/config/claves.ts`, clave `agente.modelo`).
+  - **Paperclip va al lado, como "gobierno de los agentes"** (`docs/plan-implementacion.md` §9): presupuesto de gasto por agente (tope de OpenAI), aprobación humana para acciones sensibles, auditoría y un "Builder" con Claude Code. El plan prevé que, si Paperclip no sostiene la velocidad de un chat, el mensaje vaya directo al agente y Paperclip quede para presupuestos y auditoría.
+  - **Infraestructura**: Ollama y Paperclip corren en un proyecto Docker aparte (`infra/agente/docker-compose.yml`), con Paperclip con su propia base Postgres. Ollama tiene tope de 6 vCPU y 12 GB y prioridad baja, para que una ráfaga de mensajes no ponga lento el sistema. El plan estima unos 6 GB para Ollama y 3 GB para Paperclip.
+  - **Control desde el sistema**:
+    - el agente arranca **apagado** y tiene interruptor general;
+    - números de prueba;
+    - editor del prompt con versiones y vuelta atrás;
+    - conversación de prueba que no manda nada;
+    - registro de cada respuesta (proveedor, modelo, tiempo, tokens).
+- **Qué se reusa para Via Vinilo**:
+  - El enrutador Ollama → OpenAI, el registro de respuestas, el editor de prompt y la conversación de prueba.
+  - El patrón de herramientas que leen la base. Para Via Vinilo serían: estado de mis órdenes, cuánto falta, preguntas frecuentes, precios por sistema y pasar a un asesor (D-028).
+  - **Lo nuevo**: el canal de mail (Trip solo tiene WhatsApp, Instagram y Facebook) y el canal de la app.
+- **Elevatex y GEMI**:
+  - En **Elevatex**, Paperclip es un orquestador **interno**: sus agentes corren con Claude Code (`adapterType: 'claude_local'`), trabajan por tareas asincrónicas y tienen la regla "No envías nada"; una persona aprueba todo lo que sale.
+  - **GEMI** atiende clientes por WhatsApp con un núcleo conversacional propio (Kapso) y Claude por API, **sin Paperclip**.
+  - Ninguno de los dos usa modelos locales.
+- **Por qué**: Trip ya resolvió el mismo problema (IA local gratuita, OpenAI de respaldo, solo datos del sistema, Paperclip para gobernar), con el mismo stack que Via Vinilo (NestJS + Prisma). Reusarlo baja el riesgo y el tiempo de la E2.
+- **Impacto**:
+  - **Pendiente nuevo**: ver el plan del VPS de Hostinger del cliente. Trip calcula 8 vCPU, con unos 6 GB solo para el modelo local. Si no alcanza, la ampliación la paga el cliente, según el contrato.
+  - Para atender clientes reales hace falta una **cuenta de API** de OpenAI, no una suscripción (en GEMI hubo que cambiarla por eso).
+  - Nada de esto se programa antes de cerrar la E1 (D-028).
 
 ## 5. Pendientes del cliente para arrancar la E1
 
