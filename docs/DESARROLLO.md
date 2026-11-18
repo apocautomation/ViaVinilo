@@ -242,7 +242,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - El logo de solo texto (`docs/marca/logo-texto.svg`) queda sin uso asignado; candidato para los mails.
 - **Por qué**: según el cliente, el de la mascota es "más humanizado" para los clientes, y el del isotipo es el adecuado para lo administrativo.
 - **Impacto**: los SVG se extrajeron del PDF vectorial y se guardan también en `docs/marca/`.
-- **Actualización 18/11, 11:40 (grupo de WhatsApp)**: el cliente va a mandar **otra versión de la mascota, con vinilos en los brazos**. Ezequiel respondió que "calcula" que va para la app de clientes. *Todavía no es definitivo.* Cuando llegue, se confirma con el cliente y, si va en la PWA, reemplaza a `logo-mascota.svg` y a los íconos de instalación. Ver pendientes en el §5.
+- **Actualización 18/11, 11:40 (grupo de WhatsApp)**: el cliente va a mandar **otra versión de la mascota, con vinilos en los brazos**. Ezequiel respondió que "calcula" que va para la app de clientes. *Todavía no es definitivo.* Cuando llegue, se confirma con el cliente y, si va en la PWA, reemplaza a `logo-mascota.svg` y a los íconos de instalación. Ver pendientes en el §5. **Resuelto en D-031.**
 
 ### D-023 · 18/11/2026 · Desarrollo · base técnica del monorepo (paso 1 del SPEC §10)
 - **Decisión**:
@@ -392,6 +392,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Queda **pendiente para el paso 5**: editar medida, precio y descripción desde la ficha de la orden (actualización §2.4), dividir órdenes y editar el catálogo de motivos de error. También volver un paso atrás (I-16).
   - Notificar al cliente en cada cambio es del paso 6 (push y mail).
 
+### D-031 · 19/11/2026 · Ezequiel · logo definitivo de la app de clientes (actualiza D-022)
+- **Decisión**: el logo de la app de clientes es **el último logo del PDF** (texto apilado "VIA / VINILO / MAYORISTA GRAFICO") con la **mascota de los vinilos** en lugar de la mascota original. Los íconos para instalar la app usan la mascota de los vinilos sola, sobre blanco.
+- **Cómo se armó** (reproducible con `docs/marca/scripts/`):
+  - **La mascota** llegó como JPG con fondo gris claro (`docs/marca/mascota-vinilos-original.jpg`). Se le sacó el fondo con un relleno desde los bordes, que frena en el contorno oscuro, así el cuerpo blanco queda intacto (`mascota-vinilos.png`).
+  - **El texto** se copió del PDF como **trazos vectoriales**, solo los del último logo, para que se vea nítido en cualquier tamaño.
+  - **El logo** es un SVG de unos 21 KB con la mascota incrustada (reducida y con paleta de colores para que pese poco) y el texto vectorial.
+- **Por qué**: lo decidió el cliente; la mascota con los vinilos muestra el rubro. La versión anterior queda guardada como `docs/marca/logo-mascota-original.svg`.
+- **Impacto**: cambian `apps/pwa/public/logo-mascota.svg` y los íconos de `apps/pwa/public/icons/` (192, 512 y 180 px). El backoffice sigue con el logo del isotipo (D-022).
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
@@ -399,7 +408,7 @@ Actualizar cuando llegue cada cosa.
 | Pendiente | Para qué | Estado |
 | --- | --- | --- |
 | Logo en PDF vectorial | Paleta de colores, íconos y manifest de la PWA (D-019) | **Recibido el 18/11** (D-021, D-022) |
-| Mascota con vinilos en los brazos | Posible logo e ícono de la app de clientes (D-022) | Prometida el 18/11 a las 11:40 |
+| Mascota con vinilos en los brazos | Logo e ícono de la app de clientes (D-022) | **Recibida el 19/11** (D-031) |
 | Nombres reales de las 16 máquinas y su sector | Seed de máquinas (I-10) | Pendiente |
 | Acceso a la cuenta de Hostinger | VPS para alojar el sistema (D-007) y casillas de mail por sector | Pedido el 18/11 |
 | Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
