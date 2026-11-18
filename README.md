@@ -50,6 +50,15 @@ Para entrar a la API hace falta un usuario: definí `JWT_SECRET`, `SEED_OWNER_EM
 
 Para probar la API sin Docker: `cd apps/api && pnpm exec tsx test/serve-test-db.ts` levanta un Postgres en memoria con las migraciones e imprime su `DATABASE_URL`.
 
+## Ingesta de mails
+
+El worker lee las casillas de cada sector cada minuto y crea las órdenes. La fuente se elige con `MAIL_SOURCE`:
+
+- `mailhog` (desarrollo): con `docker compose up -d`, mandá un mail por SMTP a `localhost:1025` dirigido a, por ejemplo, `dtf@viavinilo.local` (el dominio sale de `SEED_MAIL_DOMAIN`). El worker lo toma de MailHog y crea la orden.
+- `imap` (producción): Hostinger, con `IMAP_<SECTOR>_USER` / `IMAP_<SECTOR>_PASS` por sector. Solo lee, no marca los mails, y arranca desde el momento de la primera conexión.
+
+Cada mail procesado queda en la tabla `MailIngestLog` con su resultado. Detalle de las reglas en `docs/DESARROLLO.md` (D-027).
+
 ## Comandos
 
 | Comando | Qué hace |

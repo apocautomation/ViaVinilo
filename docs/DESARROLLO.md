@@ -120,6 +120,9 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-10 | Máquinas por sector | El SPEC da 16 máquinas agrupadas: 4 plotters de "Sublimación + Calandrado", 7 de Gran Formato y 5 de "DTF / DTF UV". Pero hay 6 sectores: no dice qué máquinas son de Látex, cuáles de DTF y cuáles de DTF UV, ni si las calandras se cuentan como máquinas. | E1 | Abierto. El seed asume que una máquina puede atender varios sectores (Gran Formato también atiende Látex; DTF también atiende DTF UV) y usa nombres genéricos ("DTF 1"…). Pedir a Ricardo y a Verónica los nombres reales. |
 | I-11 | Secuencia de estados por sector | Las secuencias sembradas salen de la actualización §2.4 y de D-013. Faltan las capturas del CRM de Runamatic por sector para confirmarlas, por ejemplo si toda la Sublimación pasa por calandra. | E1 | Abierto. Son configurables en `SectorStage`; se ajustan con las capturas. |
 | I-12 | Teléfonos fijos vs. celulares | En Argentina, "387 466-9944" puede ser un fijo o un celular escrito sin el 15. Si se guarda tal cual, el mismo celular cargado con y sin 15 queda como dos números, y no se reconoce al cliente cuando escribe por WhatsApp. | E1 | Abierto. Por defecto todo número argentino se guarda como celular `+549…` (D-025). Confirmar con Verónica que no se cargan fijos; si se cargan, quedan con el 9 de más. |
+| I-13 | Agente conversacional con Paperclip (D-026) | (1) El contrato pone el asistente en la **E2** y solo **dentro de la app**; que el agente **responda mails** no está en el Anexo I. (2) Arrancarlo apenas esté el VPS adelanta la E2 antes de cerrar la E1 ("una etapa por vez"). (3) El contrato dice "IA local + OpenAI de respaldo" (D-006): falta definir si Paperclip es esa IA local o una plataforma aparte, y qué costo tiene. (4) Responder mails solo, sin un humano, choca con "el asistente nunca promete ni modifica nada" (actualización 2.7): hay que acotar qué puede contestar. | E2 | Abierto. Lo define Ezequiel. Hasta entonces no se programa nada del agente. |
+| I-14 | Mail de un cliente bloqueado | No está definido qué pasa si escribe a una casilla un cliente con estado "bloqueado". | E1 | Abierto. Por defecto no se crea la orden: el mail queda registrado en el log de ingesta como rechazado, para que atención lo vea. |
+| I-15 | Mails sin archivo y respuestas en el mismo hilo | (a) La actualización 2.3 dice que si falta el adjunto la orden pasa a "Archivo con error", pero la 2.5 dice que una orden nunca nace de un "hola". (b) Si el cliente responde en el mismo hilo (por ejemplo para reenviar un archivo con error), no está definido si se suma a la orden existente o crea otra. | E1 | Abierto. Por defecto: (a) un mail sin adjuntos ni links de WeTransfer o Drive no crea orden y queda en el log como "sin archivo"; (b) cada mail con archivo crea su propia orden. |
 
 ## 4. Bitácora de decisiones
 
@@ -274,6 +277,32 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Auditoría**: todo cambio (alta, edición, aprobación, bloqueo, baja, contactos) queda en `AuditLog` con quién lo hizo.
 - **Por qué**: actualización §2.1 (alta obligatoria validada por asesor, DNI como clave, notas internas) y "los clientes vienen quemados de pasar sus datos": la búsqueda tiene que encontrarlos aunque escriban distinto.
 - **Impacto**: migración `20261118120000_customer_search_text`. **Todo código que cree o edite clientes** (el worker de mails, la app y la migración desde Tango) tiene que completar `searchText` con `customerSearchText()`.
+
+### D-026 · 18/11/2026 · Ezequiel (chat de desarrollo) · alcance de la fase y agente conversacional
+- **Decisión**:
+  - **Ritmo**: no se construye toda la Etapa 1 de una. Hay que acompañar el proceso de producción real de cada sector, así que por ahora se avanza con la **ingesta de mails (paso 3)** contra MailHog y después se adapta a Hostinger.
+  - **Próximo paso**: cuando esté el VPS, se sube lo hecho y se empieza con el **agente conversacional en Paperclip, con OpenAI de respaldo**. El agente respondería a los clientes por la app (de forma conversacional) **y a los mails**.
+- **Por qué**: el proceso evolutivo y de producción de cada sector todavía se está relevando; las capturas de Runamatic y las máquinas reales siguen pendientes (I-10, I-11).
+- **Impacto**: lo del agente tiene **puntos abiertos (I-13)** contra el contrato y la actualización. No se programa nada del agente hasta resolverlos.
+
+### D-027 · 18/11/2026 · Desarrollo · ingesta de mails (paso 3 del SPEC §10)
+- **Decisión**:
+  - **Núcleo único** (`apps/worker/src/mail/ingest.ts`) con dos fuentes intercambiables según `MAIL_SOURCE`:
+    - **imap**: Hostinger, una casilla por sector. Lee en modo solo lectura: no marca los mails como leídos, así el personal los sigue viendo igual durante la transición.
+    - **mailhog**: desarrollo. MailHog **no tiene IMAP**, así que se lee por su API web, se rutea por destinatario y se borra el mail leído.
+  - **Lectura**: cada 60 s con un job programado de BullMQ.
+  - **IMAP**: guarda el último UID por casilla (`MailboxState`). **La primera conexión arranca desde ahora** y no importa el historial (si no, entrarían años de mails como órdenes). Si el servidor renumera la casilla (cambia el UIDVALIDITY), se retoma desde ahora y queda anotado.
+  - **Deduplicación** por Message-ID **y sector**: un mail con copia a dos casillas crea una orden en cada una. Si el mail no trae Message-ID, se usa un hash del contenido.
+  - **Cliente**: se identifica por el email del remitente (cualquiera de sus emails).
+    - Activo → orden en "Archivo recibido".
+    - Sin alta → cliente pendiente + orden en "Alta pendiente" + mail con el link de alta, como máximo uno por día (D-014). Las respuestas a ese mail vuelven a la casilla del sector (Reply-To, actualización §2.2).
+    - Bloqueado → no hay orden (I-14).
+  - **Un mail con varios adjuntos = una orden con varios archivos.** Se descartan los logos incrustados de la firma. Los archivos van a disco (`STORAGE_DIR`) antes de crear la orden, con clave estable por mail.
+  - **Del cuerpo** se guardan el asunto, el texto (hasta 4.000 caracteres), las medidas declaradas (por ejemplo "1,20 x 0,80 m" → 120 × 80 cm) y los links de WeTransfer, Drive o Dropbox, sin descargarlos.
+  - **No crean orden**: los mails sin adjuntos ni links (I-15) y las respuestas automáticas o rebotes.
+  - **Log**: cada mail procesado queda en `MailIngestLog` con su resultado, para auditar que no se pierda ninguno (actualización §2.2). `MailboxState.lastMessageAt` queda listo para la alerta de "casilla sin mails en X horas", que todavía no está programada.
+- **Por qué**: SPEC E1.1 y su criterio de aceptación (400 órdenes por día sin duplicar ni perder mails), actualización §2.2 y D-014.
+- **Impacto**: migración `20261118150000_mail_ingest`. El worker usa el cliente de Prisma generado desde `apps/api/prisma/schema.prisma`. **No probado contra un servidor IMAP real ni con Redis**: la lectura IMAP se probó con una casilla simulada. Hace falta el acceso a Hostinger para probarla de punta a punta.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
