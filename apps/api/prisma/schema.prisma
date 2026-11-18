@@ -1,0 +1,322 @@
+// Modelo de datos de la Etapa 1. Ver docs/DESARROLLO.md (decisiones) y docs/SPEC.md §4.
+// Montos con Decimal, nunca float. Fechas en UTC; se muestran en America/Argentina/Salta.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+/// Debe coincidir con SECTOR_CODES de @viavinilo/contracts.
+enum SectorCode {
+  DTF
+  DTF_UV
+  GRAN_FORMATO
+  LATEX
+  CALANDRADO
+  SUBLIMACION
+}
+
+/// Debe coincidir con JOB_STATUSES de @viavinilo/contracts. Textos para el cliente en JOB_STATUS_LABELS.
+enum JobStatus {
+  PENDING_SIGNUP // Alta pendiente (D-014): mail de alguien que todavía no es cliente activo
+  RECEIVED // Archivo recibido
+  FILE_ERROR // Archivo con error
+  QUOTED // Cotizado
+  DEPOSIT_RECEIVED // Seña recibida (D-013), solo si la orden requiere seña
+  PRINTED // Impreso
+  CALENDERING // En proceso de calandra (Sublimación / Calandrado)
+  READY // Terminado, listo para retirar
+  DELIVERED // Entregado
+  CANCELLED // Cancelado
+}
+
+/// Alta de clientes validada por un asesor (actualización §2.1).
+enum CustomerStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+}
+
+enum JobSource {
+  EMAIL
+  COUNTER
+  WEB // reservado; no hay pedido de impresión por web (D-009)
+  WHATSAPP
+  API
+}
+
+enum PaymentStatus {
+  PENDING
+  DEPOSIT
+  PAID
+  CURRENT_ACCOUNT
+}
+
+/// Roles mínimos de la E1 (D-017). La gestión completa de roles va en la E3.
+enum UserRole {
+  OWNER
+  PRODUCTION
+  ATTENTION
+}
+
+// ───────────────────────── Clientes ─────────────────────────
+
+model Customer {
+  id                String          @id @default(cuid())
+  /// Número de cliente único y visible (actualización §2.1).
+  /// TODO(spec): al migrar desde Tango/Runamatic, decidir si se conservan los números existentes.
+  customerNumber    Int             @unique @default(autoincrement())
+  firstName         String?
+  lastName          String?
+  /// Clave para identificar al cliente. Opcional mientras el alta está pendiente (D-014).
+  dni               String?         @unique
+  status            CustomerStatus  @default(PENDING)
+  /// Notas internas, nunca visibles para el cliente.
+  internalNotes     String?
+  isTrade           Boolean         @default(true)
+  notificationPrefs Json?
+  approvedAt        DateTime?
+  approvedById      String?
+  approvedBy        User?           @relation("CustomerApprovedBy", fields: [approvedById], references: [id])
+  emails            CustomerEmail[]
+  phones            CustomerPhone[]
+  jobs              JobOrder[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  @@index([status])
+}
+
+/// Un cliente tiene varios emails; con ellos se identifica al remitente de un mail.
+model CustomerEmail {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Guardado siempre en minúsculas.
+  email      String   @unique
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+model CustomerPhone {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Formato E.164.
+  phone      String   @unique
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+// ───────────────────────── Personal ─────────────────────────
+
+model User {
+  id                String       @id @default(cuid())
+  email             String       @unique
+  name              String
+  passwordHash      String?
+  roles             UserRole[]
+  active            Boolean      @default(true)
+  /// Sectores de un usuario con rol PRODUCTION.
+  sectors           UserSector[]
+  jobEvents         JobEvent[]
+  approvedCustomers Customer[]   @relation("CustomerApprovedBy")
+  auditLogs         AuditLog[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  deletedAt         DateTime?
+}
+
+model UserSector {
+  userId   String
+  sectorId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sector   Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sectorId])
+}
+
+// ───────────────────────── Producción ─────────────────────────
+
+model Sector {
+  id         String          @id @default(cuid())
+  code       SectorCode      @unique
+  name       String
+  /// Casilla de Hostinger del sector (dtf@, granformato@, ...).
+  inboxEmail String?         @unique
+  active     Boolean         @default(true)
+  stages     SectorStage[]
+  machines   MachineSector[]
+  users      UserSector[]
+  jobs       JobOrder[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+/// Secuencia de estados de cada sector (actualización §2.4). Los pasos son obligatorios.
+model SectorStage {
+  id       String    @id @default(cuid())
+  sectorId String
+  sector   Sector    @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  status   JobStatus
+  position Int
+
+  @@unique([sectorId, status])
+  @@unique([sectorId, position])
+}
+
+model Machine {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  active    Boolean         @default(true)
+  /// Una máquina puede atender más de un sector (TODO(spec): I-10).
+  sectors   MachineSector[]
+  jobs      JobOrder[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model MachineSector {
+  machineId String
+  sectorId  String
+  machine   Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  sector    Sector  @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@id([machineId, sectorId])
+}
+
+/// Producto mínimo para elegir el material en la E1. El catálogo completo es de la E3.
+model Product {
+  id           String     @id @default(cuid())
+  sku          String?    @unique
+  name         String
+  isPrintMedia Boolean    @default(false)
+  widthMeters  Decimal?   @db.Decimal(6, 3)
+  active       Boolean    @default(true)
+  jobs         JobOrder[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+}
+
+model JobOrder {
+  id                String        @id @default(cuid())
+  /// Correlativo; se muestra como VV-000123 (R-JOB-1).
+  number            Int           @unique @default(autoincrement())
+  customerId        String
+  customer          Customer      @relation(fields: [customerId], references: [id])
+  sectorId          String
+  sector            Sector        @relation(fields: [sectorId], references: [id])
+  machineId         String?
+  machine           Machine?      @relation(fields: [machineId], references: [id])
+  materialProductId String?
+  material          Product?      @relation(fields: [materialProductId], references: [id])
+  /// Orden original cuando un operador divide un mail en varias órdenes.
+  parentJobId       String?
+  parentJob         JobOrder?     @relation("JobSplit", fields: [parentJobId], references: [id])
+  childJobs         JobOrder[]    @relation("JobSplit")
+  status            JobStatus
+  priority          Int           @default(0)
+  /// Medida, precio y descripción: los edita el empleado y los ve el cliente (actualización §2.4).
+  description       String?
+  measure           String?
+  /// Lo que el cliente declaró en el mail (texto o datos extraídos).
+  requestedSpecs    Json?
+  quotedAmount      Decimal?      @db.Decimal(14, 2)
+  quotedAt          DateTime?
+  depositRequired   Boolean       @default(false)
+  depositAmount     Decimal?      @db.Decimal(14, 2)
+  depositPaidAt     DateTime?
+  paymentStatus     PaymentStatus @default(PENDING)
+  estimatedReadyAt  DateTime?
+  /// Desde esta fecha corren los 30 días de retención de archivos (D-015).
+  deliveredAt       DateTime?
+  source            JobSource
+  /// Message-ID del mail, para no duplicar órdenes.
+  sourceMessageId   String?       @unique
+  /// Links de WeTransfer o Drive del mail; no se descargan en la E1.
+  externalLinks     String[]
+  files             JobFile[]
+  events            JobEvent[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  @@index([sectorId, status])
+  @@index([customerId])
+  @@index([status, deliveredAt])
+}
+
+model JobFile {
+  id         String    @id @default(cuid())
+  jobId      String
+  job        JobOrder  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  filename   String
+  storageKey String    @unique
+  sizeBytes  BigInt
+  mime       String
+  /// SHA-256 del contenido.
+  checksum   String
+  /// Fecha en que se borró el archivo del storage por retención (D-015).
+  purgedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@index([jobId])
+}
+
+/// Historial de estados de una orden.
+model JobEvent {
+  id               String           @id @default(cuid())
+  jobId            String
+  job              JobOrder         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromStatus       JobStatus?
+  toStatus         JobStatus
+  userId           String?
+  user             User?            @relation(fields: [userId], references: [id])
+  reasonId         String?
+  reason           FileErrorReason? @relation(fields: [reasonId], references: [id])
+  note             String?
+  notifiedCustomer Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+
+  @@index([jobId, createdAt])
+}
+
+/// Catálogo editable de motivos de "Archivo con error".
+model FileErrorReason {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  label     String
+  active    Boolean    @default(true)
+  sortOrder Int        @default(0)
+  events    JobEvent[]
+}
+
+// ───────────────────────── Auditoría ─────────────────────────
+
+/// Cambios de precio, anulaciones, ajustes de stock, cierres de caja y forzados del owner.
+model AuditLog {
+  id        String   @id @default(cuid())
+  entity    String
+  entityId  String
+  action    String
+  before    Json?
+  after     Json?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
