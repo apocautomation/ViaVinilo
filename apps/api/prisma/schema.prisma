@@ -68,31 +68,33 @@ enum UserRole {
 // ───────────────────────── Clientes ─────────────────────────
 
 model Customer {
-  id                String          @id @default(cuid())
+  id                 String          @id @default(cuid())
   /// Número de cliente único y visible (actualización §2.1).
   /// TODO(spec): al migrar desde Tango/Runamatic, decidir si se conservan los números existentes.
-  customerNumber    Int             @unique @default(autoincrement())
-  firstName         String?
-  lastName          String?
+  customerNumber     Int             @unique @default(autoincrement())
+  firstName          String?
+  lastName           String?
   /// Nombre y apellido sin tildes y en minúsculas, para buscar. Lo mantiene el servicio con
   /// customerSearchText() de @viavinilo/contracts; todo el que cree o edite clientes tiene que usarlo.
-  searchText        String          @default("")
+  searchText         String          @default("")
   /// Clave para identificar al cliente. Opcional mientras el alta está pendiente (D-014).
-  dni               String?         @unique
-  status            CustomerStatus  @default(PENDING)
+  dni                String?         @unique
+  status             CustomerStatus  @default(PENDING)
   /// Notas internas, nunca visibles para el cliente.
-  internalNotes     String?
-  isTrade           Boolean         @default(true)
-  notificationPrefs Json?
-  approvedAt        DateTime?
-  approvedById      String?
-  approvedBy        User?           @relation("CustomerApprovedBy", fields: [approvedById], references: [id])
-  emails            CustomerEmail[]
-  phones            CustomerPhone[]
-  jobs              JobOrder[]
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  deletedAt         DateTime?
+  internalNotes      String?
+  isTrade            Boolean         @default(true)
+  notificationPrefs  Json?
+  approvedAt         DateTime?
+  /// Último mail con el link de alta enviado a un remitente nuevo (D-014). Evita mandarlo en cada mail.
+  signupInviteSentAt DateTime?
+  approvedById       String?
+  approvedBy         User?           @relation("CustomerApprovedBy", fields: [approvedById], references: [id])
+  emails             CustomerEmail[]
+  phones             CustomerPhone[]
+  jobs               JobOrder[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  deletedAt          DateTime?
 
   @@index([status])
   @@index([searchText])
@@ -164,6 +166,8 @@ model Sector {
   machines   MachineSector[]
   users      UserSector[]
   jobs       JobOrder[]
+  mailbox    MailboxState?
+  mailLogs   MailIngestLog[]
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 }
@@ -247,8 +251,8 @@ model JobOrder {
   /// Desde esta fecha corren los 30 días de retención de archivos (D-015).
   deliveredAt       DateTime?
   source            JobSource
-  /// Message-ID del mail, para no duplicar órdenes.
-  sourceMessageId   String?       @unique
+  /// Message-ID del mail. Único por sector: el mismo mail con copia a dos casillas crea una orden en cada una.
+  sourceMessageId   String?
   /// Links de WeTransfer o Drive del mail; no se descargan en la E1.
   externalLinks     String[]
   files             JobFile[]
@@ -257,6 +261,7 @@ model JobOrder {
   updatedAt         DateTime      @updatedAt
   deletedAt         DateTime?
 
+  @@unique([sectorId, sourceMessageId])
   @@index([sectorId, status])
   @@index([customerId])
   @@index([status, deliveredAt])
@@ -306,6 +311,55 @@ model FileErrorReason {
   active    Boolean    @default(true)
   sortOrder Int        @default(0)
   events    JobEvent[]
+}
+
+// ───────────────────────── Ingesta de mails ─────────────────────────
+
+/// Resultado de procesar un mail de una casilla de sector (actualización §2.2: loguear y monitorear).
+enum MailIngestResult {
+  CREATED // se creó la orden
+  PENDING_SIGNUP // remitente sin alta: orden en "Alta pendiente" (D-014)
+  DUPLICATE // ese Message-ID ya había creado una orden en el sector
+  SKIPPED_NO_FILES // sin adjuntos ni links (I-15)
+  SKIPPED_AUTO_REPLY // respuesta automática, rebote o lista
+  REJECTED_BLOCKED // cliente bloqueado (I-14)
+  ERROR
+}
+
+/// Un registro por mail procesado. Sirve para auditar que no se pierdan mails.
+model MailIngestLog {
+  id        String           @id @default(cuid())
+  sectorId  String
+  sector    Sector           @relation(fields: [sectorId], references: [id])
+  messageId String
+  fromEmail String?
+  subject   String?
+  /// Fecha del mail según su encabezado.
+  sentAt    DateTime?
+  result    MailIngestResult
+  jobId     String?
+  fileCount Int              @default(0)
+  error     String?
+  createdAt DateTime         @default(now())
+
+  @@index([sectorId, createdAt])
+  @@index([messageId])
+}
+
+/// Estado de lectura de la casilla de cada sector.
+model MailboxState {
+  id            String    @id @default(cuid())
+  sectorId      String    @unique
+  sector        Sector    @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  /// UIDVALIDITY de IMAP: si cambia, los UID se reinician y hay que releer.
+  uidValidity   BigInt?
+  /// Último UID procesado. Se leen solo los mails nuevos y no se tocan las marcas de leído.
+  lastUid       Int       @default(0)
+  lastPolledAt  DateTime?
+  /// Último mail recibido: sirve para alertar si una casilla no recibe nada en horario laboral.
+  lastMessageAt DateTime?
+  lastError     String?
+  updatedAt     DateTime  @updatedAt
 }
 
 // ───────────────────────── Auditoría ─────────────────────────
