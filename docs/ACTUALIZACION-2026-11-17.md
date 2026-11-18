@@ -1,6 +1,8 @@
 # Actualización de alcance — llamada del 17/11/2026
 
-Llamada de 71 minutos con Ricardo y Verónica Rabadan Martín (esposa y socia; lleva la atención y la parte textil). Por APOC estuvieron Ezequiel y Elian. Este documento tiene prioridad sobre SPEC.md donde se contradigan. Leer primero SPEC.md y después esto.
+Llamada de 71 minutos con Ricardo y Verónica Rabadan Martín (esposa y socia; lleva la atención y la parte textil). Por APOC estuvieron Ezequiel y Elian. Este documento tiene prioridad sobre SPEC.md donde se contradigan.
+
+> Lo vigente está en `docs/DESARROLLO.md`, que tiene prioridad sobre este documento. El contrato del 18/11 cerró varios puntos que acá figuran "a evaluar": asistente en la app (D-005), servidor (D-007), Interbanking (D-008) y chat interno (D-010).
 
 ## 1. Resumen ejecutivo
 

@@ -2,7 +2,7 @@
 
 Documento fuente para el desarrollo con Codex. Cliente: Ricardo "Rick" y Verónica Rabadan Martín (Via Vinilo, Salta). Proyecto cerrado por APOC Automation el 16/11/2026. Líder de proyecto: Ezequiel. Comercial: Elian. Fuentes: discovery (13/11), cuestionario respondido, propuesta comercial y llamada de cierre (16/11).
 
-> Ver también `docs/ACTUALIZACION-2026-11-17.md`, que tiene prioridad sobre este documento donde se contradigan.
+> Este documento es la base técnica del 16/11 y está **parcialmente reemplazado**. Lo vigente está en `docs/DESARROLLO.md` (etapas del contrato del 18/11, decisiones y puntos abiertos), que tiene prioridad sobre este documento y sobre `docs/ACTUALIZACION-2026-11-17.md`. Partes obsoletas: §2 (etapas), §5 Etapa 2 (agente de WhatsApp) y R-BOT-1; ver D-003 a D-009.
 
 ## 0. Decisiones pendientes (resolver antes de arrancar)
 

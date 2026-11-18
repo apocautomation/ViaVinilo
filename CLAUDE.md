@@ -2,7 +2,11 @@
 
 Sistema a medida para Via Vinilo (Salta): producción de impresiones, app de clientes (el centro del sistema), WhatsApp de soporte, ERP con facturación ARCA y tiendas online.
 
-Antes de cualquier tarea leé `docs/SPEC.md` y después `docs/ACTUALIZACION-2026-11-17.md`. La actualización tiene prioridad sobre SPEC.md cuando se contradicen (Etapa 2 rediseñada, estados por sector, alta de clientes con DNI y número de cliente, mail en Hostinger, pasos obligatorios). Ante una duda de negocio, la fuente de verdad son esos dos documentos. Si algo no está ahí, no lo inventes: dejá un `TODO(spec):` y mencionalo en el PR.
+Antes de cualquier tarea leé **`docs/DESARROLLO.md`**: es el registro de decisiones y cambios, resume el alcance vigente (etapas del contrato del 18/11) y lista las inconsistencias abiertas. Solo si necesitás más detalle, seguí con `docs/ACTUALIZACION-2026-11-17.md` y después con `docs/SPEC.md`.
+
+Precedencia: `DESARROLLO.md` > contrato del 18/11 > `ACTUALIZACION-2026-11-17.md` > `SPEC.md`. La propuesta comercial en PDF está obsoleta. Ante una duda de negocio, la fuente de verdad son esos documentos. Si algo no está ahí, o es un punto abierto del §3 de `DESARROLLO.md`, no lo inventes: dejá un `TODO(spec):` con el ID (por ejemplo `TODO(spec): I-02`) y mencionalo en el PR.
+
+Toda definición nueva (reunión, mensaje del cliente, decisión técnica) se registra en `docs/DESARROLLO.md` con fecha, fuente y porqué, en el mismo PR que la implementa. Si encontrás una inconsistencia, agregala al §3 y avisale a Ezequiel.
 
 ## Stack (ver decisión D1 en SPEC)
 
@@ -26,7 +30,7 @@ Antes de cualquier tarea leé `docs/SPEC.md` y después `docs/ACTUALIZACION-2026
 
 ## Reglas de trabajo
 
-* Una etapa por vez. Hoy se trabaja en la Etapa 1. No construir módulos de etapas posteriores salvo lo mínimo que el modelo necesite.
+* Una etapa por vez. Hoy se trabaja en la Etapa 1 (inicio: 23/11/2026). No construir módulos de etapas posteriores salvo lo mínimo que el modelo necesite.
 * Hacer PRs chicos, uno por paso del plan de la §10 del SPEC.
 * Toda lógica de negocio con regla `R-*` del SPEC lleva un test que la cite en el nombre. Ejemplo: `it("R-JOB-3: bloquea PRINTING sin seña")`.
 * Idempotencia en todo lo que venga de afuera: mails (Message-ID), webhooks de WhatsApp (wamid) y pagos.
@@ -42,5 +46,5 @@ Antes de cualquier tarea leé `docs/SPEC.md` y después `docs/ACTUALIZACION-2026
 
 * Tests, lint y typecheck en verde.
 * Migración incluida y seed actualizado.
-* README o SPEC actualizado si cambió un comportamiento.
+* README o SPEC actualizado si cambió un comportamiento, y la decisión registrada en `docs/DESARROLLO.md`.
 * Probado de punta a punta con un caso real: mail → tablero → push en la PWA.
