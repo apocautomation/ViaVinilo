@@ -36,6 +36,18 @@ pnpm dev
 
 Para entrar a la API hace falta un usuario: definí `JWT_SECRET`, `SEED_OWNER_EMAIL` y `SEED_OWNER_PASSWORD` en el `.env` antes del seed.
 
+## Backoffice y tablero de producción
+
+`apps/web` en http://localhost:3000: login del personal y tablero por sector (`/tablero/DTF`, `/tablero/SUBLIMACION`…), con un botón grande por tarjeta para el próximo paso y actualización en vivo. Las reglas están en `docs/DESARROLLO.md` (D-030).
+
+Para cargar órdenes de demo pasando por la ingesta real de mails:
+
+```bash
+cd apps/worker && DATABASE_URL=... STORAGE_DIR=./storage pnpm exec tsx test/demo-mails.ts
+```
+
+Crea dos clientes activos, el usuario `impresor@viavinilo.test` (producción de DTF, sin contraseña: asignarla a mano) y cinco órdenes, una de un remitente sin alta.
+
 ## API (por ahora)
 
 | Ruta | Quién | Qué hace |
@@ -47,6 +59,12 @@ Para entrar a la API hace falta un usuario: definí `JWT_SECRET`, `SEED_OWNER_EM
 | `POST /customers/:id/approve`, `/block`, `/unblock` | atención, dueño | Validar altas pendientes y bloquear. |
 | `POST`/`DELETE /customers/:id/emails`, `/phones` | atención, dueño | Contactos. |
 | `DELETE /customers/:id` | dueño | Baja lógica. |
+| `GET /sectors`, `GET /file-error-reasons` | personal | Sectores visibles y motivos de error. |
+| `GET /jobs/board?sector=&q=&machineId=&groupByMaterial=` | personal (producción, solo su sector) | Tablero kanban. |
+| `GET /jobs/board/stream?sector=` | ídem | Avisos en vivo (SSE). |
+| `GET /jobs/:id` | ídem | Ficha de la orden con archivos e historial. |
+| `POST /jobs/:id/transition` | ídem | Cambio de estado con las reglas del sector. |
+| `PATCH /jobs/:id/machine` | ídem | Asignar máquina. |
 
 Para probar la API sin Docker: `cd apps/api && pnpm exec tsx test/serve-test-db.ts` levanta un Postgres en memoria con las migraciones e imprime su `DATABASE_URL`.
 

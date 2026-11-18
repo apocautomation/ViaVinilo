@@ -123,6 +123,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-13 | Agente conversacional con Paperclip (D-026) | (1) El contrato pone el asistente en la **E2** y solo **dentro de la app**; que el agente **responda mails** no está en el Anexo I. (2) Arrancarlo apenas esté el VPS adelanta la E2 antes de cerrar la E1 ("una etapa por vez"). (3) El contrato dice "IA local + OpenAI de respaldo" (D-006): falta definir si Paperclip es esa IA local o una plataforma aparte, y qué costo tiene. (4) Responder mails solo, sin un humano, choca con "el asistente nunca promete ni modifica nada" (actualización 2.7): hay que acotar qué puede contestar. | E2 | **Resuelto en D-028 y D-029** (Trip como referencia: Ollama `qwen3:8b` con OpenAI de respaldo, Paperclip para gobernar a los agentes). Queda ver si el VPS del cliente tiene margen para el modelo local. |
 | I-14 | Mail de un cliente bloqueado | No está definido qué pasa si escribe a una casilla un cliente con estado "bloqueado". | E1 | Abierto. Por defecto no se crea la orden: el mail queda registrado en el log de ingesta como rechazado, para que atención lo vea. |
 | I-15 | Mails sin archivo y respuestas en el mismo hilo | (a) La actualización 2.3 dice que si falta el adjunto la orden pasa a "Archivo con error", pero la 2.5 dice que una orden nunca nace de un "hola". (b) Si el cliente responde en el mismo hilo (por ejemplo para reenviar un archivo con error), no está definido si se suma a la orden existente o crea otra. | E1 | Abierto. Por defecto: (a) un mail sin adjuntos ni links de WeTransfer o Drive no crea orden y queda en el log como "sin archivo"; (b) cada mail con archivo crea su propia orden. |
+| I-16 | Volver un paso atrás | Los pasos son obligatorios y no se pueden saltear, pero un operador puede equivocarse de botón (por ejemplo, marcar "Impreso" una orden que no imprimió). Hoy nadie puede deshacerlo; solo cancelar. | E1 | Abierto. Propuesta: que el dueño pueda volver una orden un paso atrás, con motivo obligatorio y registro en la auditoría. Confirmar con Verónica. |
 
 ## 4. Bitácora de decisiones
 
@@ -355,6 +356,41 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Pendiente nuevo**: ver el plan del VPS de Hostinger del cliente. Trip calcula 8 vCPU, con unos 6 GB solo para el modelo local. Si no alcanza, la ampliación la paga el cliente, según el contrato.
   - Para atender clientes reales hace falta una **cuenta de API** de OpenAI, no una suscripción (en GEMI hubo que cambiarla por eso).
   - Nada de esto se programa antes de cerrar la E1 (D-028).
+
+### D-030 · 19/11/2026 · Desarrollo · tablero de producción (paso 4 del SPEC §10)
+- **Decisión**:
+  - **Reglas de cambio de estado** (`packages/contracts/src/transitions.ts`): funciones puras que usan la API para validar y el tablero para mostrar solo los botones posibles.
+    - Se avanza **de a un paso** según la secuencia del sector (`SectorStage`). Saltear da error: "los pasos no se pueden saltear" (actualización §2.4).
+    - **"Seña recibida"** solo aplica si la orden la requiere; si no, de Cotizado se pasa a Impreso (D-013).
+    - **R-JOB-3**: sin seña no se imprime. Solo el dueño puede forzarlo; queda en el historial ("Sin seña (forzado por el dueño)") y en la auditoría.
+    - **R-JOB-2**: para pasar a Cotizado hay que cargar el precio. Se puede cargar también la hora estimada de entrega, que el agente va a necesitar para "cuánto falta" (D-028). Todo cambio de precio va a la auditoría.
+    - **"Archivo con error"**: exige motivo del catálogo. Se puede marcar mientras el trabajo no esté impreso y vuelve a "Archivo recibido".
+    - **Cancelar**: exige motivo.
+    - **"Entregado"** registra `deliveredAt`, desde donde corre la retención de 30 días (D-015).
+  - **Tablero** (`GET /jobs/board`): una columna por paso de la secuencia del sector, con "Archivo con error" después de "Archivo recibido".
+    - Ordena por llegada, o agrupado por material, y marca cuántas órdenes pendientes comparten material (E1.4).
+    - No muestra altas pendientes ni canceladas; de las entregadas, solo las del día.
+    - Filtros por máquina, material, fecha y búsqueda por número de orden o cliente (sin tildes).
+  - **Asignación de máquina**: solo máquinas que trabajan en el sector de la orden.
+  - **Permisos (D-017)**: producción solo ve y mueve su(s) sector(es) (`UserSector`); el dueño y atención ven todos.
+  - **Dos clics a la vez**: si dos operadores tocan la misma orden, avanza una sola vez; el segundo recibe "la orden cambió, actualizá el tablero".
+  - **Tiempo real**: SSE (`GET /jobs/board/stream`). La API revisa cada 2 s si cambió el sector (cantidad de órdenes y última modificación) y avisa; el tablero se recarga solo.
+    - Se eligió revisar la base y no un aviso entre procesos porque las órdenes nuevas las crea **otro proceso** (el worker de mails), y así no hace falta Redis ni LISTEN/NOTIFY.
+    - El navegador usa `fetch` con el token en el encabezado, no `EventSource`, para no poner el token en la URL.
+  - **Al aprobar un alta**, las órdenes en "Alta pendiente" pasan a "Archivo recibido" y entran al tablero (D-014).
+  - **Backoffice** (`apps/web`):
+    - login del personal;
+    - tablero por sector con pestañas;
+    - un **botón grande por tarjeta** con el próximo paso ("Cotizar", "Marcar impreso", "Pasar a calandra"…);
+    - acciones secundarias de error de archivo, cancelar e "Imprimir sin seña" (solo el dueño);
+    - selector de máquina;
+    - indicador "En vivo";
+    - horas siempre en horario de Salta y en 24 h, sin depender de la PC del taller.
+- **Por qué**: SPEC E1.4 y actualización §2.4 ("los pasos son obligatorios", "botones grandes de un clic", "si cuesta trabajo, los empleados no lo van a usar").
+- **Impacto**:
+  - El token del personal se guarda en `localStorage` del navegador del taller. Antes de producción conviene evaluar pasarlo a una cookie `httpOnly`.
+  - Queda **pendiente para el paso 5**: editar medida, precio y descripción desde la ficha de la orden (actualización §2.4), dividir órdenes y editar el catálogo de motivos de error. También volver un paso atrás (I-16).
+  - Notificar al cliente en cada cambio es del paso 6 (push y mail).
 
 ## 5. Pendientes del cliente para arrancar la E1
 
