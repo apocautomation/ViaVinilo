@@ -180,10 +180,35 @@ export class CustomersService {
         missing,
       });
     }
-    return this.changeStatus(customer, "ACTIVE", "approve", userId, {
+    const approved = await this.changeStatus(customer, "ACTIVE", "approve", userId, {
       approvedAt: new Date(),
       approvedById: userId,
     });
+    await this.releasePendingJobs(customer.id, userId);
+    return approved;
+  }
+
+  /**
+   * D-014: las órdenes que llegaron mientras el alta estaba pendiente pasan a "Archivo recibido"
+   * y entran al tablero de su sector.
+   */
+  private async releasePendingJobs(customerId: string, userId: string) {
+    const pending = await this.prisma.jobOrder.findMany({
+      where: { customerId, status: "PENDING_SIGNUP", deletedAt: null },
+      select: { id: true },
+    });
+    for (const job of pending) {
+      await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.jobOrder.updateMany({
+          where: { id: job.id, status: "PENDING_SIGNUP" },
+          data: { status: "RECEIVED" },
+        });
+        if (count === 0) return;
+        await tx.jobEvent.create({
+          data: { jobId: job.id, fromStatus: "PENDING_SIGNUP", toStatus: "RECEIVED", userId, note: "Alta del cliente aprobada" },
+        });
+      });
+    }
   }
 
   async block(id: string, reason: string, userId: string) {
