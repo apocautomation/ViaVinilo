@@ -237,6 +237,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - El logo de solo texto (`docs/marca/logo-texto.svg`) queda sin uso asignado; candidato para los mails.
 - **Por qué**: según el cliente, el de la mascota es "más humanizado" para los clientes, y el del isotipo es el adecuado para lo administrativo.
 - **Impacto**: los SVG se extrajeron del PDF vectorial y se guardan también en `docs/marca/`.
+- **Actualización 18/11, 11:40 (grupo de WhatsApp)**: el cliente va a mandar **otra versión de la mascota, con vinilos en los brazos**. Ezequiel respondió que "calcula" que va para la app de clientes. *Todavía no es definitivo.* Cuando llegue, se confirma con el cliente y, si va en la PWA, reemplaza a `logo-mascota.svg` y a los íconos de instalación. Ver pendientes en el §5.
 
 ### D-023 · 18/11/2026 · Desarrollo · base técnica del monorepo (paso 1 del SPEC §10)
 - **Decisión**:
@@ -255,6 +256,7 @@ Actualizar cuando llegue cada cosa.
 | Pendiente | Para qué | Estado |
 | --- | --- | --- |
 | Logo en PDF vectorial | Paleta de colores, íconos y manifest de la PWA (D-019) | **Recibido el 18/11** (D-021, D-022) |
+| Mascota con vinilos en los brazos | Posible logo e ícono de la app de clientes (D-022) | Prometida el 18/11 a las 11:40 |
 | Nombres reales de las 16 máquinas y su sector | Seed de máquinas (I-10) | Pendiente |
 | Acceso a la cuenta de Hostinger | VPS para alojar el sistema (D-007) y casillas de mail por sector | Pedido el 18/11 |
 | Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
