@@ -127,6 +127,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-17 | Cómo obligar a mover las tarjetas (D-032) | Ezequiel pidió que los operadores **tengan que** mover la tarjeta para poder hacer su trabajo. Hoy nada impide imprimir sin tocar el tablero: el archivo llega por mail y el operador lo abre desde la casilla. | E1 | Abierto. Propuesta (ya dibujada en el tablero): el archivo para imprimir **solo se descarga desde la tarjeta**, y se libera cuando la orden está lista para imprimir (cotizada y, si corresponde, con seña). Para que funcione, los operadores no deberían tener acceso a las casillas de mail. Confirmar con Verónica y Ricardo. |
 | I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. |
 | I-19 | Envío de trabajos desde la app (D-034) | La actualización §2.9 dice que la recepción de trabajos va por la app, y la §2.5 pide límites de acciones por cliente y evitar duplicados (el caso de los 17 pedidos repetidos por Telegram). No está definido cuántos envíos por día se permiten ni cómo se detecta un archivo repetido. | E1 | Abierto. Propuesta: la orden solo se crea con archivo, sector y medida; si el mismo archivo (mismo hash) ya está en un pedido abierto del cliente, se avisa en lugar de crear otro; tope configurable de envíos por hora. Confirmar con Verónica. |
+| I-20 | VPS para la IA local (D-035) | El VPS del cliente tiene 4 vCPU y 15 GB de RAM. Trip calcula 8 vCPU para correr `qwen3:8b` en local (D-029). | E2 | Abierto. Alcanza para la E1. Al arrancar la E2, medir la latencia del modelo en este VPS. Si no alcanza, el cliente amplía el plan (contrato) o se usa más OpenAI de respaldo. |
 
 ## 4. Bitácora de decisiones
 
@@ -464,6 +465,25 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Rutas `(auth)`: `/ingresar` y `/alta`. `/alta` es la dirección que va en el mail a remitentes nuevos (`SIGNUP_URL`).
   - La API no cambia.
 
+### D-035 · 19/11/2026 · Ezequiel + desarrollo · preparación del VPS de Hostinger
+- **Definición**: Ezequiel dio acceso por SSH al VPS del cliente (D-007) y pidió prepararlo. El acceso es con una clave SSH dedicada a este proyecto, que queda solo en la máquina de desarrollo. La IP y los accesos no se guardan en el repo.
+- **Cómo quedó el servidor**:
+  - **Base**: Ubuntu 26.04 LTS, 4 vCPU, 15 GB de RAM y 193 GB de disco. Se actualizaron todos los paquetes.
+  - **Usuario `deploy`**: tiene sudo y está en el grupo `docker`. Desde ahora se trabaja con este usuario y no con root. El sistema va en `/srv/viavinilo`.
+  - **Firewall (ufw)**: entra solo el 22 (SSH), el 80 y el 443.
+  - **fail2ban**: banea por 1 hora a quien falle 5 veces el SSH en 10 minutos.
+  - **Parches de seguridad automáticos**: unattended-upgrades.
+  - **Docker 29 y Docker Compose 2.40**: instalados desde los repositorios de Ubuntu.
+  - **Caddy 2.6**: instalado como servidor web, sin dominios configurados todavía.
+- **Por qué**:
+  - Docker Compose permite levantar en el servidor el mismo stack que en local (`docker compose`: Postgres, Redis, API, worker y las dos apps).
+  - Caddy saca y renueva solo el certificado HTTPS.
+  - Los paquetes son de Ubuntu, sin scripts de terceros, para que las actualizaciones automáticas los cubran.
+- **Impacto**:
+  - Docker publica puertos salteando ufw, así que los contenedores tienen que escuchar solo en `127.0.0.1`. Al exterior se sale únicamente por Caddy.
+  - **Faltan los dominios**: por ejemplo, uno para el ERP y otro para la app de clientes, apuntando a la IP del VPS. Sin eso no hay HTTPS, y la PWA y el push lo necesitan.
+  - **Choque con D-029**: Trip calcula 8 vCPU para el modelo local del agente y el VPS tiene 4. Alcanza de sobra para la E1. Para la IA local de la E2 hay que medir; si no alcanza, la ampliación la paga el cliente, según el contrato. Ver I-20.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
@@ -473,7 +493,9 @@ Actualizar cuando llegue cada cosa.
 | Logo en PDF vectorial | Paleta de colores, íconos y manifest de la PWA (D-019) | **Recibido el 18/11** (D-021, D-022) |
 | Mascota con vinilos en los brazos | Logo e ícono de la app de clientes (D-022) | **Recibida el 19/11** (D-031) |
 | Nombres reales de las 16 máquinas y su sector | Seed de máquinas (I-10) | Pendiente |
-| Acceso a la cuenta de Hostinger | VPS para alojar el sistema (D-007) y casillas de mail por sector | Pedido el 18/11 |
+| Acceso al VPS de Hostinger | Alojar el sistema (D-007) | **Recibido el 19/11**: servidor preparado (D-035) |
+| Dominios para el ERP y la app de clientes | HTTPS, PWA y push (D-035) | Pendiente |
+| Casillas de mail por sector en Hostinger | Ingesta IMAP (D-027) | Pendiente |
 | Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
 | Capturas del CRM de Runamatic con los estados por sector | Definir la secuencia de estados de cada sector | Pendiente (actualización §6) |
 
