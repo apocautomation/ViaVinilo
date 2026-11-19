@@ -15,6 +15,8 @@ x-app: &app
     DATABASE_URL: postgresql://viavinilo:${POSTGRES_PASSWORD}@postgres:5432/viavinilo?schema=public
     REDIS_URL: redis://redis:6379
     TZ: America/Argentina/Salta
+    # Sin SMTP, en producción el código de ingreso no se escribe en el log: se responde que no se pudo enviar (D-038).
+    NODE_ENV: production
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_started }
@@ -50,6 +52,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?falta NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SUPPORT_WHATSAPP_URL: ${SUPPORT_WHATSAPP_URL:-}
     working_dir: /app/apps/api
     # Aplica las migraciones pendientes antes de arrancar.
     command: ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main.js"]
@@ -57,6 +60,7 @@ services:
       DATABASE_URL: postgresql://viavinilo:${POSTGRES_PASSWORD}@postgres:5432/viavinilo?schema=public
       REDIS_URL: redis://redis:6379
       TZ: America/Argentina/Salta
+      NODE_ENV: production
       API_PORT: "3001"
     ports:
       - "127.0.0.1:3001:3001"

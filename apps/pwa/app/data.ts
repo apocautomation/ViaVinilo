@@ -142,6 +142,5 @@ export const ORDERS: Order[] = [
   },
 ];
 
-export const CUSTOMER = { name: "Remeras del Norte", contact: "Juan Pérez", number: 128, points: 12450 };
 
 export const ars = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });

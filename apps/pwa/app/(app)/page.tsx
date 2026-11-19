@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { AlertTriangle, ChevronRight, Clock, PackageCheck } from "lucide-react";
 import { AppBar, StatusPill, StepsBar } from "../components";
-import { CUSTOMER, ORDERS, ars } from "../data";
+import { ORDERS, ars } from "../data";
+import { useSession } from "../session";
 
 /** Mis pedidos: lo primero que ve el cliente al abrir la app (D-034). */
 export default function PedidosPage() {
+  const { me } = useSession();
   const [tab, setTab] = useState<"curso" | "entregados">("curso");
   const active = ORDERS.filter((o) => o.status !== "DELIVERED");
   const list = tab === "curso" ? active : ORDERS.filter((o) => o.status === "DELIVERED");
@@ -21,12 +23,15 @@ export default function PedidosPage() {
         <section className="hello">
           <img src="/icons/icon-192.png" alt="" />
           <div>
-            <strong>Hola, {CUSTOMER.contact.split(" ")[0]}</strong>
+            <strong>Hola{me.firstName ? `, ${me.firstName}` : ""}</strong>
             <span>
-              {CUSTOMER.name} · Cliente N.º {CUSTOMER.number}
+              {me.businessName ? `${me.businessName} · ` : ""}Cliente N.º {me.customerNumber}
             </span>
           </div>
         </section>
+
+        {/* TODO(spec): paso 6 del SPEC §10 — reemplazar por los pedidos reales del cliente. */}
+        <p className="sample-note">Pedidos de ejemplo: el seguimiento real se conecta en el próximo paso.</p>
 
         <div className="stats">
           <div className="card stat">
