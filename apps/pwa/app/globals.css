@@ -973,16 +973,6 @@ details.faq p {
 .splash {
   min-height: 100dvh;
 }
-.sample-note {
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-  font-size: 12.5px;
-  font-weight: 600;
-  text-align: center;
-}
 .password-row {
   position: relative;
   display: block;
@@ -996,5 +986,24 @@ details.faq p {
   right: 5px;
   top: 50%;
   transform: translateY(-50%);
+  color: var(--color-text-muted);
+}
+.empty-orders {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.empty-orders strong {
+  color: var(--color-text);
+}
+.splash-error {
+  min-height: 80dvh;
+  display: grid;
+  place-content: center;
+  gap: 14px;
+  text-align: center;
   color: var(--color-text-muted);
 }

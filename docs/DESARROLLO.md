@@ -589,6 +589,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Las sesiones de clientes siguen igual que en D-038: token con `kind: "customer"`, separado del personal, y se cortan al bloquear.
   - **Al cambiar la contraseña de un cliente se cortan las sesiones que tenía abiertas**: un token emitido antes de `appPasswordSetAt` ya no sirve. Así, si alguien conocía la contraseña vieja, queda afuera.
 
+### D-040 · 19/11/2026 · Ezequiel (chat de desarrollo) · producción sin datos de prueba
+- **Definición**: producción arranca limpia.
+  - Se borró de la base el cliente de prueba de la verificación de D-039, con su auditoría, y la numeración de clientes volvió a empezar en el N.º 1.
+  - La app de clientes deja de mostrar los pedidos de ejemplo de D-034. Ahora muestra "No tenés pedidos en curso" hasta conectar el seguimiento real (paso 6).
+  - Primer cliente real: Ezequiel, para probar la app.
+- **Por qué**: Ezequiel pidió borrar todos los datos de prueba. Mostrarles pedidos inventados a clientes reales confunde.
+- **Impacto**:
+  - Las pantallas del ERP marcadas "Vista previa" siguen con datos de ejemplo. Son maquetas de etapas posteriores (D-032) y no leen la base.
+  - Si la API falla (sin conexión o el sistema caído), la app muestra "Probar de nuevo" en lugar de quedar en blanco.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
