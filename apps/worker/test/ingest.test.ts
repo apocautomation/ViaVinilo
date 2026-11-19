@@ -187,7 +187,7 @@ describe("ingesta de un mail (SPEC E1.1)", () => {
 });
 
 describe("remitentes sin alta (D-014)", () => {
-  it("crea el cliente pendiente, la orden en 'Alta pendiente' y manda el link de alta una sola vez", async () => {
+  it("crea el cliente pendiente, la orden en 'Alta pendiente' y manda el mail de alta una sola vez", async () => {
     const mail = (subject: string) =>
       buildMail({
         from: "Ana Gómez <ana@nuevo.test>",

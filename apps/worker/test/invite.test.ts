@@ -30,12 +30,12 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
-describe("mail con el link de alta (D-014)", () => {
-  it("se envía por SMTP con Reply-To a la casilla del sector y el link de alta", async () => {
+describe("mail a un remitente que no es cliente (D-014, D-038)", () => {
+  it("D-038: se envía por SMTP con Reply-To al sector y deriva a WhatsApp, sin link de autoalta", async () => {
     const notifier = createSmtpNotifier({
       url: `smtp://127.0.0.1:${port}`,
       from: "Via Vinilo <no-responder@viavinilo.test>",
-      signupUrl: "https://app.viavinilo.test/alta",
+      contactUrl: "https://wa.me/5490000000000",
     });
     const sector = { code: "GRAN_FORMATO", inboxEmail: "granformato@viavinilo.test" } as Sector;
 
@@ -47,15 +47,23 @@ describe("mail con el link de alta (D-014)", () => {
     // Las respuestas tienen que volver al sector, no rebotar a DTF (actualización §2.2).
     expect(mail.replyTo?.text).toBe("granformato@viavinilo.test");
     expect(mail.headers.get("auto-submitted")).toBe("auto-generated");
-    expect(mail.subject).toBe("Via Vinilo · Completá tu alta para imprimir");
-    expect(mail.text).toContain("https://app.viavinilo.test/alta");
+    expect(mail.subject).toBe("Via Vinilo · Cómo darte de alta para imprimir");
+    expect(mail.text).toContain("Escribinos por WhatsApp acá: https://wa.me/5490000000000");
+    expect(mail.text).not.toContain("/alta");
     expect(mail.text).toContain('("Lona 2x1")');
     expect(mail.text).toContain("Tu trabajo quedó guardado");
   });
 
+  it("D-038: sin el número de WhatsApp cargado, el mail igual dice que escriban por WhatsApp", async () => {
+    const { signupInviteText } = await import("../src/mail/invite");
+    const text = signupInviteText("", null);
+    expect(text).toContain("Escribinos por WhatsApp a Via Vinilo.");
+    expect(text).not.toContain("http");
+  });
+
   it("sin SMTP_URL no rompe: el worker arranca y el envío se saltea (D-037)", async () => {
     const before = received.length;
-    const notifier = createSmtpNotifier({ url: "", from: "Via Vinilo <x@viavinilo.test>", signupUrl: "https://x.test/alta" });
+    const notifier = createSmtpNotifier({ url: "", from: "Via Vinilo <x@viavinilo.test>", contactUrl: "" });
     const sector = { code: "DTF", inboxEmail: null } as Sector;
 
     await expect(notifier.sendSignupInvite({ to: "ana@nuevo.test", sector, subject: null })).resolves.toBeUndefined();

@@ -43,6 +43,14 @@ enum CustomerStatus {
   BLOCKED
 }
 
+/// Condición frente al IVA, para facturar con ARCA (E3, D-038).
+enum TaxCondition {
+  RESPONSABLE_INSCRIPTO
+  MONOTRIBUTO
+  EXENTO
+  CONSUMIDOR_FINAL
+}
+
 enum JobSource {
   EMAIL
   COUNTER
@@ -83,7 +91,21 @@ model Customer {
   /// Notas internas, nunca visibles para el cliente.
   internalNotes      String?
   isTrade            Boolean         @default(true)
+  /// Empresa o marca con la que trabaja el cliente (D-038).
+  businessName       String?
+  /// Datos fiscales para facturar con ARCA (E3). Opcionales hasta la E3 (D-038).
+  /// CUIT con 11 dígitos, sin guiones.
+  cuit               String?         @unique
+  legalName          String?
+  taxCondition       TaxCondition?
+  fiscalAddress      String?
+  city               String?
+  province           String?
+  /// Cuenta corriente habilitada (E3).
+  creditEnabled      Boolean         @default(false)
+  /// { push: boolean, email: boolean }. Sin valor = los dos prendidos (D-038).
   notificationPrefs  Json?
+  loginCodes         CustomerLoginCode[]
   approvedAt         DateTime?
   /// Último mail con el link de alta enviado a un remitente nuevo (D-014). Evita mandarlo en cada mail.
   signupInviteSentAt DateTime?
@@ -122,6 +144,23 @@ model CustomerPhone {
   isPrimary  Boolean  @default(false)
   createdAt  DateTime @default(now())
 
+  @@index([customerId])
+}
+
+/// Código de 6 números para entrar a la app (D-016, D-038). Se guarda solo el hash.
+model CustomerLoginCode {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Email al que se mandó el código, en minúsculas.
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
   @@index([customerId])
 }
 

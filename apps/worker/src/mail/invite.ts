@@ -5,19 +5,25 @@ import type { IngestNotifier } from "./ingest";
 export interface SmtpConfig {
   url: string;
   from: string;
-  /** Link de alta de la app de clientes. */
-  signupUrl: string;
+  /** Link de WhatsApp de la empresa (wa.me). Vacío mientras no se tenga el número (D-038). */
+  contactUrl: string;
 }
 
-/** Texto del mail de alta (D-014). Español rioplatense, sin promesas. */
-export function signupInviteText(signupUrl: string, subject: string | null): string {
+/**
+ * Texto del mail a un remitente que no es cliente (D-014, cambiado por D-038): no hay autoalta,
+ * el alta la hace un asesor después de que el cliente escribe por WhatsApp. Sin promesas.
+ */
+export function signupInviteText(contactUrl: string, subject: string | null): string {
   const ref = subject ? ` ("${subject}")` : "";
+  const contact = contactUrl.trim()
+    ? `Escribinos por WhatsApp acá: ${contactUrl.trim()}`
+    : "Escribinos por WhatsApp a Via Vinilo.";
   return [
     "¡Hola!",
     "",
-    `Recibimos tu mail${ref} en Via Vinilo. Para empezar a imprimir tus trabajos necesitamos que te des de alta como cliente del gremio.`,
+    `Recibimos tu mail${ref} en Via Vinilo. Para imprimir tus trabajos tenés que estar dado de alta como cliente del gremio.`,
     "",
-    `Completá tus datos acá: ${signupUrl}`,
+    `${contact} Un asesor te da de alta y te deja listo el acceso a la app.`,
     "",
     "Tu trabajo quedó guardado: cuando un asesor apruebe el alta, pasa a producción y lo vas a poder seguir desde la app.",
     "",
@@ -43,8 +49,8 @@ export function createSmtpNotifier(config: SmtpConfig): IngestNotifier {
         to,
         // Las respuestas vuelven a la casilla del sector, no a la de DTF (actualización §2.2).
         replyTo: sector.inboxEmail ?? undefined,
-        subject: "Via Vinilo · Completá tu alta para imprimir",
-        text: signupInviteText(config.signupUrl, subject),
+        subject: "Via Vinilo · Cómo darte de alta para imprimir",
+        text: signupInviteText(config.contactUrl, subject),
         headers: { "Auto-Submitted": "auto-generated" },
       });
     },
