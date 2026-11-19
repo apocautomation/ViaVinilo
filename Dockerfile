@@ -26,4 +26,7 @@ COPY . .
 # URL pública de la API que usa el ERP desde el navegador. Next la fija al compilar.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# WhatsApp de la empresa para "¿Todavía no sos cliente?" en la app (D-038).
+ARG NEXT_PUBLIC_SUPPORT_WHATSAPP_URL=""
+ENV NEXT_PUBLIC_SUPPORT_WHATSAPP_URL=$NEXT_PUBLIC_SUPPORT_WHATSAPP_URL
 RUN pnpm -r build
