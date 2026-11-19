@@ -1,36 +1,35 @@
 import type { ReactNode } from "react";
 import { Eye, type LucideIcon } from "lucide-react";
+import { Help } from "./help";
 
-/** Encabezado de página. `preview` marca las pantallas que por ahora son solo visuales (D-032). */
+/**
+ * Encabezado de página: solo el título. La explicación va en el "?" (`help`).
+ * `preview` marca las pantallas que por ahora son solo visuales (D-032).
+ */
 export function PageHead({
-  eyebrow,
   title,
-  sub,
+  help,
   preview,
   stage,
   actions,
 }: {
-  eyebrow: string;
   title: string;
-  sub?: string;
+  help?: ReactNode;
   preview?: boolean;
   stage?: number;
   actions?: ReactNode;
 }) {
   return (
     <div className="page-head">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>
-          {title}
-          {preview && (
-            <span className="preview-pill" title="Pantalla de muestra con datos de ejemplo">
-              <Eye size={12} aria-hidden /> Vista previa{stage ? ` · Etapa ${stage}` : ""}
-            </span>
-          )}
-        </h1>
-        {sub && <p className="sub">{sub}</p>}
-      </div>
+      <h1>
+        {title}
+        {help && <Help label={`Qué es ${title}`}>{help}</Help>}
+        {preview && (
+          <span className="preview-pill" title="Pantalla de muestra con datos de ejemplo">
+            <Eye size={12} aria-hidden /> Vista previa{stage ? ` · Etapa ${stage}` : ""}
+          </span>
+        )}
+      </h1>
       {actions && <div className="page-actions">{actions}</div>}
     </div>
   );

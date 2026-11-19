@@ -14,6 +14,7 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
+import { Help } from "../../help";
 import { Badge, ars } from "../../ui";
 
 /**
@@ -61,13 +62,13 @@ const CHATS: Chat[] = [
     ],
     messages: [
       { kind: "day", text: "Hoy" },
-      { kind: "in", text: "Hola! Te subí el archivo de las remeras de la escuela 🙌", time: "09:15", file: "frente-escuela.pdf · 4,2 MB" },
+      { kind: "in", text: "Hola! Te subí el archivo de las remeras de la escuela.", time: "09:15", file: "frente-escuela.pdf · 4,2 MB" },
       { kind: "event", text: "Pedido VV-000418 creado · Archivo recibido · DTF" },
       { kind: "ai", by: "Asistente Via Vinilo", text: "¡Gracias! Recibimos el archivo y está en revisión. Te aviso por acá apenas esté cotizado.", time: "09:15" },
       { kind: "event", text: "VV-000418 · Cotizado · $ 54.000,00 · listo hoy 13:00" },
       { kind: "event", text: "VV-000418 · Impreso" },
       { kind: "in", text: "¿Ya está impreso el VV-000418?", time: "10:41" },
-      { kind: "ai", by: "Asistente Via Vinilo", text: "Sí 😊 El VV-000418 ya está impreso y pasa a terminado en unos minutos. Lo podés retirar por el local desde las 13:00.", time: "10:42" },
+      { kind: "ai", by: "Asistente Via Vinilo", text: "Sí, el VV-000418 ya está impreso y pasa a terminado en unos minutos. Lo podés retirar por el local desde las 13:00.", time: "10:42" },
       { kind: "in", text: "Genial. Y el otro, ¿cuánto quedó?", time: "10:42" },
     ],
   },
@@ -88,7 +89,7 @@ const CHATS: Chat[] = [
       { kind: "event", text: "VV-000415 · Archivo con error · Resolución menor a 150 dpi" },
       { kind: "ai", by: "Asistente Via Vinilo", text: "Hola! El archivo del VV-000415 tiene una resolución baja (menos de 150 dpi). ¿Lo podés reenviar en mejor calidad?", time: "09:58" },
       { kind: "in", text: "Si hago 20 metros, ¿me hacen precio?", time: "10:20" },
-      { kind: "ai", by: "Asistente Via Vinilo", text: "Te paso con un asesor para que lo vea con vos 👍", time: "10:20" },
+      { kind: "ai", by: "Asistente Via Vinilo", text: "Te paso con un asesor para que lo vea con vos.", time: "10:20" },
       { kind: "out", by: "Verónica", text: "Hola! Sí, para 20 m te hacemos un 10%. Mandame el archivo corregido y lo cotizo.", time: "10:30" },
       { kind: "in", text: "Te mando el archivo corregido", time: "10:35", file: "tela-v2.tif · 38 MB" },
     ],
@@ -169,7 +170,14 @@ export default function ConversacionesPage() {
       <aside className="inbox-list" aria-label="Conversaciones">
         <div className="inbox-list-head">
           <h1>
-            Conversaciones
+            <span style={{ display: "flex", alignItems: "center" }}>
+              Conversaciones
+              <Help label="Qué es Conversaciones">
+                Chats y pedidos que llegan desde la app de Via Vinilo (no WhatsApp). Responde el asistente IA con los datos del
+                sistema; si no puede, deriva a un asesor, que toma la conversación. Los cambios de estado de cada pedido
+                aparecen solos en el chat.
+              </Help>
+            </span>
             <span className="preview-pill">Vista previa · E2</span>
           </h1>
           <label className="search" style={{ width: "100%" }}>
@@ -218,7 +226,6 @@ export default function ConversacionesPage() {
             <strong>{chat.name}</strong>
             <small style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Smartphone size={12} aria-hidden /> App Via Vinilo · Cliente N.º {chat.number}
-              {mode === "ai" ? " · responde el asistente" : " · lo atiende un asesor"}
             </small>
           </span>
           <div className="seg" role="group" aria-label="Quién responde">
@@ -281,7 +288,7 @@ export default function ConversacionesPage() {
               <Paperclip size={18} />
             </button>
             <input
-              placeholder={mode === "ai" ? "El asistente está respondiendo. Escribí para tomar la conversación…" : "Escribí un mensaje…"}
+              placeholder="Escribí un mensaje…"
               aria-label="Mensaje"
             />
             <button className="btn btn-primary">

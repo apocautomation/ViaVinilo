@@ -31,9 +31,13 @@ export function MockTablePage({ screen }: { screen: MockScreen }) {
   return (
     <div className="page">
       <PageHead
-        eyebrow={screen.eyebrow}
         title={screen.title}
-        sub={screen.sub}
+        help={
+          <>
+            {screen.sub}
+            {screen.note && <em style={{ display: "block", marginTop: 6 }}>{screen.note}</em>}
+          </>
+        }
         preview
         stage={screen.stage}
         actions={
@@ -116,7 +120,6 @@ export function MockTablePage({ screen }: { screen: MockScreen }) {
           </table>
         </div>
       </section>
-      {screen.note && <p style={{ margin: 0, fontSize: 12.5, color: "var(--color-text-muted)" }}>{screen.note}</p>}
     </div>
   );
 }
