@@ -13,6 +13,11 @@ export interface SessionUser {
   roles: ("OWNER" | "PRODUCTION" | "ATTENTION")[];
 }
 
+/** Producción entra directo a su tablero; dueño y atención, al inicio. */
+export function homeFor(user: SessionUser): string {
+  return user.roles.includes("OWNER") || user.roles.includes("ATTENTION") ? "/inicio" : "/produccion";
+}
+
 function storage(): Storage | null {
   try {
     return window.localStorage;

@@ -124,6 +124,8 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-14 | Mail de un cliente bloqueado | No está definido qué pasa si escribe a una casilla un cliente con estado "bloqueado". | E1 | Abierto. Por defecto no se crea la orden: el mail queda registrado en el log de ingesta como rechazado, para que atención lo vea. |
 | I-15 | Mails sin archivo y respuestas en el mismo hilo | (a) La actualización 2.3 dice que si falta el adjunto la orden pasa a "Archivo con error", pero la 2.5 dice que una orden nunca nace de un "hola". (b) Si el cliente responde en el mismo hilo (por ejemplo para reenviar un archivo con error), no está definido si se suma a la orden existente o crea otra. | E1 | Abierto. Por defecto: (a) un mail sin adjuntos ni links de WeTransfer o Drive no crea orden y queda en el log como "sin archivo"; (b) cada mail con archivo crea su propia orden. |
 | I-16 | Volver un paso atrás | Los pasos son obligatorios y no se pueden saltear, pero un operador puede equivocarse de botón (por ejemplo, marcar "Impreso" una orden que no imprimió). Hoy nadie puede deshacerlo; solo cancelar. | E1 | Abierto. Propuesta: que el dueño pueda volver una orden un paso atrás, con motivo obligatorio y registro en la auditoría. Confirmar con Verónica. |
+| I-17 | Cómo obligar a mover las tarjetas (D-032) | Ezequiel pidió que los operadores **tengan que** mover la tarjeta para poder hacer su trabajo. Hoy nada impide imprimir sin tocar el tablero: el archivo llega por mail y el operador lo abre desde la casilla. | E1 | Abierto. Propuesta (ya dibujada en el tablero): el archivo para imprimir **solo se descarga desde la tarjeta**, y se libera cuando la orden está lista para imprimir (cotizada y, si corresponde, con seña). Para que funcione, los operadores no deberían tener acceso a las casillas de mail. Confirmar con Verónica y Ricardo. |
+| I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. |
 
 ## 4. Bitácora de decisiones
 
@@ -400,6 +402,28 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **El logo** es un SVG de unos 21 KB con la mascota incrustada (reducida y con paleta de colores para que pese poco) y el texto vectorial.
 - **Por qué**: lo decidió el cliente; la mascota con los vinilos muestra el rubro. La versión anterior queda guardada como `docs/marca/logo-mascota-original.svg`.
 - **Impacto**: cambian `apps/pwa/public/logo-mascota.svg` y los íconos de `apps/pwa/public/icons/` (192, 512 y 180 px). El backoffice sigue con el logo del isotipo (D-022).
+
+### D-032 · 19/11/2026 · Ezequiel (chat de desarrollo) · el sistema son dos cosas: ERP y app de clientes
+- **Definición**: el sistema son **dos productos**:
+  1. **ERP de gestión integral** (`apps/web`) para el personal de Via Vinilo.
+  2. **App de clientes** (`apps/pwa`) para lo comercial.
+- **El ERP se organiza por apartados**, con un menú lateral:
+  - **Ventas**: conversaciones y pedidos que llegan desde la app de clientes, y clientes. La bandeja de conversaciones sigue el modelo de **Krokanticas** (lista de chats, chat, asistente IA o asesor, etiquetas, respuestas rápidas), pero conectada a **nuestra app** en lugar de WhatsApp. Suma un panel con los datos del cliente y sus pedidos activos (I-18).
+  - **Producción**: los tableros por sector que ya funcionan, más el panel de tiempos. Los operadores **tienen que** mover la tarjeta para poder trabajar (propuesta en I-17).
+  - **Administración**: comprobantes ARCA, cobranzas, facturas de compra, proveedores, bancos y caja, stock, Libro IVA Ventas, Libro IVA Compras, posición de IVA y reportes. Toma como ejemplo el lado administrativo de **GHM**; las columnas y estados de cada listado se copiaron de GHM. El apartado "Proyectos" de GHM Contenidos es, en Via Vinilo, el proceso productivo de Producción.
+- **Qué se hizo ahora**: solo lo **visual**, para mandarle capturas al cliente como seguimiento.
+  - El **tablero de producción** es real y se rediseñó: columnas con color y número de paso, barra de avance, tiempo en el paso y archivo bloqueado hasta que la orden se puede imprimir.
+  - **El resto de las pantallas** son vistas previas con datos de ejemplo inventados (CUIT, CAE, montos, precios y nombres ficticios). Cada una lleva la marca "Vista previa · Etapa N" (`apps/web/app/(erp)/screens.ts`).
+  - El login también se rediseñó.
+- **Por qué**:
+  - El backoffice anterior era una sola pantalla de producción y se veía antiguo.
+  - El cliente necesita ver el sistema completo para entender hacia dónde va cada etapa.
+  - Hacerlo visual primero permite validar el menú y los listados antes de programarlos, sin adelantar las etapas 2 y 3 ("una etapa por vez").
+- **Impacto técnico**:
+  - Rutas nuevas en el grupo `(erp)`: `/inicio`, `/ventas/*`, `/produccion/[sector]`, `/produccion-tiempos`, `/administracion/[seccion]` y `/configuracion`.
+  - `/tablero/*` redirige a `/produccion/*`.
+  - Al entrar, producción va directo a su tablero; el dueño y atención van a Inicio.
+  - Íconos con `lucide-react`, tipografía Inter y logo blanco para la barra lateral (`logo-isotipo-blanco.svg`). La API no cambia.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
