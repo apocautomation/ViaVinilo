@@ -124,8 +124,8 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-14 | Mail de un cliente bloqueado | No está definido qué pasa si escribe a una casilla un cliente con estado "bloqueado". | E1 | Abierto. Por defecto no se crea la orden: el mail queda registrado en el log de ingesta como rechazado, para que atención lo vea. |
 | I-15 | Mails sin archivo y respuestas en el mismo hilo | (a) La actualización 2.3 dice que si falta el adjunto la orden pasa a "Archivo con error", pero la 2.5 dice que una orden nunca nace de un "hola". (b) Si el cliente responde en el mismo hilo (por ejemplo para reenviar un archivo con error), no está definido si se suma a la orden existente o crea otra. | E1 | Abierto. Por defecto: (a) un mail sin adjuntos ni links de WeTransfer o Drive no crea orden y queda en el log como "sin archivo"; (b) cada mail con archivo crea su propia orden. |
 | I-16 | Volver un paso atrás | Los pasos son obligatorios y no se pueden saltear, pero un operador puede equivocarse de botón (por ejemplo, marcar "Impreso" una orden que no imprimió). Hoy nadie puede deshacerlo; solo cancelar. | E1 | Abierto. Propuesta: que el dueño pueda volver una orden un paso atrás, con motivo obligatorio y registro en la auditoría. Confirmar con Verónica. |
-| I-17 | Cómo obligar a mover las tarjetas (D-032) | Ezequiel pidió que los operadores **tengan que** mover la tarjeta para poder hacer su trabajo. Hoy nada impide imprimir sin tocar el tablero: el archivo llega por mail y el operador lo abre desde la casilla. | E1 | Abierto. Propuesta (ya dibujada en el tablero): el archivo para imprimir **solo se descarga desde la tarjeta**, y se libera cuando la orden está lista para imprimir (cotizada y, si corresponde, con seña). Para que funcione, los operadores no deberían tener acceso a las casillas de mail. Confirmar con Verónica y Ricardo. |
-| I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. |
+| I-17 | Cómo obligar a mover las tarjetas (D-032) | Ezequiel pidió que los operadores **tengan que** mover la tarjeta para poder hacer su trabajo. Hoy nada impide imprimir sin tocar el tablero: el archivo llega por mail y el operador lo abre desde la casilla. | E1 | Abierto. Propuesta (ya dibujada en el tablero): el archivo para imprimir **solo se descarga desde la tarjeta**, y se libera cuando la orden está lista para imprimir (cotizada y, si corresponde, con seña). Para que funcione, los operadores no deberían tener acceso a las casillas de mail. Ampliada en D-042 para que el estado que ve el cliente sea el real. Confirmar con Verónica y Ricardo. |
+| I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. **Canales**: la app y también el **mail** (D-041). |
 | I-19 | Envío de trabajos desde la app (D-034) | La actualización §2.9 dice que la recepción de trabajos va por la app, y la §2.5 pide límites de acciones por cliente y evitar duplicados (el caso de los 17 pedidos repetidos por Telegram). No está definido cuántos envíos por día se permiten ni cómo se detecta un archivo repetido. | E1 | Abierto. Propuesta: la orden solo se crea con archivo, sector y medida; si el mismo archivo (mismo hash) ya está en un pedido abierto del cliente, se avisa en lugar de crear otro; tope configurable de envíos por hora. Confirmar con Verónica. |
 | I-20 | VPS para la IA local (D-035) | El VPS del cliente tiene 4 vCPU y 15 GB de RAM. Trip calcula 8 vCPU para correr `qwen3:8b` en local (D-029). | E2 | Abierto. Alcanza para la E1. Al arrancar la E2, medir la latencia del modelo en este VPS. Si no alcanza, el cliente amplía el plan (contrato) o se usa más OpenAI de respaldo. |
 
@@ -598,6 +598,41 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**:
   - Las pantallas del ERP marcadas "Vista previa" siguen con datos de ejemplo. Son maquetas de etapas posteriores (D-032) y no leen la base.
   - Si la API falla (sin conexión o el sistema caído), la app muestra "Probar de nuevo" en lugar de quedar en blanco.
+
+### D-041 · 19/11/2026 · Ezequiel (chat de desarrollo) · Conversaciones también recibe el mail
+- **Definición**: la bandeja **Ventas → Conversaciones** del ERP junta **la app y el mail**. Los clientes siguen mandando archivos y pedidos por mail a las casillas de cada sector, como hoy, y eso tiene que aparecer en la misma bandeja que los mensajes de la app, en el hilo del mismo cliente.
+- **Por qué**: "no solo va por la app". Hoy la mayoría de los trabajos entra por mail (actualización §2.2), y el cliente no va a cambiar de canal de un día para el otro. Si el asesor tiene que mirar dos lugares, el sistema no le resuelve nada.
+- **Impacto**:
+  - **Ya está hecho**: la ingesta por IMAP (D-027) crea la orden desde el mail del sector y reconoce al cliente por cualquiera de sus emails (D-038).
+  - **Falta (E2)**: mostrar cada mail como un mensaje en el hilo del cliente, con el adjunto y la orden que creó, y que el asesor pueda **responder desde la bandeja**. La respuesta sale por SMTP desde la casilla del sector y vuelve al mismo hilo (Reply-To del sector, actualización §2.2).
+  - **Canal por mensaje**: cada mensaje lleva su canal ("App" o "Mail"), igual que la etiqueta "Canal" que ya muestra la app en cada pedido.
+  - **Hacen falta los accesos de las casillas de Hostinger** (§5): sin ellos no se lee el mail real.
+
+### D-042 · 19/11/2026 · Ezequiel + desarrollo · propuesta: que el estado que ve el cliente sea el real (amplía I-17)
+- **Problema** (Ezequiel): el cliente ve el estado de su pedido en la app, pero ese estado solo es real si el trabajo pasa por el sistema. Si el operador abre el mail, imprime y no toca el tablero, la app muestra "Archivo recibido" con el trabajo ya impreso. Para cerrar la E1 esto tiene que estar resuelto.
+- **Propuesta** (pendiente de confirmar con Verónica y Ricardo; no se implementa hasta su OK):
+  1. **Los pasos automáticos los marca el sistema**:
+     - "Archivo recibido": al entrar el mail o el envío por la app.
+     - "Cotizado": cuando atención carga precio y medida, que igual tiene que hacer para pasárselo al cliente.
+     - "Seña recibida": cuando se registra el pago.
+  2. **El archivo para imprimir sale solo de la tarjeta** (I-17):
+     - El operador no usa la casilla de mail.
+     - El botón "Descargar para imprimir" aparece recién cuando la orden se puede imprimir.
+     - Descargarlo la pasa a "En impresión" sola. El cliente no ve ese estado: para él sigue en "Cotizado" o "Seña recibida".
+  3. **Una a la vez por máquina**: el operador no puede bajar el archivo siguiente hasta marcar el anterior como "Impreso". Es un toque, y es lo que da el estado real.
+  4. **"Entregado" en el mostrador**: se marca al entregar, buscando por número de pedido o de cliente. En la E3 sale solo al cobrar en el POS.
+  5. **Control**:
+     - El tablero marca en rojo los trabajos que no se movieron en más de X horas (hoy 2 h, D-030).
+     - El dueño ve qué trabajos quedaron trabados y en qué paso.
+     - Además, si un cliente ve un estado viejo, escribe, y eso deja a la vista quién no movió la tarjeta.
+  6. **Piloto**: arrancar una semana solo con **DTF**, con una tablet o una PC fija en el sector, y después sumar el resto.
+- **Por qué**: si mover la tarjeta es un paso aparte, se olvida. Si es la única forma de conseguir el archivo y de pasar al trabajo siguiente, se hace solo. Así se cumple "los pasos de producción son obligatorios" (CLAUDE.md) sin agregar clics: el operador hace lo mismo que hoy (bajar el archivo, imprimir, avisar que terminó), pero desde el tablero.
+- **Puntos a confirmar** (I-17):
+  - ¿Los operadores pueden dejar de entrar a las casillas de mail?
+  - ¿Hay una PC o tablet por sector?
+  - ¿Cuántos trabajos por máquina se imprimen a la vez (tandas)?
+  - ¿Quién marca "Entregado"?
+  - Necesita el estado interno `PRINTING` ("En impresión"), que el cliente no ve. Cambia D-013 y la actualización §2.4, que sacaron "Imprimiendo" de lo que ve el cliente.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
