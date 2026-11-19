@@ -484,6 +484,25 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Faltan los dominios**: por ejemplo, uno para el ERP y otro para la app de clientes, apuntando a la IP del VPS. Sin eso no hay HTTPS, y la PWA y el push lo necesitan.
   - **Choque con D-029**: Trip calcula 8 vCPU para el modelo local del agente y el VPS tiene 4. Alcanza de sobra para la E1. Para la IA local de la E2 hay que medir; si no alcanza, la ampliación la paga el cliente, según el contrato. Ver I-20.
 
+### D-036 · 19/11/2026 · Ezequiel + desarrollo · DNS de viavinilo.tech apuntando al VPS
+- **Definición**: Ezequiel pidió apuntar el dominio `viavinilo.tech` al VPS del cliente (D-035). El cambio se hizo desde la zona DNS de Hostinger, con su conector.
+- **Cómo quedó la zona**:
+  - **`@`, `www` y `erp`**: registros A al VPS, con TTL 300. Igual que en D-035, la IP no se guarda en el repo: es la del VPS.
+  - **Parking borrado**: se borraron el A de `@`, que apuntaba al parking de Hostinger, y el CNAME de `www`, que apuntaba a `@`. Un CNAME no puede convivir con un A en el mismo nombre.
+  - **Sin otros registros**: la zona no tiene MX, así que hoy el dominio no recibe mail.
+- **Verificación (19/11)**:
+  - Los tres nombres resuelven a la IP del VPS en el nameserver de Hostinger, en 8.8.8.8 y en 1.1.1.1.
+  - Caddy, ya configurado en el VPS, sacó solo un certificado de Let's Encrypt para cada nombre, que vence el 17/02/2027 y lo renueva Caddy.
+  - `https://viavinilo.tech`, `https://www.viavinilo.tech` y `https://erp.viavinilo.tech` responden HTTP 200 con la cadena válida.
+  - En el puerto 80, Caddy redirige a HTTPS (308).
+- **Por qué**:
+  - D-035 dejó pendiente el dominio: sin él no hay HTTPS, y la PWA y el push lo necesitan.
+  - El TTL de 300 permite corregir rápido mientras se arma el deploy. Cuando se estabilice se puede subir.
+- **Impacto**:
+  - Queda resuelto el pendiente "Dominios" del §5.
+  - `erp.viavinilo.tech` es el ERP. Falta decidir explícitamente si la raíz y `www` sirven la app de clientes, la web o las dos cosas.
+  - Las casillas de mail por sector (D-027) van a necesitar registros MX en esta zona. Hay que agregarlos sin tocar los A.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
@@ -494,7 +513,7 @@ Actualizar cuando llegue cada cosa.
 | Mascota con vinilos en los brazos | Logo e ícono de la app de clientes (D-022) | **Recibida el 19/11** (D-031) |
 | Nombres reales de las 16 máquinas y su sector | Seed de máquinas (I-10) | Pendiente |
 | Acceso al VPS de Hostinger | Alojar el sistema (D-007) | **Recibido el 19/11**: servidor preparado (D-035) |
-| Dominios para el ERP y la app de clientes | HTTPS, PWA y push (D-035) | Pendiente |
+| Dominios para el ERP y la app de clientes | HTTPS, PWA y push (D-035) | **Recibido el 19/11**: `viavinilo.tech`, `www` y `erp` apuntan al VPS, con HTTPS (D-036) |
 | Casillas de mail por sector en Hostinger | Ingesta IMAP (D-027) | Pendiente |
 | Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
 | Capturas del CRM de Runamatic con los estados por sector | Definir la secuencia de estados de cada sector | Pendiente (actualización §6) |
