@@ -494,7 +494,7 @@ Actualizar cuando llegue cada cosa.
 | Mascota con vinilos en los brazos | Logo e ícono de la app de clientes (D-022) | **Recibida el 19/11** (D-031) |
 | Nombres reales de las 16 máquinas y su sector | Seed de máquinas (I-10) | Pendiente |
 | Acceso al VPS de Hostinger | Alojar el sistema (D-007) | **Recibido el 19/11**: servidor preparado (D-035) |
-| Dominios para el ERP y la app de clientes | HTTPS, PWA y push (D-035) | Pendiente |
+| Dominios para el ERP y la app de clientes | HTTPS, PWA y push (D-035) | **Listo el 19/11**: `viavinilo.tech` y `erp.viavinilo.tech` (D-036) |
 | Casillas de mail por sector en Hostinger | Ingesta IMAP (D-027) | Pendiente |
 | Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
 | Capturas del CRM de Runamatic con los estados por sector | Definir la secuencia de estados de cada sector | Pendiente (actualización §6) |
