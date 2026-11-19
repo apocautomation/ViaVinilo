@@ -26,6 +26,15 @@ export function signupInviteText(signupUrl: string, subject: string | null): str
 }
 
 export function createSmtpNotifier(config: SmtpConfig): IngestNotifier {
+  // Sin SMTP configurado (producción antes de tener las casillas, D-037) el worker igual arranca:
+  // el mail de alta no se manda y queda en el log. La orden se crea igual.
+  if (!config.url.trim()) {
+    return {
+      async sendSignupInvite({ to }) {
+        console.warn(`[mail] SMTP_URL vacío: no se envió el mail de alta a ${to}`);
+      },
+    };
+  }
   const transport = nodemailer.createTransport(config.url);
   return {
     async sendSignupInvite({ to, sector, subject }: { to: string; sector: Sector; subject: string | null }) {

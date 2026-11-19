@@ -52,4 +52,13 @@ describe("mail con el link de alta (D-014)", () => {
     expect(mail.text).toContain('("Lona 2x1")');
     expect(mail.text).toContain("Tu trabajo quedó guardado");
   });
+
+  it("sin SMTP_URL no rompe: el worker arranca y el envío se saltea (D-037)", async () => {
+    const before = received.length;
+    const notifier = createSmtpNotifier({ url: "", from: "Via Vinilo <x@viavinilo.test>", signupUrl: "https://x.test/alta" });
+    const sector = { code: "DTF", inboxEmail: null } as Sector;
+
+    await expect(notifier.sendSignupInvite({ to: "ana@nuevo.test", sector, subject: null })).resolves.toBeUndefined();
+    expect(received).toHaveLength(before);
+  });
 });
