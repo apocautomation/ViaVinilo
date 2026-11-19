@@ -502,7 +502,36 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Queda resuelto el pendiente "Dominios" del §5.
   - `erp.viavinilo.tech` es el ERP. **La raíz `viavinilo.tech` (y `www`) es la app de clientes**: lo definió Ezequiel el 19/11 en el chat de desarrollo.
   - `SIGNUP_URL` en producción va a ser `https://viavinilo.tech/alta`.
-  - Falta definir por dónde se expone la API. La propuesta es la ruta `/api` dentro de cada dominio, por Caddy: así no hace falta un subdominio más y se evitan los problemas de CORS. Se define al subir el sistema.
+  - Falta definir por dónde se expone la API. La propuesta es la ruta `/api` dentro de cada dominio, por Caddy: así no hace falta un subdominio más y se evitan los problemas de CORS. Se define al subir el sistema. **Resuelto en D-037**: queda en `/api`.
+
+### D-037 · 19/11/2026 · Ezequiel + desarrollo · primer deploy en el VPS
+- **Definición**: Ezequiel pidió subir el sistema al VPS. Desde hoy:
+  - `https://viavinilo.tech` sirve la app de clientes.
+  - `https://erp.viavinilo.tech` sirve el ERP.
+  - Las dos usan la API en `/api`.
+  - `www` redirige a la raíz.
+- **Cómo quedó**:
+  - **Imagen única** (`Dockerfile`): compila todo el monorepo una vez (`pnpm -r build`), y cada servicio del compose la arranca con su propio comando. La imagen se construye en el mismo VPS: no hay registro de imágenes ni acceso del servidor a GitHub. El código se sube con `git archive` por SSH a `/srv/viavinilo`.
+  - **`deploy/docker-compose.prod.yml`**: postgres 16, redis (con AOF), api, worker, web y pwa.
+    - Ningún contenedor expone puertos al exterior; solo escuchan en `127.0.0.1` (D-035).
+    - La API aplica `prisma migrate deploy` al arrancar.
+    - Los archivos de las órdenes quedan en el volumen `storage`.
+  - **`deploy/Caddyfile`**: HTTPS, `/api` hacia la API sin buffer (para el SSE del tablero), HSTS y compresión. Se copia a `/etc/caddy/Caddyfile`.
+  - **Secretos**: `deploy/.env` existe solo en el VPS (permisos 600). La contraseña de Postgres y `JWT_SECRET` se generaron ahí mismo y no salieron del servidor. La plantilla es `deploy/.env.prod.example`.
+  - **Seed**: se cargaron solo los catálogos (6 sectores, 16 máquinas y 6 motivos de error). No hay usuario dueño ni datos de demo.
+  - **Worker**: está con `MAIL_SOURCE=off` y `SMTP_URL` vacío hasta tener las casillas por sector. Se arregló que no arrancaba con `SMTP_URL` vacío: ahora saltea el mail de alta y lo deja en el log (con test).
+- **Verificado (19/11)**:
+  - Los tres dominios responden con HTTPS.
+  - `/api/health` responde `{"status":"ok","db":"ok"}`.
+  - El login del ERP llega a la API por `/api` (credenciales malas → 401 con CORS correcto).
+  - El puerto 3001 no responde desde afuera.
+- **Por qué**: mostrar el avance en las direcciones reales antes del inicio de la E1 (23/11, §5, "Expectativa a cuidar"). Compilar en el VPS evita montar un registro y darle al servidor acceso al repo. Con 4 vCPU el build tarda unos 2 minutos.
+- **Impacto y pendientes**:
+  - La app de clientes todavía muestra los **datos de ejemplo** de D-034 (cliente y pedidos ficticios), en una dirección pública. Se reemplazan cuando se conecte la API (paso 6).
+  - **Falta el usuario dueño**: el ERP muestra el login, pero nadie puede entrar todavía. Se crea con `SEED_OWNER_*` en el `.env` del VPS. La contraseña la define Ezequiel, no se inventa.
+  - **Cómo actualizar**: subir el código con `git archive HEAD | ssh deploy@<vps> "cd /srv/viavinilo && tar -xf -"` y correr `docker compose -f deploy/docker-compose.prod.yml build api && docker compose -f deploy/docker-compose.prod.yml up -d`.
+  - **Faltan backups de Postgres**. Hay que definir dónde se guardan, fuera del VPS.
+  - Los contenedores corren como root dentro de la imagen. Conviene pasarlos a un usuario sin privilegios.
   - Las casillas de mail por sector (D-027) van a necesitar registros MX en esta zona. Hay que agregarlos sin tocar los A.
 
 ## 5. Pendientes del cliente para arrancar la E1
@@ -516,7 +545,7 @@ Actualizar cuando llegue cada cosa.
 | Nombres reales de las 16 máquinas y su sector | Seed de máquinas (I-10) | Pendiente |
 | Acceso al VPS de Hostinger | Alojar el sistema (D-007) | **Recibido el 19/11**: servidor preparado (D-035) |
 | Dominios para el ERP y la app de clientes | HTTPS, PWA y push (D-035) | **Recibido el 19/11**: `viavinilo.tech`, `www` y `erp` apuntan al VPS, con HTTPS (D-036) |
-| Casillas de mail por sector en Hostinger | Ingesta IMAP (D-027) | Pendiente |
+| Casillas de mail por sector en Hostinger | Ingesta IMAP (D-027) y envío de mails (SMTP, D-037) | Pendiente |
 | Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
 | Capturas del CRM de Runamatic con los estados por sector | Definir la secuencia de estados de cada sector | Pendiente (actualización §6) |
 
