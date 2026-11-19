@@ -128,6 +128,8 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. **Canales**: la app y también el **mail** (D-041). |
 | I-19 | Envío de trabajos desde la app (D-034) | La actualización §2.9 dice que la recepción de trabajos va por la app, y la §2.5 pide límites de acciones por cliente y evitar duplicados (el caso de los 17 pedidos repetidos por Telegram). No está definido cuántos envíos por día se permiten ni cómo se detecta un archivo repetido. | E1 | Abierto. Propuesta: la orden solo se crea con archivo, sector y medida; si el mismo archivo (mismo hash) ya está en un pedido abierto del cliente, se avisa en lugar de crear otro; tope configurable de envíos por hora. Confirmar con Verónica. |
 | I-20 | VPS para la IA local (D-035) | El VPS del cliente tiene 4 vCPU y 15 GB de RAM. Trip calcula 8 vCPU para correr `qwen3:8b` en local (D-029). | E2 | Abierto. Alcanza para la E1. Al arrancar la E2, medir la latencia del modelo en este VPS. Si no alcanza, el cliente amplía el plan (contrato) o se usa más OpenAI de respaldo. |
+| I-21 | Casillas `cortes@` y `tpu@` (D-043) | En Hostinger existen las casillas `cortes@viavinilo.com` y `tpu@viavinilo.com`, pero el sistema tiene 6 sectores y ninguno es Cortes ni TPU. | E1 | Abierto. Preguntar a Ricardo y a Verónica si son sectores que reciben trabajos (y hay que sumarlos con su secuencia de estados) o casillas de otro uso. |
+| I-22 | `dtf@` bloqueada para enviar (D-043) | Hostinger bloqueó el envío de `dtf@viavinilo.com` por "sending_spam". El sistema responde desde la casilla del sector (Reply-To, actualización §2.2), así que las respuestas de DTF no salen. | E1 | Abierto. El cliente tiene que pedirle a Hostinger que la desbloquee y revisar SPF, DKIM y DMARC de `viavinilo.com` (actualización §2.2). Mientras tanto, DTF puede responder desde otra casilla. |
 
 ## 4. Bitácora de decisiones
 
@@ -616,23 +618,65 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
      - "Cotizado": cuando atención carga precio y medida, que igual tiene que hacer para pasárselo al cliente.
      - "Seña recibida": cuando se registra el pago.
   2. **El archivo para imprimir sale solo de la tarjeta** (I-17):
-     - El operador no usa la casilla de mail.
+     - El operador no abre el programa de mail ni el webmail: el mail se lee dentro del ERP (Conversaciones, D-041) y el adjunto ya está en la tarjeta. *(Ajustado: no es "dejar de usar el mail", es usarlo desde el ERP.)*
      - El botón "Descargar para imprimir" aparece recién cuando la orden se puede imprimir.
      - Descargarlo la pasa a "En impresión" sola. El cliente no ve ese estado: para él sigue en "Cotizado" o "Seña recibida".
-  3. **Una a la vez por máquina**: el operador no puede bajar el archivo siguiente hasta marcar el anterior como "Impreso". Es un toque, y es lo que da el estado real.
+  3. ~~Una a la vez por máquina~~ **Descartado por Ezequiel (19/11): retrasa la producción.** En su lugar:
+     - El operador puede bajar varios archivos para imprimir en tanda.
+     - Marca "Impreso" de a varios: selecciona las tarjetas y da un solo toque.
+     - Si una orden queda "En impresión" más de X horas, se marca en rojo y le aparece al dueño.
   4. **"Entregado" en el mostrador**: se marca al entregar, buscando por número de pedido o de cliente. En la E3 sale solo al cobrar en el POS.
   5. **Control**:
      - El tablero marca en rojo los trabajos que no se movieron en más de X horas (hoy 2 h, D-030).
      - El dueño ve qué trabajos quedaron trabados y en qué paso.
      - Además, si un cliente ve un estado viejo, escribe, y eso deja a la vista quién no movió la tarjeta.
-  6. **Piloto**: arrancar una semana solo con **DTF**, con una tablet o una PC fija en el sector, y después sumar el resto.
+  6. ~~Piloto solo con DTF~~ **Descartado por Ezequiel (19/11)**: Via Vinilo necesita todos los sectores, y la E1 se entrega y se cobra completa. Arrancan todos los sectores juntos.
 - **Por qué**: si mover la tarjeta es un paso aparte, se olvida. Si es la única forma de conseguir el archivo y de pasar al trabajo siguiente, se hace solo. Así se cumple "los pasos de producción son obligatorios" (CLAUDE.md) sin agregar clics: el operador hace lo mismo que hoy (bajar el archivo, imprimir, avisar que terminó), pero desde el tablero.
 - **Puntos a confirmar** (I-17):
-  - ¿Los operadores pueden dejar de entrar a las casillas de mail?
+  - ~~¿Los operadores pueden dejar de entrar a las casillas de mail?~~ Resuelto: el mail se usa desde el ERP (D-041).
   - ¿Hay una PC o tablet por sector?
-  - ¿Cuántos trabajos por máquina se imprimen a la vez (tandas)?
+  - ¿Cuántos trabajos por máquina se imprimen a la vez (tandas)? Define el X de las alertas.
   - ¿Quién marca "Entregado"?
   - Necesita el estado interno `PRINTING` ("En impresión"), que el cliente no ve. Cambia D-013 y la actualización §2.4, que sacaron "Imprimiendo" de lo que ve el cliente.
+
+### D-043 · 19/11/2026 · Ezequiel + desarrollo · casillas reales de Hostinger y lectura por la API de mail
+- **Qué se encontró** (con el MCP de Hostinger, solo lectura, 19/11):
+  - El correo está en **`viavinilo.com`**, no en `viavinilo.tech`. Es un plan Premium Business Email de 15 casillas, vigente hasta el 07/08/2027.
+  - **Casillas**: `dtf@`, `dtfuv@`, `granformato@`, `latex@`, `calandra@`, `sublimacion@`, `cortes@`, `tpu@`, `ventas@`, `soporte@`, `tienda@`, `publi@`, `admin@` y `rick@`.
+  - **`dtf@viavinilo.com` tiene el envío bloqueado por Hostinger por "sending_spam"**: puede recibir pero no mandar. Es probablemente la causa de los mails que no llegan y de las respuestas que rebotan (actualización §2.2). Ver I-22.
+  - Las casillas de sector tienen una respuesta automática configurada.
+- **Correcciones**:
+  - La casilla de Calandrado es `calandra@`, no `calandrado@` (`SECTOR_INBOX_LOCAL_PART`).
+  - En producción, `SEED_MAIL_DOMAIN=viavinilo.com`.
+- **Propuesta para leer y responder el mail**: Hostinger tiene una **API de mail con tokens**, que dan acceso a las casillas elegidas (leer, buscar y enviar) **sin las contraseñas de las casillas**.
+  - Así no hay que pedirles las contraseñas ni cambiarlas, y los empleados siguen como hoy.
+  - Se crea un token solo para las 6 casillas de sector y se guarda en el `.env` del VPS.
+  - El worker suma una fuente `hostinger-api` además de `imap`.
+  - **Crear el token necesita el OK explícito de Ezequiel**, porque es una credencial nueva sobre el correo del cliente.
+- **Por qué**: Ezequiel señaló que el MCP de Hostinger ya está conectado. Con la API no hace falta pedir contraseñas, que es lo que trababa la ingesta real desde D-027.
+
+### D-044 · 19/11/2026 · Ezequiel · la E1 se entrega completa para cobrarla
+- **Definición**: no hay piloto por sector. La E1 se entrega completa, en todos los sectores, para cobrarla (contrato, Anexo I).
+- **Estado de la E1** (19/11), punto por punto del §2.2:
+  - **Hecho**:
+    - Clientes con alta en el ERP, número, DNI, notas y ficha completa (D-038).
+    - Login del personal con roles.
+    - Acceso a la app (D-039).
+    - Altas pendientes desde el mail (D-014).
+    - Tablero por sector con pasos obligatorios y cotización y seña antes de imprimir (D-030).
+    - Ingesta de mail con control de duplicados, probada con una casilla simulada (D-027).
+  - **Falta, en este orden**:
+    1. **Mail real**: token de la API de Hostinger, fuente `hostinger-api` en el worker y casillas `@viavinilo.com` (D-043). Sin esto no entra ningún trabajo real.
+    2. **Ficha de la orden**: editar medida, precio y descripción (paso 5); motivos de error y reenvío de archivo.
+    3. **Estado real** (D-042): el archivo solo sale de la tarjeta, "Impreso" de a varios y alertas.
+    4. **App con pedidos reales** (paso 6): estado, medida, precio y hora estimada; push, y el email como respaldo.
+    5. **Alta manual desde el mostrador.**
+    6. **Revisión del archivo con IA** (I-09): chequeos sin IA más un LLM solo para leer las medidas del mail.
+    7. **Panel de tiempos** con datos reales; hoy es una vista previa.
+    8. **Borrado automático de archivos** a los 30 días de entregada la orden (D-015).
+    9. **Migración de clientes** de Runamatic y Tango: depende de que el cliente pase los datos (§5).
+  - **No es E1, según el contrato**: la bandeja de Conversaciones con chat y respuestas (D-041) es de la E2. Se puede adelantar la parte de mostrar los mails de cada cliente si Ezequiel lo prioriza, sin que eso frene el cobro de la E1.
+- **Por qué**: Ezequiel necesita cobrar la E1 completa. Ordenar lo que falta deja claro qué se entrega y qué depende del cliente.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
