@@ -500,7 +500,9 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - El TTL de 300 permite corregir rápido mientras se arma el deploy. Cuando se estabilice se puede subir.
 - **Impacto**:
   - Queda resuelto el pendiente "Dominios" del §5.
-  - `erp.viavinilo.tech` es el ERP. Falta decidir explícitamente si la raíz y `www` sirven la app de clientes, la web o las dos cosas.
+  - `erp.viavinilo.tech` es el ERP. **La raíz `viavinilo.tech` (y `www`) es la app de clientes**: lo definió Ezequiel el 19/11 en el chat de desarrollo.
+  - `SIGNUP_URL` en producción va a ser `https://viavinilo.tech/alta`.
+  - Falta definir por dónde se expone la API. La propuesta es la ruta `/api` dentro de cada dominio, por Caddy: así no hace falta un subdominio más y se evitan los problemas de CORS. Se define al subir el sistema.
   - Las casillas de mail por sector (D-027) van a necesitar registros MX en esta zona. Hay que agregarlos sin tocar los A.
 
 ## 5. Pendientes del cliente para arrancar la E1
