@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { Inter } from "next/font/google";
 import { cssVariables, semantic } from "@viavinilo/ui";
+import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Via Vinilo",
@@ -12,24 +16,16 @@ export const viewport: Viewport = {
   themeColor: semantic.primary,
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es-AR">
+    <html lang="es-AR" className={inter.variable}>
       <head>
         <style>{cssVariables()}</style>
       </head>
-      <body
-        style={{
-          margin: 0,
-          fontFamily: "system-ui, sans-serif",
-          background: "var(--color-background)",
-          color: "var(--color-text)",
-        }}
-      >
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

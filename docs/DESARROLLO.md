@@ -126,6 +126,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-16 | Volver un paso atrás | Los pasos son obligatorios y no se pueden saltear, pero un operador puede equivocarse de botón (por ejemplo, marcar "Impreso" una orden que no imprimió). Hoy nadie puede deshacerlo; solo cancelar. | E1 | Abierto. Propuesta: que el dueño pueda volver una orden un paso atrás, con motivo obligatorio y registro en la auditoría. Confirmar con Verónica. |
 | I-17 | Cómo obligar a mover las tarjetas (D-032) | Ezequiel pidió que los operadores **tengan que** mover la tarjeta para poder hacer su trabajo. Hoy nada impide imprimir sin tocar el tablero: el archivo llega por mail y el operador lo abre desde la casilla. | E1 | Abierto. Propuesta (ya dibujada en el tablero): el archivo para imprimir **solo se descarga desde la tarjeta**, y se libera cuando la orden está lista para imprimir (cotizada y, si corresponde, con seña). Para que funcione, los operadores no deberían tener acceso a las casillas de mail. Confirmar con Verónica y Ricardo. |
 | I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. |
+| I-19 | Envío de trabajos desde la app (D-034) | La actualización §2.9 dice que la recepción de trabajos va por la app, y la §2.5 pide límites de acciones por cliente y evitar duplicados (el caso de los 17 pedidos repetidos por Telegram). No está definido cuántos envíos por día se permiten ni cómo se detecta un archivo repetido. | E1 | Abierto. Propuesta: la orden solo se crea con archivo, sector y medida; si el mismo archivo (mismo hash) ya está en un pedido abierto del cliente, se avisa en lugar de crear otro; tope configurable de envíos por hora. Confirmar con Verónica. |
 
 ## 4. Bitácora de decisiones
 
@@ -438,6 +439,30 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Componente `Help` en `app/(erp)/help.tsx`. `PageHead` ya no tiene subtítulo: el texto va en `help`.
   - Con un menú abierto, pasar el mouse por otro apartado lo abre. El clic afuera o Escape lo cierran.
   - `logo-isotipo-blanco.svg` queda para el login.
+
+### D-034 · 19/11/2026 · Ezequiel (chat de desarrollo) · front de la app de clientes
+- **Definición**: se arma el front de la app de clientes (`apps/pwa`), pensada para el celular. Abajo tiene una barra con 4 secciones:
+  - **Pedidos** (inicio de la app): saludo con nombre y número de cliente, contadores (en curso, para retirar, con error), y pedidos en curso y entregados.
+    - Cada pedido muestra su barra de avance, su estado y su precio.
+    - Si hay un error en el archivo, se ve el motivo.
+    - Si está listo, se ve el aviso "Ya lo podés pasar a buscar".
+  - **Detalle del pedido**: estado, precio, seña y saldo, medida y hora en que está listo. Incluye el seguimiento paso a paso con fecha y hora, y los archivos. Si el archivo tiene un error, aparece el botón **"Reenviar archivo"** (SPEC E1.5). También está **"Consultar por este pedido"**, que abre el asistente.
+  - **Enviar trabajo**: sector, archivo y medida (ancho, largo, cantidad) son obligatorios; las aclaraciones son opcionales. La orden nunca nace sin archivo (actualización §2.5 y §2.9; límites en I-19).
+  - **Ayuda**: acceso al asistente, listas de precios, instructivos, horarios, cómo llegar, preguntas frecuentes y "Hablar con un asesor" (Etapa 2, actualización §2.7).
+  - **Asistente**: chat con respuestas sugeridas. Responde con datos del sistema, como la tarjeta del pedido, y deriva a un asesor (D-028, D-029). Es de la Etapa 2.
+  - **Cuenta**: datos, número de cliente, switches de avisos (push y mail) y saldo de puntos. Los puntos son de la Etapa 4.
+  - **Avisos** (campana): un aviso por cada cambio de estado.
+  - **Ingreso sin contraseña**: email, código de 6 números (D-016) y link a **Alta de cliente**. El alta pide nombre, apellido, DNI, email, celular y empresa (opcional), y queda pendiente hasta que la valida un asesor (D-014).
+- **Qué se hizo ahora**: es **solo visual**, con datos de ejemplo (`apps/pwa/app/data.ts`), igual que las vistas previas del ERP (D-032). Las pantallas de etapas posteriores llevan una etiqueta "Etapa N". El estilo es el mismo que el del ERP:
+  - colores del logo;
+  - logo con la mascota de los vinilos (D-031);
+  - Inter e íconos `lucide-react`;
+  - sin emojis y con poco texto (D-033).
+- **Por qué**: la app es "el centro de todo" (actualización, §1). Ver el recorrido completo del cliente sirve para validarlo con Verónica antes de conectar la API (OTP, pedidos y push son del paso 6).
+- **Impacto técnico**:
+  - Rutas `(app)`: `/`, `/pedidos/[id]`, `/enviar`, `/ayuda`, `/ayuda/asistente`, `/cuenta` y `/avisos`.
+  - Rutas `(auth)`: `/ingresar` y `/alta`. `/alta` es la dirección que va en el mail a remitentes nuevos (`SIGNUP_URL`).
+  - La API no cambia.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

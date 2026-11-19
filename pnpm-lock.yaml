@@ -111,6 +111,9 @@ importers:
       '@viavinilo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      lucide-react:
+        specifier: 0.460.0
+        version: 0.460.0(react@19.3.1)
       next:
         specifier: ^15.0.0
         version: 15.5.29(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
