@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Clock, Download, FileText, Lock, Paperclip, ShieldCheck } from "lucide-react";
+import { Clock, Download, FileText, Lock, Paperclip } from "lucide-react";
 import { api, getUser, watchBoard, type SessionUser } from "../../../lib/api";
+import { Help } from "../../help";
 
 type Status =
   | "PENDING_SIGNUP" | "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED"
@@ -236,11 +237,16 @@ export default function BoardPage() {
     <>
       <div className="page" style={{ paddingBottom: 0 }}>
         <div className="page-head">
-          <div>
-            <p className="eyebrow">Producción</p>
-            <h1>Tablero · {board?.sector.name ?? "…"}</h1>
-            <p className="sub">Cada trabajo avanza de a un paso. El archivo para imprimir se libera recién cuando la orden está lista.</p>
-          </div>
+          <h1>
+            Tablero · {board?.sector.name ?? "…"}
+            <Help label="Cómo funciona el tablero">
+              <strong>Pasos obligatorios:</strong> cada trabajo avanza de a un paso y no se puede saltear ninguno.
+              <br />
+              El archivo para imprimir se libera recién cuando la orden está lista (cotizada y, si corresponde, con seña).
+              <br />
+              El cliente ve cada cambio en su app al instante. En amarillo: más de 2 h en el mismo paso.
+            </Help>
+          </h1>
           <span className="live" data-on={live}>
             {live ? `En vivo · ${total} órdenes` : "Reconectando…"}
           </span>
@@ -277,13 +283,6 @@ export default function BoardPage() {
           <input type="checkbox" checked={groupByMaterial} onChange={(e) => setGroupByMaterial(e.target.checked)} />
           Agrupar por material
         </label>
-      </div>
-
-      <div className="rule-banner">
-        <ShieldCheck size={18} aria-hidden />
-        <span>
-          <strong>Pasos obligatorios:</strong> no se puede saltear ningún estado. El cliente ve cada cambio en su app al instante.
-        </span>
       </div>
 
       <main className="board">

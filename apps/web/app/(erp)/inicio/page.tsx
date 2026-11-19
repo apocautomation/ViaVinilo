@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, ClipboardList, Factory, MessagesSquare, PackageCheck, Receipt } from "lucide-react";
+import { Bot, ClipboardList, Factory, PackageCheck, Receipt } from "lucide-react";
 import { Badge, Kpi, PageHead, ars } from "../ui";
 
 // Datos de ejemplo (D-032). Se reemplazan por la API a medida que se construye cada etapa.
@@ -30,20 +30,9 @@ export default function InicioPage() {
   return (
     <div className="page">
       <PageHead
-        eyebrow="Jueves 19 de noviembre"
-        title="Buen día 👋"
-        sub="Así viene el día en Via Vinilo."
+        title="Inicio"
+        help="Resumen del día: pedidos, producción por sector, conversaciones de la app y trabajos que llevan más de 2 h en el mismo paso."
         preview
-        actions={
-          <>
-            <Link className="btn btn-ghost" href="/ventas/conversaciones">
-              <MessagesSquare size={16} /> Conversaciones
-            </Link>
-            <Link className="btn btn-primary" href="/produccion">
-              <Factory size={16} /> Ir a producción
-            </Link>
-          </>
-        }
       />
 
       <div className="kpis">

@@ -424,6 +424,20 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - `/tablero/*` redirige a `/produccion/*`.
   - Al entrar, producción va directo a su tablero; el dueño y atención van a Inicio.
   - Íconos con `lucide-react`, tipografía Inter y logo blanco para la barra lateral (`logo-isotipo-blanco.svg`). La API no cambia.
+  - **Actualizado por D-033**: el menú pasó de la barra lateral a la barra superior.
+
+### D-033 · 19/11/2026 · Ezequiel (chat de desarrollo) · menú arriba, desplegable y sin texto de más (ajusta D-032)
+- **Definición**:
+  - **El menú va arriba**, como en el primer tablero: barra blanca con el logo a color y la línea marino abajo, que a Ezequiel le gustaba.
+  - **Cada apartado se despliega**: Ventas, Producción y Administración abren su menú con un clic. Producción muestra arriba los tableros de cada sector. Inicio es un link directo y Configuración es el engranaje de la derecha.
+  - **Sin emojis**.
+  - **Sin textos redundantes**: cada pantalla muestra solo el título. La explicación queda en un botón **"?"** al lado del título. El aviso de pasos obligatorios del tablero también pasó al "?".
+- **Por qué**: la barra lateral y los textos explicativos ocupaban lugar y hacían la pantalla más pesada. El "?" deja la explicación a mano para quien la necesite sin repetirla en cada vista.
+- **Impacto técnico**:
+  - `app/(erp)/layout.tsx` arma la barra superior a partir de `nav.ts` (el menú sigue definido en un solo lugar).
+  - Componente `Help` en `app/(erp)/help.tsx`. `PageHead` ya no tiene subtítulo: el texto va en `help`.
+  - Con un menú abierto, pasar el mouse por otro apartado lo abre. El clic afuera o Escape lo cierran.
+  - `logo-isotipo-blanco.svg` queda para el login.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
