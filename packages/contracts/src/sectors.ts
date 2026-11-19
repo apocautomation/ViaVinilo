@@ -21,6 +21,6 @@ export const SECTOR_INBOX_LOCAL_PART: Record<SectorCode, string> = {
   DTF_UV: "dtfuv",
   GRAN_FORMATO: "granformato",
   LATEX: "latex",
-  CALANDRADO: "calandrado",
+  CALANDRADO: "calandra",
   SUBLIMACION: "sublimacion",
 };
