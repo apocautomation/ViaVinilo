@@ -17,7 +17,7 @@ export default function NewCustomerPage() {
       </Link>
       <PageHead
         title="Nuevo cliente"
-        help="El cliente queda activo y ya puede entrar a la app con cualquiera de sus emails. Queda registrado quién lo dio de alta."
+        help="El cliente queda activo. Entra a la app con cualquiera de sus emails y la contraseña que le cargues. Queda registrado quién lo dio de alta."
       />
       <CustomerForm
         mode="create"

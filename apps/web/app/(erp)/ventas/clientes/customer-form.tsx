@@ -25,6 +25,21 @@ export interface CustomerFormValues {
   notifyPush: boolean;
   notifyEmail: boolean;
   internalNotes: string;
+  /** Solo en el alta: contraseña de la app que el asesor le pasa al cliente (D-039). */
+  appPassword: string;
+}
+
+/**
+ * Contraseña fácil de dictar por WhatsApp o en el mostrador: palabra, 4 números y 2 letras
+ * sin las que se confunden (D-039). Ej.: vinilo-4827-kt
+ */
+export function generateAppPassword(): string {
+  const words = ["vinilo", "remera", "lona", "tinta", "plotter", "calandra", "sticker", "papel"];
+  const letters = "abcdefghjkmnpqrstuvwxyz";
+  const r = new Uint32Array(4);
+  crypto.getRandomValues(r);
+  const num = String(r[1]! % 10000).padStart(4, "0");
+  return `${words[r[0]! % words.length]}-${num}-${letters[r[2]! % letters.length]}${letters[r[3]! % letters.length]}`;
 }
 
 export function initialValues(c?: Customer): CustomerFormValues {
@@ -46,6 +61,7 @@ export function initialValues(c?: Customer): CustomerFormValues {
     notifyPush: c?.notificationPrefs?.push ?? true,
     notifyEmail: c?.notificationPrefs?.email ?? true,
     internalNotes: c?.internalNotes ?? "",
+    appPassword: c ? "" : generateAppPassword(),
   };
 }
 
@@ -70,6 +86,7 @@ export function toPayload(v: CustomerFormValues, mode: "create" | "edit") {
     creditEnabled: v.creditEnabled,
     notificationPrefs: { push: v.notifyPush, email: v.notifyEmail },
     internalNotes: opt(v.internalNotes),
+    ...(mode === "create" ? { appPassword: v.appPassword.trim() || undefined } : {}),
   };
 }
 
@@ -201,14 +218,30 @@ export function CustomerForm({
           title="Contacto y acceso a la app"
           help={
             <>
-              Con <b>cualquiera de sus emails</b> el cliente entra a la app: le llega un código de 6 números. Con los
-              mismos emails se reconocen los trabajos que manda por mail. El email principal recibe los avisos. El
-              teléfono principal es su WhatsApp.
+              El cliente entra a la app con <b>cualquiera de sus emails</b> y la contraseña de abajo. Pasásela vos por
+              WhatsApp o en el mostrador. Con los mismos emails se reconocen los trabajos que manda por mail. El email
+              principal recibe los avisos. El teléfono principal es su WhatsApp.
             </>
           }
         >
           <ContactList label="Emails" type="email" placeholder="cliente@email.com" values={v.emails} onChange={(x) => set("emails", x)} />
           <ContactList label="Teléfonos (WhatsApp)" type="tel" placeholder="387 466-9944" values={v.phones} onChange={(x) => set("phones", x)} />
+          <div className="field field-wide">
+            Contraseña de la app
+            <div className="contact-row">
+              <input
+                className="mono"
+                value={v.appPassword}
+                onChange={(e) => set("appPassword", e.target.value)}
+                placeholder="Mínimo 8 caracteres. Vacía: el cliente no entra hasta que se la cargues"
+                autoComplete="off"
+                aria-label="Contraseña de la app"
+              />
+              <button type="button" className="btn btn-ghost" onClick={() => set("appPassword", generateAppPassword())}>
+                Generar otra
+              </button>
+            </div>
+          </div>
         </Section>
       ) : (
         contacts

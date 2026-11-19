@@ -24,6 +24,8 @@ export interface Customer {
   notificationPrefs: NotificationPrefs | null;
   emails: { id: string; email: string; isPrimary: boolean }[];
   phones: { id: string; phone: string; isPrimary: boolean }[];
+  /** Cuándo se cargó la contraseña de la app. Null = no puede entrar (D-039). */
+  appPasswordSetAt: string | null;
   createdAt: string;
 }
 
