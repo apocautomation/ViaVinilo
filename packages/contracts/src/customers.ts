@@ -34,7 +34,62 @@ export const dniSchema = z
 
 const nameSchema = z.string().trim().min(1, "No puede estar vacío").max(80);
 
-/** Alta de cliente desde el backoffice. Datos mínimos de la actualización §2.1. */
+/** Condición frente al IVA (D-038). Coincide con el enum `TaxCondition` de Prisma. */
+export const TAX_CONDITIONS = ["RESPONSABLE_INSCRIPTO", "MONOTRIBUTO", "EXENTO", "CONSUMIDOR_FINAL"] as const;
+export const taxConditionSchema = z.enum(TAX_CONDITIONS);
+export type TaxCondition = z.infer<typeof taxConditionSchema>;
+
+export const TAX_CONDITION_LABELS: Record<TaxCondition, string> = {
+  RESPONSABLE_INSCRIPTO: "Responsable inscripto",
+  MONOTRIBUTO: "Monotributo",
+  EXENTO: "Exento",
+  CONSUMIDOR_FINAL: "Consumidor final",
+};
+
+/** CUIT/CUIL: 11 dígitos con dígito verificador válido. Se aceptan guiones y espacios al cargarlo. */
+export function normalizeCuit(cuit: string): string {
+  return cuit.replace(/\D/g, "");
+}
+
+export function isValidCuit(cuit: string): boolean {
+  const d = normalizeCuit(cuit);
+  if (!/^\d{11}$/.test(d)) return false;
+  const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const sum = weights.reduce((acc, w, i) => acc + w * Number(d[i]), 0);
+  const mod = 11 - (sum % 11);
+  const check = mod === 11 ? 0 : mod === 10 ? 9 : mod;
+  return check === Number(d[10]);
+}
+
+export const cuitSchema = z
+  .string()
+  .transform(normalizeCuit)
+  .refine(isValidCuit, "El CUIT no es válido: revisá los 11 números");
+
+/** Avisos al cliente (D-038). Sin valor guardado = los dos prendidos. */
+export const notificationPrefsSchema = z.object({ push: z.boolean(), email: z.boolean() });
+export type NotificationPrefs = z.infer<typeof notificationPrefsSchema>;
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = { push: true, email: true };
+
+const optionalText = (max: number) => z.string().trim().max(max).transform((v) => v || undefined).optional();
+
+/**
+ * Datos de la ficha que no son la identidad ni los contactos (D-038). Los fiscales son para
+ * facturar con ARCA en la E3 y son opcionales hasta entonces.
+ */
+const profileFields = {
+  businessName: optionalText(120),
+  cuit: z.union([z.literal("").transform(() => undefined), cuitSchema]).optional(),
+  legalName: optionalText(160),
+  taxCondition: taxConditionSchema.optional(),
+  fiscalAddress: optionalText(200),
+  city: optionalText(80),
+  province: optionalText(80),
+  creditEnabled: z.boolean().optional(),
+  notificationPrefs: notificationPrefsSchema.optional(),
+};
+
+/** Alta de cliente desde el ERP (D-038). Datos mínimos de la actualización §2.1 más la ficha. */
 export const createCustomerSchema = z.object({
   firstName: nameSchema,
   lastName: nameSchema,
@@ -43,8 +98,18 @@ export const createCustomerSchema = z.object({
   phones: z.array(phoneSchema).min(1, "Cargá al menos un teléfono"),
   internalNotes: z.string().trim().max(2000).optional(),
   isTrade: z.boolean().optional(),
+  ...profileFields,
 });
 export type CreateCustomerInput = z.input<typeof createCustomerSchema>;
+
+/** En la edición, null borra el dato. */
+const nullableText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .transform((v) => v || null);
 
 export const updateCustomerSchema = z
   .object({
@@ -53,6 +118,15 @@ export const updateCustomerSchema = z
     dni: dniSchema,
     internalNotes: z.string().trim().max(2000).nullable(),
     isTrade: z.boolean(),
+    businessName: nullableText(120),
+    cuit: z.union([z.literal("").transform(() => null), z.null(), cuitSchema]),
+    legalName: nullableText(160),
+    taxCondition: taxConditionSchema.nullable(),
+    fiscalAddress: nullableText(200),
+    city: nullableText(80),
+    province: nullableText(80),
+    creditEnabled: z.boolean(),
+    notificationPrefs: notificationPrefsSchema,
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, "No hay cambios para guardar");

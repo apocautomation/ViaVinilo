@@ -10,7 +10,7 @@ async function main() {
   const deps = {
     prisma,
     storage: new LocalDiskStorage(process.env.STORAGE_DIR ?? "./storage"),
-    notifier: { sendSignupInvite: async ({ to }: { to: string }) => console.log(`(link de alta para ${to})`) },
+    notifier: { sendSignupInvite: async ({ to }: { to: string }) => console.log(`(mail de alta para ${to})`) },
   };
   const clientes = [
     { first: "Juan", last: "Pérez", dni: "30123456", email: "juan@remeras.test" },

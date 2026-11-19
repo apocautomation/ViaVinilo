@@ -54,8 +54,11 @@ Crea dos clientes activos, el usuario `impresor@viavinilo.test` (producción de 
 | --- | --- | --- |
 | `POST /auth/login` | público | Email y contraseña → token (12 h). Máximo 5 intentos por minuto. |
 | `GET /auth/me` | personal | Usuario y roles. |
+| `POST /app/auth/request-code` | público | El cliente pide un código de 6 números a uno de sus emails. La respuesta es siempre la misma (D-038). |
+| `POST /app/auth/verify` | público | Email y código → token del cliente (30 días). |
+| `GET /app/me` | cliente | Datos del cliente para la app. Los tokens de cliente no sirven en las rutas del personal (D-038). |
 | `GET /customers?search=&status=&page=` | personal | Busca por nombre (sin tildes), número de cliente, DNI, email o teléfono. |
-| `POST /customers`, `PATCH /customers/:id` | atención, dueño | Alta y edición. |
+| `POST /customers`, `PATCH /customers/:id` | atención, dueño | Alta y edición con la ficha completa: identidad, contactos, datos fiscales, cuenta corriente y avisos (D-038). |
 | `POST /customers/:id/approve`, `/block`, `/unblock` | atención, dueño | Validar altas pendientes y bloquear. |
 | `POST`/`DELETE /customers/:id/emails`, `/phones` | atención, dueño | Contactos. |
 | `DELETE /customers/:id` | dueño | Baja lógica. |

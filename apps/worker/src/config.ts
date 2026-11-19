@@ -11,7 +11,7 @@ export interface WorkerConfig {
   mailhogUrl: string;
   /** Credenciales IMAP por sector. Los sectores sin credenciales no se leen. */
   imap: Partial<Record<SectorCode, ImapCredentials>>;
-  smtp: { url: string; from: string; signupUrl: string };
+  smtp: { url: string; from: string; contactUrl: string };
 }
 
 /** Lee la configuración del entorno. Nunca hay credenciales en el código (CLAUDE.md). */
@@ -46,7 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
     smtp: {
       url: env.SMTP_URL ?? "smtp://localhost:1025",
       from: env.SMTP_FROM ?? "Via Vinilo <no-responder@viavinilo.local>",
-      signupUrl: env.SIGNUP_URL ?? "http://localhost:3002/alta",
+      contactUrl: env.SUPPORT_WHATSAPP_URL ?? "",
     },
   };
 }

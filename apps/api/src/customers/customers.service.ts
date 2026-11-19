@@ -12,6 +12,8 @@ import {
   normalizePhone,
   normalizeSearch,
   type CustomerStatus,
+  type NotificationPrefs,
+  type TaxCondition,
 } from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -23,7 +25,20 @@ const include = {
 
 export type CustomerWithContacts = Prisma.CustomerGetPayload<{ include: typeof include }>;
 
-interface CreateInput {
+/** Ficha del cliente más allá de identidad y contactos (D-038). */
+interface ProfileInput {
+  businessName?: string | null;
+  cuit?: string | null;
+  legalName?: string | null;
+  taxCondition?: TaxCondition | null;
+  fiscalAddress?: string | null;
+  city?: string | null;
+  province?: string | null;
+  creditEnabled?: boolean;
+  notificationPrefs?: NotificationPrefs;
+}
+
+interface CreateInput extends ProfileInput {
   firstName: string;
   lastName: string;
   dni: string;
@@ -33,7 +48,7 @@ interface CreateInput {
   isTrade?: boolean;
 }
 
-interface UpdateInput {
+interface UpdateInput extends ProfileInput {
   firstName?: string;
   lastName?: string;
   dni?: string;
@@ -53,6 +68,7 @@ function uniqueConflict(err: unknown): never {
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
     const target = String((err.meta?.target as string[] | string | undefined) ?? "");
     if (target.includes("dni")) throw new ConflictException("Ya existe un cliente con ese DNI");
+    if (target.includes("cuit")) throw new ConflictException("Ya existe un cliente con ese CUIT");
     if (target.includes("email")) throw new ConflictException("Ese email ya está cargado en otro cliente");
     if (target.includes("phone")) throw new ConflictException("Ese teléfono ya está cargado en otro cliente");
     throw new ConflictException("Ya existe un registro con esos datos");
@@ -118,6 +134,15 @@ export class CustomersService {
             dni: input.dni,
             internalNotes: input.internalNotes,
             isTrade: input.isTrade ?? true,
+            businessName: input.businessName,
+            cuit: input.cuit,
+            legalName: input.legalName,
+            taxCondition: input.taxCondition,
+            fiscalAddress: input.fiscalAddress,
+            city: input.city,
+            province: input.province,
+            creditEnabled: input.creditEnabled ?? false,
+            notificationPrefs: input.notificationPrefs,
             status: "ACTIVE",
             approvedAt: new Date(),
             approvedById: userId,

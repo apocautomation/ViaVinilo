@@ -5,7 +5,7 @@ import { parseMail, type ParsedMail } from "./parse";
 
 /** Avisos que dispara la ingesta. En producción manda mails por SMTP (invite.ts). */
 export interface IngestNotifier {
-  /** Mail con el link de alta a un remitente que todavía no es cliente activo (D-014). */
+  /** Mail a un remitente que todavía no es cliente activo: le dice que escriba por WhatsApp (D-014, D-038). */
   sendSignupInvite(input: { to: string; sector: Sector; subject: string | null }): Promise<void>;
 }
 
@@ -24,7 +24,7 @@ export interface IngestOutcome {
   error?: string;
 }
 
-/** No se reenvía el link de alta más de una vez por día al mismo remitente. */
+/** No se reenvía el mail de alta más de una vez por día al mismo remitente. */
 const INVITE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 /** Lo que se guarda del cuerpo del mail en la orden. */
 const MAX_BODY_CHARS = 4000;
@@ -195,7 +195,7 @@ async function maybeInvite(deps: IngestDeps, sector: Sector, customerId: string,
   } catch (err) {
     // Si el envío falla se libera la reserva para reintentar con el próximo mail.
     await deps.prisma.customer.update({ where: { id: customerId }, data: { signupInviteSentAt: null } });
-    console.error(`[mail] no se pudo enviar el link de alta a ${mail.fromEmail}`, err);
+    console.error(`[mail] no se pudo enviar el mail de alta a ${mail.fromEmail}`, err);
   }
 }
 

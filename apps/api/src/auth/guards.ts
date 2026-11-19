@@ -3,7 +3,14 @@ import { Reflector } from "@nestjs/core";
 import { JwtService } from "@nestjs/jwt";
 import type { UserRole } from "@viavinilo/contracts";
 import { PrismaService } from "../prisma/prisma.service";
-import { IS_PUBLIC, ROLES, type AuthUser } from "./decorators";
+import {
+  CUSTOMER_TOKEN_KIND,
+  IS_CUSTOMER_ROUTE,
+  IS_PUBLIC,
+  ROLES,
+  type AuthCustomer,
+  type AuthUser,
+} from "./decorators";
 
 /**
  * Exige un token válido en todas las rutas salvo las @Public().
@@ -27,11 +34,29 @@ export class JwtAuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException("Iniciá sesión para continuar");
 
     let sub: string;
+    let kind: string | undefined;
     try {
-      ({ sub } = await this.jwt.verifyAsync<{ sub: string }>(token));
+      ({ sub, kind } = await this.jwt.verifyAsync<{ sub: string; kind?: string }>(token));
     } catch {
       throw new UnauthorizedException("La sesión venció. Iniciá sesión de nuevo");
     }
+
+    // D-038: la sesión de un cliente solo sirve en las rutas de la app, y la del personal solo en el ERP.
+    const isCustomerRoute = this.reflector.getAllAndOverride<boolean>(IS_CUSTOMER_ROUTE, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
+    if (isCustomerRoute) {
+      if (kind !== CUSTOMER_TOKEN_KIND) throw new UnauthorizedException("Iniciá sesión para continuar");
+      const customer = await this.prisma.customer.findFirst({
+        where: { id: sub, status: "ACTIVE", deletedAt: null },
+        select: { id: true, customerNumber: true },
+      });
+      if (!customer) throw new UnauthorizedException("Tu cuenta no está activa. Escribinos por WhatsApp");
+      req.customer = customer satisfies AuthCustomer;
+      return true;
+    }
+    if (kind === CUSTOMER_TOKEN_KIND) throw new UnauthorizedException("Iniciá sesión para continuar");
 
     const user = await this.prisma.user.findFirst({ where: { id: sub, active: true, deletedAt: null } });
     if (!user) throw new UnauthorizedException("Tu usuario no está activo");

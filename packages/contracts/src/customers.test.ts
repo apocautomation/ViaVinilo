@@ -70,3 +70,28 @@ describe("alta de cliente", () => {
     ).toEqual([]);
   });
 });
+
+describe("ficha del cliente (D-038)", () => {
+  it("D-038: el CUIT se guarda sin guiones y exige el dígito verificador", async () => {
+    const { cuitSchema, isValidCuit } = await import("./customers");
+    expect(cuitSchema.parse("33-69345023-9")).toBe("33693450239");
+    expect(isValidCuit("30-50001091-2")).toBe(true);
+    expect(isValidCuit("30-50001091-3")).toBe(false);
+    expect(isValidCuit("2012345678")).toBe(false);
+  });
+
+  it("D-038: los datos fiscales son opcionales en el alta y un CUIT vacío no se guarda", () => {
+    const base = {
+      firstName: "Ana",
+      lastName: "Gómez",
+      dni: "30111222",
+      emails: ["ana@x.test"],
+      phones: ["387 466-9944"],
+    };
+    expect(createCustomerSchema.parse(base).cuit).toBeUndefined();
+    const withEmptyCuit = createCustomerSchema.parse({ ...base, cuit: "", businessName: "  " });
+    expect(withEmptyCuit.cuit).toBeUndefined();
+    expect(withEmptyCuit.businessName).toBeUndefined();
+    expect(createCustomerSchema.safeParse({ ...base, cuit: "20-11111111-1" }).success).toBe(false);
+  });
+});

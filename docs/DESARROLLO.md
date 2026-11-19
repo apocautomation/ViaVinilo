@@ -534,6 +534,39 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Los contenedores corren como root dentro de la imagen. Conviene pasarlos a un usuario sin privilegios.
   - Las casillas de mail por sector (D-027) van a necesitar registros MX en esta zona. Hay que agregarlos sin tocar los A.
 
+### D-038 · 19/11/2026 · Ezequiel (chat de desarrollo) · logins y alta de clientes solo desde el ERP (cambia D-014 y la actualización §2.1)
+- **Definición**:
+  - **Sin autoalta**: el cliente no puede darse de alta solo. Si no es cliente, se contacta con la empresa **por WhatsApp**, y un asesor le crea el usuario desde el ERP. Se saca la pantalla `/alta` de la app.
+  - **Ingreso a la app con el email**: el cliente pone uno de los emails de su ficha y recibe un código de 6 números en ese email (D-016). Nadie tiene contraseña. Puede entrar con cualquier email de la ficha, mientras el cliente esté **activo**.
+  - **Alta en el ERP con todos los datos que usan las automatizaciones**:
+    - **Identidad**: nombre, apellido y DNI. Son obligatorios (actualización §2.1).
+    - **Emails** (al menos uno): con cualquiera entra a la app; el principal recibe los avisos; todos sirven para reconocer al remitente de un mail (E1.1).
+    - **Teléfonos** (al menos uno): el principal es su WhatsApp e identifica sus chats en la E2.
+    - **Empresa o marca**: opcional.
+    - **Datos fiscales para facturar con ARCA (E3)**: CUIT, razón social, condición frente al IVA, y domicilio fiscal (domicilio, localidad y provincia). Son opcionales hasta la E3.
+    - **Condiciones comerciales**: gremio (sí por defecto) y cuenta corriente (no por defecto).
+    - **Avisos**: push y email, los dos prendidos por defecto.
+    - **Notas internas**.
+  - **Mail de un remitente que no es cliente** (cambia D-014): la orden se sigue guardando bloqueada en "Alta pendiente", pero el mail que se le responde ya no lleva un link de alta. Le dice que **escriba por WhatsApp** para que un asesor le dé de alta. Cuando el asesor completa la ficha y la aprueba, la orden se libera como antes.
+- **Por qué**: el alta la valida un asesor (actualización §2.1), y Ezequiel quiere que pase siempre por una persona, así se controlan los requisitos de ingreso (que sea del gremio). Los datos fiscales se piden desde el alta para no tener que volver a pedírselos en la E3, porque "los clientes vienen quemados de pasar sus datos". Que esos datos sean opcionales permite dar de alta rápido a un cliente que todavía no los tiene a mano.
+- **Impacto técnico**:
+  - Migración `customer_profile_and_login`:
+    - en `Customer`: `businessName`, `cuit`, `legalName`, `taxCondition`, `fiscalAddress`, `city`, `province` y `creditEnabled`;
+    - tabla nueva `CustomerLoginCode`.
+  - **Códigos**:
+    - Duran 10 minutos y admiten 5 intentos.
+    - Se guarda solo un hash (HMAC con `JWT_SECRET`).
+    - Pedir un código nuevo anula el anterior.
+    - Como mucho 1 código por minuto y 5 por hora por email, y 5 pedidos por minuto por IP.
+    - La respuesta es siempre la misma, para no revelar qué emails son de clientes.
+  - **Sesión del cliente**: token de 30 días con `kind: "customer"`. Esos tokens no sirven en las rutas del personal, ni al revés.
+  - **Rutas nuevas**: `POST /app/auth/request-code`, `POST /app/auth/verify` y `GET /app/me`.
+  - **Envío**: la API manda el código por SMTP (`SMTP_URL`). Sin SMTP, en desarrollo el código se escribe en el log. En producción responde que no se pudo enviar.
+  - **Worker**: `SIGNUP_URL` se reemplaza por `SUPPORT_WHATSAPP_URL` (link `wa.me` del WhatsApp de la empresa).
+  - **Pendientes**:
+    - **Falta el número de WhatsApp de la empresa**. Hasta tenerlo, el mail dice "escribinos por WhatsApp" sin el link.
+    - **Producción no puede mandar los códigos hasta tener una casilla SMTP en Hostinger.** Ver el §5.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
