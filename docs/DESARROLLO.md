@@ -565,7 +565,29 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Worker**: `SIGNUP_URL` se reemplaza por `SUPPORT_WHATSAPP_URL` (link `wa.me` del WhatsApp de la empresa).
   - **Pendientes**:
     - **Falta el número de WhatsApp de la empresa**. Hasta tenerlo, el mail dice "escribinos por WhatsApp" sin el link.
-    - **Producción no puede mandar los códigos hasta tener una casilla SMTP en Hostinger.** Ver el §5.
+    - **Producción no puede mandar los códigos hasta tener una casilla SMTP en Hostinger.** Ver el §5. *(Ya no aplica: ver D-039.)*
+  - **Actualizado por D-039**: el ingreso a la app pasa a ser con email y contraseña. El código por mail se saca.
+
+### D-039 · 19/11/2026 · Ezequiel (chat de desarrollo) · la app de clientes entra con email y contraseña (cambia D-016 y D-038)
+- **Definición**:
+  - El cliente entra a la app con **email y contraseña**. No hay código por mail.
+  - La contraseña la carga el **asesor** cuando da de alta al cliente en el ERP; puede escribirla o generar una. Se la pasa al cliente a mano, por WhatsApp o en el mostrador.
+  - Si el cliente se la olvida, escribe por WhatsApp y el asesor le pone una nueva desde la ficha. El cliente no tiene "olvidé mi contraseña" ni la puede cambiar solo.
+  - Puede entrar con **cualquier email de su ficha**, mientras el cliente esté **activo** y tenga contraseña cargada.
+  - El **WhatsApp de la empresa** queda pendiente. Ezequiel propuso poner cualquiera por ahora, pero un número inventado puede ser el de otra persona. Se deja el texto sin link hasta tener el número real.
+  - El **usuario dueño del ERP** de producción lo crea desarrollo con una contraseña provisoria, que se cambia después.
+- **Por qué**: Ezequiel no quiere depender de una casilla de envío en Hostinger para que los clientes entren. Con email y contraseña no hace falta mandar mails para el ingreso. Que la cargue el asesor mantiene la regla de D-038: no hay autoalta y todo pasa por una persona.
+- **Impacto técnico**:
+  - Migración `customer_app_password`:
+    - en `Customer`: `appPasswordHash` y `appPasswordSetAt`;
+    - se borra `CustomerLoginCode`, de D-038.
+  - **Contraseñas de clientes**: mínimo 8 caracteres. Se guardan con scrypt, igual que las del personal (D-024), y nunca quedan en la auditoría: solo queda que se cambió y quién la cambió.
+  - **Rutas**:
+    - `POST /app/auth/login` (email y contraseña → token de 30 días): reemplaza a `request-code` y `verify`. Acepta 5 intentos por minuto por IP y da la misma respuesta si el email no existe, si la contraseña está mal, si el cliente no está activo o si no tiene contraseña.
+    - `POST /customers/:id/app-password` (atención y dueño): pone o cambia la contraseña de la app.
+  - Se saca el envío de mails desde la API (`MailerService`). El SMTP sigue haciendo falta para el worker: mail a remitentes nuevos y, más adelante, avisos.
+  - Las sesiones de clientes siguen igual que en D-038: token con `kind: "customer"`, separado del personal, y se cortan al bloquear.
+  - **Al cambiar la contraseña de un cliente se cortan las sesiones que tenía abiertas**: un token emitido antes de `appPasswordSetAt` ya no sirve. Así, si alguien conocía la contraseña vieja, queda afuera.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

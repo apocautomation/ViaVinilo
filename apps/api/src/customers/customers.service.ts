@@ -16,6 +16,7 @@ import {
   type TaxCondition,
 } from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
+import { hashPassword } from "../auth/password";
 import { PrismaService } from "../prisma/prisma.service";
 
 const include = {
@@ -46,6 +47,8 @@ interface CreateInput extends ProfileInput {
   phones: string[];
   internalNotes?: string;
   isTrade?: boolean;
+  /** Contraseña de la app en claro: se guarda solo el hash (D-039). */
+  appPassword?: string;
 }
 
 interface UpdateInput extends ProfileInput {
@@ -123,7 +126,8 @@ export class CustomersService {
   }
 
   /** Alta desde el backoffice: la hace un asesor, así que el cliente queda activo y aprobado por él. */
-  async create(input: CreateInput, userId: string) {
+  async create({ appPassword, ...input }: CreateInput, userId: string) {
+    const appPasswordHash = appPassword ? await hashPassword(appPassword) : undefined;
     try {
       return await this.prisma.$transaction(async (tx) => {
         const created = await tx.customer.create({
@@ -143,6 +147,8 @@ export class CustomersService {
             province: input.province,
             creditEnabled: input.creditEnabled ?? false,
             notificationPrefs: input.notificationPrefs,
+            appPasswordHash,
+            appPasswordSetAt: appPasswordHash ? new Date() : undefined,
             status: "ACTIVE",
             approvedAt: new Date(),
             approvedById: userId,
@@ -184,6 +190,23 @@ export class CustomersService {
     } catch (err) {
       uniqueConflict(err);
     }
+  }
+
+  /**
+   * El asesor pone o cambia la contraseña de la app (D-039). En la auditoría queda que se cambió
+   * y quién lo hizo, nunca la contraseña ni el hash. Las sesiones anteriores del cliente se cortan.
+   */
+  async setAppPassword(id: string, password: string, userId: string) {
+    const customer = await this.get(id);
+    const appPasswordHash = await hashPassword(password);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customer.update({ where: { id }, data: { appPasswordHash, appPasswordSetAt: new Date() } });
+      await this.audit.log(
+        { entity: "Customer", entityId: id, action: "set_app_password", userId, after: { hadPassword: customer.appPasswordSetAt !== null } },
+        tx,
+      );
+    });
+    return this.get(id);
   }
 
   /** Un asesor aprueba un alta pendiente. Exige los datos mínimos de la actualización §2.1. */

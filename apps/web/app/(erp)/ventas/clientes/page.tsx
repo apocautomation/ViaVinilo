@@ -55,7 +55,7 @@ export default function CustomersPage() {
         help={
           <>
             Los clientes no se dan de alta solos: escriben por WhatsApp y un asesor los carga acá con todos sus datos.
-            Con cualquiera de sus emails entran a la app con un código. Las <b>altas pendientes</b> son
+            Entran a la app con cualquiera de sus emails y la contraseña que les carga el asesor. Las <b>altas pendientes</b> son
             remitentes de mails que todavía no son clientes: completá la ficha y aprobala para liberar sus trabajos.
           </>
         }

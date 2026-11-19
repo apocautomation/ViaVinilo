@@ -983,3 +983,18 @@ details.faq p {
   font-weight: 600;
   text-align: center;
 }
+.password-row {
+  position: relative;
+  display: block;
+}
+.password-row input {
+  width: 100%;
+  padding-right: 52px;
+}
+.password-row .icon-btn {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+}

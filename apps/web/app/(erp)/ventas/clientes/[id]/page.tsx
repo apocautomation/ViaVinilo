@@ -8,7 +8,7 @@ import { CUSTOMER_STATUS_LABELS } from "@viavinilo/contracts";
 import { api, ApiError } from "../../../../lib/api";
 import { Badge, PageHead } from "../../../ui";
 import { formatPhone, fullName, STATUS_TONE, type Customer } from "../customer";
-import { CustomerForm, initialValues, toPayload } from "../customer-form";
+import { CustomerForm, generateAppPassword, initialValues, toPayload } from "../customer-form";
 
 const errorText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal. Probá de nuevo.");
 
@@ -140,6 +140,50 @@ function Contacts({ customer, onChange }: { customer: Customer; onChange: () => 
   );
 }
 
+/** El asesor pone o cambia la contraseña de la app y se la pasa al cliente (D-039). */
+function AppPasswordDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (password: string) => Promise<void> }) {
+  const [password, setPassword] = useState(generateAppPassword);
+  const [error, setError] = useState("");
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <form
+        className="dialog"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          onConfirm(password).catch((err: unknown) => setError(errorText(err)));
+        }}
+      >
+        <h3>Contraseña de la app</h3>
+        <p className="muted">
+          Pasásela al cliente por WhatsApp o en el mostrador. Al guardarla se cierran las sesiones que tenía abiertas.
+        </p>
+        <div className="contact-row">
+          <input
+            className="mono"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
+            required
+            autoFocus
+            aria-label="Nueva contraseña de la app"
+          />
+          <button type="button" className="btn btn-ghost" onClick={() => setPassword(generateAppPassword())}>
+            Generar otra
+          </button>
+        </div>
+        {error && <p className="error">{error}</p>}
+        <div className="form-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="btn btn-primary">Guardar contraseña</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function BlockDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (reason: string) => Promise<void> }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -176,8 +220,9 @@ function CustomerDetail() {
   const isNew = useSearchParams().get("nuevo") === "1";
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState(isNew ? "Cliente dado de alta. Ya puede entrar a la app con cualquiera de sus emails." : "");
+  const [notice, setNotice] = useState(isNew ? "Cliente dado de alta. Pasale por WhatsApp su email y la contraseña de la app." : "");
   const [blocking, setBlocking] = useState(false);
+  const [settingPassword, setSettingPassword] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -216,6 +261,9 @@ function CustomerDetail() {
         title={fullName(customer)}
         actions={
           <>
+            <button className="btn btn-ghost" onClick={() => setSettingPassword(true)}>
+              {customer.appPasswordSetAt ? "Cambiar contraseña de la app" : "Cargar contraseña de la app"}
+            </button>
             <Badge tone={STATUS_TONE[customer.status]}>{CUSTOMER_STATUS_LABELS[customer.status]}</Badge>
             <span className="mono muted">Cliente N.º {customer.customerNumber}</span>
             {customer.status === "PENDING" && (
@@ -260,6 +308,20 @@ function CustomerDetail() {
           setNotice("Cambios guardados.");
         }}
       />
+
+      {!customer.appPasswordSetAt && customer.status === "ACTIVE" && (
+        <p className="warn-note">Este cliente todavía no tiene contraseña: no puede entrar a la app.</p>
+      )}
+
+      {settingPassword && (
+        <AppPasswordDialog
+          onClose={() => setSettingPassword(false)}
+          onConfirm={async (password) => {
+            await action("app-password", { password }, "Contraseña guardada. Pasásela al cliente; sus sesiones anteriores se cerraron.");
+            setSettingPassword(false);
+          }}
+        />
+      )}
 
       {blocking && (
         <BlockDialog

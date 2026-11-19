@@ -5,6 +5,7 @@ import {
   blockCustomerSchema,
   createCustomerSchema,
   listCustomersSchema,
+  setAppPasswordSchema,
   updateCustomerSchema,
 } from "@viavinilo/contracts";
 import { CurrentUser, Roles, type AuthUser } from "../auth/decorators";
@@ -64,6 +65,18 @@ export class CustomersController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.customers.block(id, body.reason, user.id);
+  }
+
+  /** Pone o cambia la contraseña de la app del cliente (D-039). */
+  @Post(":id/app-password")
+  @HttpCode(200)
+  @Roles("ATTENTION")
+  setAppPassword(
+    @Param("id") id: string,
+    @ZodBody(setAppPasswordSchema) body: { password: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.customers.setAppPassword(id, body.password, user.id);
   }
 
   @Post(":id/unblock")

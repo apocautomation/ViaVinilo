@@ -1514,3 +1514,12 @@ table.data tfoot td {
   font-size: 13.5px;
   font-weight: 500;
 }
+.warn-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: 13.5px;
+  font-weight: 500;
+}

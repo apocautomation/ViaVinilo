@@ -35,8 +35,9 @@ export class JwtAuthGuard implements CanActivate {
 
     let sub: string;
     let kind: string | undefined;
+    let iat = 0;
     try {
-      ({ sub, kind } = await this.jwt.verifyAsync<{ sub: string; kind?: string }>(token));
+      ({ sub, kind, iat = 0 } = await this.jwt.verifyAsync<{ sub: string; kind?: string; iat?: number }>(token));
     } catch {
       throw new UnauthorizedException("La sesión venció. Iniciá sesión de nuevo");
     }
@@ -50,10 +51,14 @@ export class JwtAuthGuard implements CanActivate {
       if (kind !== CUSTOMER_TOKEN_KIND) throw new UnauthorizedException("Iniciá sesión para continuar");
       const customer = await this.prisma.customer.findFirst({
         where: { id: sub, status: "ACTIVE", deletedAt: null },
-        select: { id: true, customerNumber: true },
+        select: { id: true, customerNumber: true, appPasswordSetAt: true },
       });
       if (!customer) throw new UnauthorizedException("Tu cuenta no está activa. Escribinos por WhatsApp");
-      req.customer = customer satisfies AuthCustomer;
+      // D-039: si el asesor le cambió la contraseña, las sesiones anteriores dejan de servir.
+      if (customer.appPasswordSetAt && iat * 1000 < Math.floor(customer.appPasswordSetAt.getTime() / 1000) * 1000) {
+        throw new UnauthorizedException("La sesión venció. Iniciá sesión de nuevo");
+      }
+      req.customer = { id: customer.id, customerNumber: customer.customerNumber } satisfies AuthCustomer;
       return true;
     }
     if (kind === CUSTOMER_TOKEN_KIND) throw new UnauthorizedException("Iniciá sesión para continuar");

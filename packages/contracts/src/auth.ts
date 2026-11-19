@@ -17,20 +17,21 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.input<typeof loginSchema>;
 
-/** Ingreso del cliente a la app: pide un código al email (D-016, D-038). */
-export const requestLoginCodeSchema = z.object({
-  email: z.string().trim().toLowerCase().email("El email no es válido"),
-});
-export type RequestLoginCodeInput = z.input<typeof requestLoginCodeSchema>;
+/** Contraseña de la app de clientes: mínimo 8 caracteres. La carga el asesor (D-039). */
+export const customerPasswordSchema = z
+  .string()
+  .min(8, "La contraseña de la app tiene que tener al menos 8 caracteres")
+  .max(200);
 
-export const verifyLoginCodeSchema = z.object({
+/** Ingreso del cliente a la app con email y contraseña (D-039). */
+export const customerLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email("El email no es válido"),
-  code: z
-    .string()
-    .transform((c) => c.replace(/\D/g, ""))
-    .refine((c) => c.length === 6, "El código tiene 6 números"),
+  password: z.string().min(1, "Ingresá la contraseña"),
 });
-export type VerifyLoginCodeInput = z.input<typeof verifyLoginCodeSchema>;
+export type CustomerLoginInput = z.input<typeof customerLoginSchema>;
+
+/** El asesor pone o cambia la contraseña de la app de un cliente (D-039). */
+export const setAppPasswordSchema = z.object({ password: customerPasswordSchema });
 
 /** Contraseñas del personal: mínimo 10 caracteres. */
 export const passwordSchema = z.string().min(10, "La contraseña tiene que tener al menos 10 caracteres").max(200);

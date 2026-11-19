@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { customerPasswordSchema } from "./auth";
 import { normalizeDni, normalizeEmail, normalizePhone } from "./contact";
 
 export const CUSTOMER_STATUSES = ["PENDING", "ACTIVE", "BLOCKED"] as const;
@@ -99,6 +100,8 @@ export const createCustomerSchema = z.object({
   internalNotes: z.string().trim().max(2000).optional(),
   isTrade: z.boolean().optional(),
   ...profileFields,
+  /** Contraseña de la app (D-039). Opcional: sin ella el cliente no puede entrar hasta que se la carguen. */
+  appPassword: z.union([z.literal("").transform(() => undefined), customerPasswordSchema]).optional(),
 });
 export type CreateCustomerInput = z.input<typeof createCustomerSchema>;
 

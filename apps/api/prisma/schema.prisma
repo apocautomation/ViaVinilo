@@ -105,7 +105,10 @@ model Customer {
   creditEnabled      Boolean         @default(false)
   /// { push: boolean, email: boolean }. Sin valor = los dos prendidos (D-038).
   notificationPrefs  Json?
-  loginCodes         CustomerLoginCode[]
+  /// Contraseña de la app (scrypt). La carga el asesor desde el ERP (D-039). Sin valor = no puede entrar.
+  appPasswordHash    String?
+  /// Último cambio de contraseña: los tokens emitidos antes ya no sirven (D-039).
+  appPasswordSetAt   DateTime?
   approvedAt         DateTime?
   /// Último mail con el link de alta enviado a un remitente nuevo (D-014). Evita mandarlo en cada mail.
   signupInviteSentAt DateTime?
@@ -144,23 +147,6 @@ model CustomerPhone {
   isPrimary  Boolean  @default(false)
   createdAt  DateTime @default(now())
 
-  @@index([customerId])
-}
-
-/// Código de 6 números para entrar a la app (D-016, D-038). Se guarda solo el hash.
-model CustomerLoginCode {
-  id         String    @id @default(cuid())
-  customerId String
-  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  /// Email al que se mandó el código, en minúsculas.
-  email      String
-  codeHash   String
-  expiresAt  DateTime
-  attempts   Int       @default(0)
-  usedAt     DateTime?
-  createdAt  DateTime  @default(now())
-
-  @@index([email, createdAt])
   @@index([customerId])
 }
 

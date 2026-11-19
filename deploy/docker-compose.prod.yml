@@ -15,7 +15,7 @@ x-app: &app
     DATABASE_URL: postgresql://viavinilo:${POSTGRES_PASSWORD}@postgres:5432/viavinilo?schema=public
     REDIS_URL: redis://redis:6379
     TZ: America/Argentina/Salta
-    # Sin SMTP, en producción el código de ingreso no se escribe en el log: se responde que no se pudo enviar (D-038).
+    # Modo producción de Node y Next (sin mensajes de desarrollo en el log).
     NODE_ENV: production
   depends_on:
     postgres: { condition: service_healthy }

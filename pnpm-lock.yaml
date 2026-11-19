@@ -53,9 +53,6 @@ importers:
       libphonenumber-js:
         specifier: ^1.13.16
         version: 1.13.16
-      nodemailer:
-        specifier: ^10.6.0
-        version: 10.6.0
       reflect-metadata:
         specifier: ^0.2.0
         version: 0.2.2
@@ -81,30 +78,15 @@ importers:
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6
-      '@types/mailparser':
-        specifier: ^3.9.0
-        version: 3.9.0
       '@types/node':
         specifier: ^24.0.0
         version: 24.19.2
-      '@types/nodemailer':
-        specifier: ^8.0.2
-        version: 8.0.2
-      '@types/smtp-server':
-        specifier: ^3.5.13
-        version: 3.5.13
       '@types/supertest':
         specifier: ^7.2.1
         version: 7.2.1
-      mailparser:
-        specifier: ^3.14.5
-        version: 3.14.5
       prisma:
         specifier: ^6.0.0
         version: 6.19.3(typescript@5.9.3)
-      smtp-server:
-        specifier: ^3.21.6
-        version: 3.21.6
       supertest:
         specifier: ^7.3.2
         version: 7.3.2(supports-color@8.1.1)
