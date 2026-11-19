@@ -1,0 +1,43 @@
+# Caddy del VPS (D-036, D-037). Se copia a /etc/caddy/Caddyfile.
+# La API se sirve en /api de cada dominio: mismo origen que el front, sin subdominio extra.
+
+(api) {
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:3001 {
+			# El tablero usa SSE: sin buffer, para que los cambios lleguen al instante.
+			flush_interval -1
+		}
+	}
+}
+
+(security) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	encode zstd gzip
+}
+
+# App de clientes
+viavinilo.tech {
+	import security
+	import api
+	handle {
+		reverse_proxy 127.0.0.1:3002
+	}
+}
+
+www.viavinilo.tech {
+	redir https://viavinilo.tech{uri} permanent
+}
+
+# ERP
+erp.viavinilo.tech {
+	import security
+	import api
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

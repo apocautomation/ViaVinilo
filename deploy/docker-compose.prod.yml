@@ -1,0 +1,95 @@
+# Producción en el VPS (D-037). Se corre desde /srv/viavinilo:
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+# Ningún contenedor publica puertos al exterior: Docker saltea ufw (D-035).
+# Solo se exponen en 127.0.0.1 y al público se sale únicamente por Caddy.
+
+name: viavinilo
+
+x-app: &app
+  image: viavinilo-app:latest
+  # La imagen la construye el servicio api; los demás no la buscan en un registro.
+  pull_policy: never
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://viavinilo:${POSTGRES_PASSWORD}@postgres:5432/viavinilo?schema=public
+    REDIS_URL: redis://redis:6379
+    TZ: America/Argentina/Salta
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: viavinilo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: viavinilo
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viavinilo"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+  api:
+    <<: *app
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?falta NEXT_PUBLIC_API_URL}
+    working_dir: /app/apps/api
+    # Aplica las migraciones pendientes antes de arrancar.
+    command: ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/main.js"]
+    environment:
+      DATABASE_URL: postgresql://viavinilo:${POSTGRES_PASSWORD}@postgres:5432/viavinilo?schema=public
+      REDIS_URL: redis://redis:6379
+      TZ: America/Argentina/Salta
+      API_PORT: "3001"
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - storage:/app/storage
+
+  worker:
+    <<: *app
+    working_dir: /app/apps/worker
+    command: ["node", "dist/main.js"]
+    depends_on:
+      api: { condition: service_started }
+    volumes:
+      - storage:/app/storage
+
+  web:
+    <<: *app
+    working_dir: /app/apps/web
+    command: ["./node_modules/.bin/next", "start", "--port", "3000"]
+    depends_on:
+      api: { condition: service_started }
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  pwa:
+    <<: *app
+    working_dir: /app/apps/pwa
+    command: ["./node_modules/.bin/next", "start", "--port", "3002"]
+    depends_on: []
+    ports:
+      - "127.0.0.1:3002:3002"
+
+volumes:
+  pgdata:
+  redisdata:
+  storage:
