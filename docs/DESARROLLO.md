@@ -489,7 +489,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Cómo quedó la zona**:
   - **`@`, `www` y `erp`**: registros A al VPS, con TTL 300. Igual que en D-035, la IP no se guarda en el repo: es la del VPS.
   - **Parking borrado**: se borraron el A de `@`, que apuntaba al parking de Hostinger, y el CNAME de `www`, que apuntaba a `@`. Un CNAME no puede convivir con un A en el mismo nombre.
-  - **Sin otros registros**: la zona no tiene MX, así que hoy el dominio no recibe mail.
+  - **Sin MX**: `viavinilo.tech` no recibe mail, por decisión de Ezequiel (ver más abajo).
 - **Verificación (19/11)**:
   - Los tres nombres resuelven a la IP del VPS en el nameserver de Hostinger, en 8.8.8.8 y en 1.1.1.1.
   - Caddy, ya configurado en el VPS, sacó solo un certificado de Let's Encrypt para cada nombre, que vence el 17/02/2027 y lo renueva Caddy.
@@ -500,8 +500,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - El TTL de 300 permite corregir rápido mientras se arma el deploy. Cuando se estabilice se puede subir.
 - **Impacto**:
   - Queda resuelto el pendiente "Dominios" del §5.
-  - `erp.viavinilo.tech` es el ERP. Falta decidir explícitamente si la raíz y `www` sirven la app de clientes, la web o las dos cosas.
-  - Las casillas de mail por sector (D-027) van a necesitar registros MX en esta zona. Hay que agregarlos sin tocar los A.
+- **Qué sirve cada nombre** (Ezequiel, revisión del PR #13, 19/11):
+  - `viavinilo.tech` (y `www`): la **app de clientes** (`apps/pwa`).
+  - `erp.viavinilo.tech`: el **sistema**, es decir el ERP o backoffice (`apps/web`).
+  - Esto sigue la división de D-032: el sistema son dos cosas, el ERP y la app de clientes.
+- **Mail**: `viavinilo.tech` no recibe mail y no se le agregan MX. Las casillas por sector de la ingesta IMAP (D-027) no van en este dominio.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
