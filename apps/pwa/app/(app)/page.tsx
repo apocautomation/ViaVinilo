@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, ChevronRight, Clock, PackageCheck } from "lucide-react";
+import { AlertTriangle, ChevronRight, ClipboardList, Clock, PackageCheck } from "lucide-react";
 import { AppBar, StatusPill, StepsBar } from "../components";
 import { ORDERS, ars } from "../data";
 import { useSession } from "../session";
@@ -30,8 +30,6 @@ export default function PedidosPage() {
           </div>
         </section>
 
-        {/* TODO(spec): paso 6 del SPEC §10 — reemplazar por los pedidos reales del cliente. */}
-        <p className="sample-note">Pedidos de ejemplo: el seguimiento real se conecta en el próximo paso.</p>
 
         <div className="stats">
           <div className="card stat">
@@ -56,6 +54,14 @@ export default function PedidosPage() {
             Entregados
           </button>
         </div>
+
+        {list.length === 0 && (
+          <section className="card empty-orders">
+            <ClipboardList size={28} aria-hidden />
+            <strong>{tab === "curso" ? "No tenés pedidos en curso" : "Todavía no tenés pedidos entregados"}</strong>
+            <span className="muted">Cuando nos mandes un trabajo, lo vas a poder seguir acá paso a paso.</span>
+          </section>
+        )}
 
         {list.map((o) => (
           <Link key={o.id} href={`/pedidos/${o.id}`} className="card order">

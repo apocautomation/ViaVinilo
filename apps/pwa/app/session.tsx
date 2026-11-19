@@ -84,22 +84,38 @@ export function useSession() {
 export function SessionGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
+  const [failed, setFailed] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!getToken()) {
       router.replace("/ingresar");
       return;
     }
+    setFailed("");
     api<Me>("/app/me")
       .then(setMe)
       .catch((e: unknown) => {
         if (e instanceof ApiError && e.status === 401) {
           clearToken();
           router.replace("/ingresar");
+          return;
         }
+        // Sin conexión o el sistema caído: avisar en vez de quedar en blanco.
+        setFailed(e instanceof Error ? e.message : "No pudimos cargar tus datos.");
       });
-  }, [router]);
+  }, [router, attempt]);
 
+  if (failed) {
+    return (
+      <main className="screen splash-error">
+        <p>{failed}</p>
+        <button className="btn btn-primary" onClick={() => setAttempt((a) => a + 1)}>
+          Probar de nuevo
+        </button>
+      </main>
+    );
+  }
   if (!me) return <div className="splash" aria-busy="true" />;
 
   const logout = () => {
