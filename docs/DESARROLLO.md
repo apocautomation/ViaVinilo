@@ -652,7 +652,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Así no hay que pedirles las contraseñas ni cambiarlas, y los empleados siguen como hoy.
   - Se crea un token solo para las 6 casillas de sector y se guarda en el `.env` del VPS.
   - El worker suma una fuente `hostinger-api` además de `imap`.
-  - **Crear el token necesita el OK explícito de Ezequiel**, porque es una credencial nueva sobre el correo del cliente.
+  - ~~Crear el token necesita el OK explícito de Ezequiel~~ **Hecho el 19/11 con su OK**:
+    - Token "Via Vinilo ERP - casillas de sector (APOC)", limitado a `dtf@`, `dtfuv@`, `granformato@`, `latex@`, `calandra@` y `sublimacion@`.
+    - Está guardado solo en el `.env` del VPS (`HOSTINGER_MAIL_API_TOKEN`). Se revoca desde Hostinger.
+    - **Probado** desde el VPS: ve las 6 casillas y lista la bandeja sin abrir ni marcar mails (unos 400 mails entre las 6).
+  - **Cómo usarla** (documentación de la API de mail, `https://api.mail.hostinger.com/api/v1`, con Bearer token):
+    - Se lee con `/source` (MIME completo), que no marca el mail como leído.
+    - Para no repetir, se guarda el último `uid` de cada casilla. La deduplicación por Message-ID sigue igual.
+    - Para responder se usa `POST /mailboxes/{id}/send` con `inReplyTo` = el `uid` del mail original, así queda en el mismo hilo.
+    - Para recibir al instante hay webhooks `message.received`. Al principio alcanza con revisar cada minuto.
 - **Por qué**: Ezequiel señaló que el MCP de Hostinger ya está conectado. Con la API no hace falta pedir contraseñas, que es lo que trababa la ingesta real desde D-027.
 
 ### D-044 · 19/11/2026 · Ezequiel · la E1 se entrega completa para cobrarla
@@ -666,7 +674,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - Tablero por sector con pasos obligatorios y cotización y seña antes de imprimir (D-030).
     - Ingesta de mail con control de duplicados, probada con una casilla simulada (D-027).
   - **Falta, en este orden**:
-    1. **Mail real**: token de la API de Hostinger, fuente `hostinger-api` en el worker y casillas `@viavinilo.com` (D-043). Sin esto no entra ningún trabajo real.
+    1. **Mail real en el ERP**: fuente `hostinger-api` en el worker (el token ya está), casillas `@viavinilo.com`, y bandeja de mails en Conversaciones con respuestas (D-041, D-043). Sin esto no entra ningún trabajo real ni el equipo se puede mudar.
     2. **Ficha de la orden**: editar medida, precio y descripción (paso 5); motivos de error y reenvío de archivo.
     3. **Estado real** (D-042): el archivo solo sale de la tarjeta, "Impreso" de a varios y alertas.
     4. **App con pedidos reales** (paso 6): estado, medida, precio y hora estimada; push, y el email como respaldo.
@@ -675,7 +683,12 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     7. **Panel de tiempos** con datos reales; hoy es una vista previa.
     8. **Borrado automático de archivos** a los 30 días de entregada la orden (D-015).
     9. **Migración de clientes** de Runamatic y Tango: depende de que el cliente pase los datos (§5).
-  - **No es E1, según el contrato**: la bandeja de Conversaciones con chat y respuestas (D-041) es de la E2. Se puede adelantar la parte de mostrar los mails de cada cliente si Ezequiel lo prioriza, sin que eso frene el cobro de la E1.
+  - **La bandeja de mails entra en la E1** (Ezequiel, 19/11): "no podemos hacerlos mudar sin tener algo primero". Si los pedidos entran por mail y el mail no está en el ERP, el equipo seguiría trabajando desde la casilla y el sistema quedaría como una carga manual de más. Por eso el paso 1 incluye:
+    - ver en Ventas → Conversaciones los mails de cada casilla, en el hilo de cada cliente, con su adjunto y la orden que creó;
+    - responder desde ahí.
+
+    El chat de la app con el asistente y la derivación a un asesor siguen en la E2 (contrato).
+    Esto se encuadra en la E1 como parte de "Ingreso de trabajos por IMAP desde las casillas de Hostinger" (Anexo I); el Anexo I permite ajustar funcionalidades dentro de cada módulo sin cambiar el alcance (cláusula 2.2).
 - **Por qué**: Ezequiel necesita cobrar la E1 completa. Ordenar lo que falta deja claro qué se entrega y qué depende del cliente.
 
 ## 5. Pendientes del cliente para arrancar la E1
