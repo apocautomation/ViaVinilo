@@ -481,8 +481,21 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Los paquetes son de Ubuntu, sin scripts de terceros, para que las actualizaciones automáticas los cubran.
 - **Impacto**:
   - Docker publica puertos salteando ufw, así que los contenedores tienen que escuchar solo en `127.0.0.1`. Al exterior se sale únicamente por Caddy.
-  - **Faltan los dominios**: por ejemplo, uno para el ERP y otro para la app de clientes, apuntando a la IP del VPS. Sin eso no hay HTTPS, y la PWA y el push lo necesitan.
+  - **Faltan los dominios**: por ejemplo, uno para el ERP y otro para la app de clientes, apuntando a la IP del VPS. Sin eso no hay HTTPS, y la PWA y el push lo necesitan. Resuelto en D-036.
   - **Choque con D-029**: Trip calcula 8 vCPU para el modelo local del agente y el VPS tiene 4. Alcanza de sobra para la E1. Para la IA local de la E2 hay que medir; si no alcanza, la ampliación la paga el cliente, según el contrato. Ver I-20.
+
+### D-036 · 19/11/2026 · Ezequiel · dominios del sistema
+- **Definición**: el dominio es `viavinilo.tech`, registrado en Hostinger.
+  - **App de clientes**: `viavinilo.tech`. `www.viavinilo.tech` sirve lo mismo.
+  - **ERP**: `erp.viavinilo.tech`.
+- **Cómo quedó**:
+  - **DNS**: en Hostinger, tres registros A (`@`, `www` y `erp`) apuntan al VPS, con TTL 300. Se cargaron con el MCP de Hostinger.
+  - **Caddy**: tiene los tres nombres y sacó certificados de Let's Encrypt, que renueva solo.
+  - Por ahora cada dominio responde una página "en preparación", hasta que se suba el sistema.
+- **Por qué**: la PWA y las notificaciones push solo funcionan con HTTPS. Además, el link de alta que va en los mails (`SIGNUP_URL`) necesita una dirección pública.
+- **Impacto**:
+  - `SIGNUP_URL` en producción va a ser `https://viavinilo.tech/alta`.
+  - Falta definir por dónde se expone la API. La propuesta es la ruta `/api` dentro de cada dominio, por Caddy: así no hace falta un subdominio más y se evitan los problemas de CORS. Se define al subir el sistema.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
