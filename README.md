@@ -86,3 +86,21 @@ Cada mail procesado queda en la tabla `MailIngestLog` con su resultado. Detalle 
 | `pnpm typecheck` | Chequeo de tipos de todos los paquetes. |
 | `pnpm build` | Build de producción. |
 | `node packages/ui/scripts/generate-palette.mjs` | Regenera la paleta desde los colores del logo. |
+
+## Producción (VPS)
+
+Se describe en D-036 y D-037 de `docs/DESARROLLO.md`.
+
+- **App de clientes:** `https://viavinilo.tech`
+- **ERP:** `https://erp.viavinilo.tech`
+- **API:** `/api` de cada dominio
+
+Para actualizar el VPS, desde la raíz del repo y con la clave SSH del proyecto:
+
+```bash
+git archive HEAD | ssh deploy@<vps> "cd /srv/viavinilo && tar -xf -"
+ssh deploy@<vps> "cd /srv/viavinilo && docker compose -f deploy/docker-compose.prod.yml build api && docker compose -f deploy/docker-compose.prod.yml up -d"
+```
+
+- **Secretos:** solo en `deploy/.env` del VPS. La plantilla es `deploy/.env.prod.example`.
+- **Caddy:** si cambia `deploy/Caddyfile`, copiarlo a `/etc/caddy/Caddyfile` y hacer `sudo systemctl reload caddy`.
