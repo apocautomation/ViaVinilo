@@ -1,6 +1,14 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { CONVERSATION_FILTERS, formatJobNumber, isResetCommand, normalizeSearch, RESET_REPLY, type MessageChannel } from "@viavinilo/contracts";
+import {
+  CONVERSATION_FILTERS,
+  formatJobNumber,
+  isResetCommand,
+  normalizeSearch,
+  RESET_REPLY,
+  type MessageAttachment,
+  type MessageChannel,
+} from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -20,6 +28,8 @@ const appMessageSelect = {
   body: true,
   attachments: true,
   createdAt: true,
+  /** Pedido que creó el mensaje (un archivo mandado por la app, D-062). */
+  jobId: true,
   /** El cliente sabe cuándo le responde el asistente virtual y no una persona (D-056). */
   fromBot: true,
 } satisfies Prisma.MessageSelect;
@@ -209,7 +219,8 @@ export class ConversationsService {
    * - por mail: sale desde la casilla del sector del último mail del cliente y en el mismo hilo,
    *   o desde la casilla general si el cliente nunca escribió por mail.
    */
-  async send(id: string, input: { text: string; channel: MessageChannel }, userId: string) {
+  async send(id: string, input: { text: string; channel: MessageChannel }, userId: string, attachments: MessageAttachment[] = []) {
+    const files = attachments.length ? (attachments as unknown as Prisma.InputJsonValue) : undefined;
     const conv = await this.prisma.conversation.findUnique({
       where: { id },
       include: { customer: { select: { id: true, status: true, emails: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], take: 1 } } } },
@@ -222,7 +233,7 @@ export class ConversationsService {
       }
       return this.prisma.$transaction(async (tx) => {
         const msg = await tx.message.create({
-          data: { conversationId: id, direction: "OUT", channel: "APP", body: input.text, authorId: userId },
+          data: { conversationId: id, direction: "OUT", channel: "APP", body: input.text, authorId: userId, attachments: files },
         });
         await tx.conversation.update({
           where: { id },
@@ -259,6 +270,7 @@ export class ConversationsService {
           customerId: conv.customerId,
           fromAddress: lastMail?.sector?.inboxEmail ?? null,
           inReplyToUid: lastMail?.mailUid ?? null,
+          attachments: files,
         },
       });
       const msg = await tx.message.create({
@@ -271,6 +283,7 @@ export class ConversationsService {
           body: input.text,
           authorId: userId,
           outboundEmailId: out.id,
+          attachments: files,
         },
       });
       await tx.conversation.update({

@@ -65,6 +65,12 @@ export class JobsController {
     return this.jobs.detail(user, id);
   }
 
+  /** Archivo para imprimir (D-062): se libera según el estado del pedido. */
+  @Get(":id/files/:fileId")
+  download(@Param("id") id: string, @Param("fileId") fileId: string, @CurrentUser() user: AuthUser) {
+    return this.jobs.downloadFile(user, id, fileId);
+  }
+
   @Post(":id/transition")
   @HttpCode(200)
   transition(@Param("id") id: string, @ZodBody(transitionSchema) body: TransitionBody, @CurrentUser() user: AuthUser) {

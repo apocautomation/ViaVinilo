@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { attachmentsOf } from "@viavinilo/contracts";
 import nodemailer from "nodemailer";
 import { hostingerMailboxIds, HostingerMailError, type HostingerMailConfig } from "./sources/hostinger-api";
 
@@ -15,6 +16,8 @@ export interface OutgoingMail {
   from?: string | null;
   /** UID del mail original en esa casilla, para responder en el mismo hilo (D-045). */
   inReplyToUid?: number | null;
+  /** Adjuntos que mandó el asesor (D-062). */
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 export type MailSender = (mail: OutgoingMail) => Promise<void>;
@@ -49,6 +52,9 @@ export function hostingerSender(
         subject: mail.subject,
         text: mail.text,
         displayName: "Via Vinilo",
+        ...(mail.attachments?.length
+          ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64"), contentType: a.contentType })) }
+          : {}),
         ...(mail.inReplyToUid ? { inReplyTo: { uid: mail.inReplyToUid, folder: "INBOX" } } : {}),
       }),
     });
@@ -67,6 +73,7 @@ export function smtpSender(url: string, from: string): MailSender {
       to: mail.to,
       subject: mail.subject,
       text: mail.text,
+      attachments: mail.attachments?.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })),
       headers: { "Auto-Submitted": "auto-generated" },
     });
   };
@@ -76,7 +83,7 @@ export function smtpSender(url: string, from: string): MailSender {
 export async function sendOutbox(
   prisma: PrismaClient,
   send: MailSender,
-  opts: { perRun?: number; gapMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+  opts: { perRun?: number; gapMs?: number; sleep?: (ms: number) => Promise<void>; readFile?: (key: string) => Promise<Buffer> } = {},
 ): Promise<{ sent: number; failed: number }> {
   const perRun = opts.perRun ?? OUTBOX.perRun;
   const gapMs = opts.gapMs ?? OUTBOX.gapMs;
@@ -91,7 +98,20 @@ export async function sendOutbox(
   for (const [i, mail] of pending.entries()) {
     if (i > 0) await sleep(gapMs);
     try {
-      await send({ to: mail.to, subject: mail.subject, text: mail.text, from: mail.fromAddress, inReplyToUid: mail.inReplyToUid });
+      // D-062: los adjuntos se leen del almacenamiento recién al enviar.
+      const files = attachmentsOf(mail.attachments).filter((a) => a.key);
+      if (files.length && !opts.readFile) throw new Error("Hay adjuntos pero el worker no tiene acceso al almacenamiento");
+      const attachments = await Promise.all(
+        files.map(async (a) => ({ filename: a.name, content: await opts.readFile!(a.key!), contentType: a.mime ?? "application/octet-stream" })),
+      );
+      await send({
+        to: mail.to,
+        subject: mail.subject,
+        text: mail.text,
+        from: mail.fromAddress,
+        inReplyToUid: mail.inReplyToUid,
+        ...(attachments.length ? { attachments } : {}),
+      });
       await prisma.outboundEmail.update({
         where: { id: mail.id },
         data: { status: "SENT", sentAt: new Date(), text: mail.text.replace(LINK, "[link enviado]"), lastError: null },

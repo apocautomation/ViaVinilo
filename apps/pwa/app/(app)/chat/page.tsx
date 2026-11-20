@@ -3,9 +3,96 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { CircleHelp, Mail, Send } from "lucide-react";
+import { CircleHelp, Download, Mail, Paperclip, Send, X } from "lucide-react";
+import { ACCEPT_ATTRIBUTE, attachmentsOf, formatBytes, help, MAX_UPLOAD_BYTES, type SectorCode } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
-import { api } from "../../session";
+import { api, downloadFile, upload } from "../../session";
+
+/** Servicio de la Ayuda → tablero donde entra el pedido (D-062). */
+const SECTOR_OF: Record<string, SectorCode> = {
+  "dtf-textil": "DTF",
+  "dtf-uv": "DTF_UV",
+  sublimacion: "SUBLIMACION",
+  calandra: "CALANDRADO",
+  "uv-rigidos": "GRAN_FORMATO",
+  ecosolvente: "GRAN_FORMATO",
+  "uv-rollo": "GRAN_FORMATO",
+  corte: "GRAN_FORMATO",
+  latex: "LATEX",
+};
+
+/**
+ * Mandar un archivo por el chat (D-062): el cliente elige el servicio, escribe medidas y cantidad, y
+ * el pedido se crea solo en el tablero de ese servicio, en "Archivo recibido".
+ */
+function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: string) => void }) {
+  const [serviceId, setServiceId] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const service = help.SERVICES.find((s) => s.id === serviceId);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    if (!file || !serviceId) return;
+    if (file.size > MAX_UPLOAD_BYTES) return setError("El archivo es muy grande: el máximo es 150 MB.");
+    const form = new FormData();
+    form.append("sector", SECTOR_OF[serviceId]!);
+    const extra = [service ? `Servicio: ${service.name}` : "", note.trim()].filter(Boolean).join("\n");
+    if (extra) form.append("note", extra);
+    form.append("file", file);
+    setError("");
+    setProgress(0);
+    try {
+      const r = await upload<{ job: { label: string } }>("/app/chat/files", form, setProgress);
+      onSent(r.job.label);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No pudimos subir el archivo.");
+      setProgress(null);
+    }
+  }
+
+  return (
+    <div className="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && progress === null && onClose()}>
+      <form className="sheet" onSubmit={send} aria-label="Mandar un archivo">
+        <div className="sheet-head">
+          <strong>Mandar un archivo</strong>
+          <button type="button" className="icon-btn" aria-label="Cerrar" onClick={onClose} disabled={progress !== null}>
+            <X size={20} />
+          </button>
+        </div>
+        <p className="sheet-label">1 · ¿Para qué servicio?</p>
+        <div className="choices">
+          {help.SERVICES.map((s) => (
+            <button type="button" key={s.id} className="choice" aria-pressed={serviceId === s.id} onClick={() => setServiceId(s.id)}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+        {service && <p className="muted sheet-hint">Formato: {service.formats}.</p>}
+        <p className="sheet-label">2 · Medidas, cantidad y sucursal</p>
+        <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: 58 × 100 cm, 2 copias, retiro en San Juan" />
+        <p className="sheet-label">3 · El archivo</p>
+        <label className="drop">
+          <Paperclip size={24} />
+          <strong>{file ? file.name : "Tocá para elegir el archivo"}</strong>
+          <span>{file ? formatBytes(file.size) : "PDF, PNG, JPG, TIF, AI, EPS, PSD, CDR o ZIP · hasta 150 MB"}</span>
+          <input type="file" hidden accept={ACCEPT_ATTRIBUTE} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
+        {error && <p className="form-error">{error}</p>}
+        {progress !== null && (
+          <div className="progress" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
+            <span style={{ width: `${Math.round(progress * 100)}%` }} />
+          </div>
+        )}
+        <button className="btn btn-primary btn-block" disabled={!file || !serviceId || progress !== null}>
+          {progress !== null ? `Subiendo… ${Math.round(progress * 100)}%` : "Mandar el archivo"}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 /**
  * Chat de la app (D-045): el cliente le escribe a Via Vinilo y le responde un asesor. Acá también
@@ -18,8 +105,9 @@ interface Msg {
   channel: "APP" | "MAIL";
   subject: string | null;
   body: string;
-  attachments: string[] | null;
+  attachments: unknown;
   createdAt: string;
+  jobId?: string | null;
 }
 /** Cada cuánto se buscan respuestas nuevas (hasta tener las notificaciones push del paso 6). */
 const REFRESH_MS = 8000;
@@ -30,6 +118,8 @@ function Chat() {
   const [text, setText] = useState(pedido ? `Consulta por el pedido ${pedido}: ` : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [notice, setNotice] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -85,7 +175,24 @@ function Chat() {
               </span>
             )}
             <span className="bubble-text">{m.body}</span>
-            {m.attachments && m.attachments.length > 0 && <span className="via-mail">{m.attachments.join(", ")}</span>}
+            {attachmentsOf(m.attachments).map((a, i) =>
+              a.key ? (
+                <button
+                  key={`${m.id}-${i}`}
+                  type="button"
+                  className="file-chip"
+                  onClick={() => void downloadFile(`/app/chat/files/${m.id}/${i}`, a.name).catch((e: unknown) => setError(e instanceof Error ? e.message : "No pudimos descargar el archivo."))}
+                >
+                  <Download size={14} aria-hidden /> {a.name}
+                  {a.size ? <small>{formatBytes(a.size)}</small> : null}
+                </button>
+              ) : (
+                <span key={`${m.id}-${i}`} className="via-mail">
+                  {a.name}
+                </span>
+              ),
+            )}
+            {m.jobId && m.direction === "IN" && m.channel === "APP" && <span className="via-mail">Pedido creado: lo ves en Pedidos</span>}
             <time dateTime={m.createdAt}>
               {new Date(m.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
             </time>
@@ -95,13 +202,27 @@ function Chat() {
       </div>
       <form className="composer" onSubmit={submit}>
         {error && <p className="form-error">{error}</p>}
+        {notice && <p className="form-ok">{notice}</p>}
         <div className="composer-row">
+          <button type="button" className="attach" aria-label="Mandar un archivo" onClick={() => setSending(true)}>
+            <Paperclip size={20} />
+          </button>
           <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribí tu mensaje…" aria-label="Mensaje" />
           <button className="send" aria-label="Enviar" disabled={busy || !text.trim()}>
             <Send size={19} />
           </button>
         </div>
       </form>
+      {sending && (
+        <SendFile
+          onClose={() => setSending(false)}
+          onSent={(label) => {
+            setSending(false);
+            setNotice(`¡Listo! Recibimos tu archivo: pedido ${label}. Lo revisamos y te pasamos el precio.`);
+            void load();
+          }}
+        />
+      )}
     </>
   );
 }

@@ -84,6 +84,52 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 /**
+ * Sube un archivo con barra de progreso (D-062). Usa XMLHttpRequest porque fetch no informa el avance.
+ */
+export function upload<T>(path: string, form: FormData, onProgress?: (fraction: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}${path}`);
+    const token = getToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onerror = () => reject(new ApiError("No hay conexión. Revisá internet y probá de nuevo.", 0));
+    xhr.onload = () => {
+      let body: { message?: string | string[]; errors?: Record<string, string> } & Record<string, unknown> = {};
+      try {
+        body = JSON.parse(xhr.responseText || "{}");
+      } catch {
+        /* respuesta vacía */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(body as T);
+      if (xhr.status === 413) return reject(new ApiError("El archivo es muy grande: el máximo es 150 MB.", 413));
+      const first = body.errors ? Object.values(body.errors)[0] : undefined;
+      const message = first ?? (Array.isArray(body.message) ? body.message[0] : body.message);
+      reject(new ApiError(message ?? "No pudimos subir el archivo. Probá de nuevo.", xhr.status));
+    };
+    xhr.send(form);
+  });
+}
+
+/** Descarga un archivo con la sesión (un link común no manda el token) y lo guarda con su nombre. */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new ApiError(body.message ?? "No pudimos descargar el archivo.", res.status);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/**
  * Escucha los cambios del tablero de un sector (SSE de la API) con fetch, para poder mandar el token.
  * Llama a `onChange` cada vez que cambia algo. Si se corta, reintenta solo. Devuelve la función para cortar.
  */

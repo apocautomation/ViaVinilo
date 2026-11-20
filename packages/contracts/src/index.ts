@@ -9,3 +9,4 @@ export * from "./conversations";
 export * from "./format";
 export * as help from "./help-content";
 export * from "./mail-body";
+export * from "./files";

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Clock, Download, FileText, Lock, Paperclip } from "lucide-react";
-import { api, getUser, watchBoard, type SessionUser } from "../../../lib/api";
+import { api, downloadFile, getUser, watchBoard, type SessionUser } from "../../../lib/api";
 import { Help } from "../../help";
 import { ars, MoneyInput } from "../../ui";
 
@@ -205,6 +205,17 @@ export default function BoardPage() {
     }
   }
 
+  /** D-062: descarga los archivos del pedido para imprimir (la API controla que esté liberado). */
+  async function downloadForPrint(jobId: string) {
+    try {
+      const detail = await api<{ files: { id: string; filename: string }[] }>(`/jobs/${jobId}`);
+      for (const f of detail.files) await downloadFile(`/jobs/${jobId}/files/${f.id}`, f.filename);
+      if (!detail.files.length) setToast("Este pedido no tiene archivos guardados.");
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "No pudimos descargar el archivo.");
+    }
+  }
+
   function submitDialog(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!dialog) return;
@@ -373,7 +384,7 @@ export default function BoardPage() {
                     printUnlocked(card) ? (
                       <button
                         className="btn btn-ghost"
-                        onClick={() => setToast("Vista previa: la descarga del archivo se conecta en el próximo paso.")}
+                        onClick={() => void downloadForPrint(card.id)}
                       >
                         <Download size={14} aria-hidden /> Descargar archivo para imprimir
                       </button>

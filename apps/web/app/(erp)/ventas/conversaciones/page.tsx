@@ -2,9 +2,18 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Bell, BellOff, Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, SlidersHorizontal, Smartphone, X } from "lucide-react";
-import { JOB_STATUS_LABELS, parseMailBody, type JobStatus } from "@viavinilo/contracts";
-import { api, ApiError, getUser } from "../../../lib/api";
+import { Bell, BellOff, Bot, BotOff, Download, Paperclip, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, SlidersHorizontal, Smartphone, X } from "lucide-react";
+import {
+  ACCEPT_ATTRIBUTE,
+  attachmentsOf,
+  formatBytes,
+  JOB_STATUS_LABELS,
+  MAX_FILES_PER_MESSAGE,
+  MAX_MAIL_ATTACHMENTS_BYTES,
+  parseMailBody,
+  type JobStatus,
+} from "@viavinilo/contracts";
+import { api, ApiError, downloadFile, getUser, upload } from "../../../lib/api";
 import { Help } from "../../help";
 import { Badge, ars } from "../../ui";
 import { CustomerRecord } from "../clientes/customer-record";
@@ -55,7 +64,7 @@ interface Message {
   channel: Channel;
   subject: string | null;
   body: string;
-  attachments: string[] | null;
+  attachments: unknown;
   jobId: string | null;
   fromEmail: string | null;
   createdAt: string;
@@ -112,18 +121,36 @@ function Composer({ thread, onSent }: { thread: Thread; onSent: () => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /** Archivos para mandar con la respuesta (D-062). */
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState<number | null>(null);
+  const totalBytes = files.reduce((n, f) => n + f.size, 0);
+  const tooBigForMail = channel === "MAIL" && totalBytes > MAX_MAIL_ATTACHMENTS_BYTES;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() && !files.length) return;
+    if (tooBigForMail) return setError("Por mail entran hasta 20 MB de adjuntos. Mandalo por la app o en partes.");
     setBusy(true);
     setError("");
     try {
-      await api(`/conversations/${thread.id}/messages`, { method: "POST", body: JSON.stringify({ text, channel }) });
+      if (files.length) {
+        const form = new FormData();
+        form.append("channel", channel);
+        if (text.trim()) form.append("text", text);
+        files.forEach((f) => form.append("files", f));
+        setProgress(0);
+        await upload(`/conversations/${thread.id}/files`, form, setProgress);
+        setFiles([]);
+      } else {
+        await api(`/conversations/${thread.id}/messages`, { method: "POST", body: JSON.stringify({ text, channel }) });
+      }
       setText("");
+      setProgress(null);
       onSent();
     } catch (err) {
       setError(errorText(err));
+      setProgress(null);
     } finally {
       setBusy(false);
     }
@@ -149,7 +176,36 @@ function Composer({ thread, onSent }: { thread: Thread; onSent: () => void }) {
               : "Sale desde la casilla de soporte."}
         </span>
       </div>
+      {files.length > 0 && (
+        <div className="composer-files">
+          {files.map((f, i) => (
+            <span key={`${f.name}-${i}`} className="file-pill">
+              <FileText size={13} aria-hidden /> {f.name} <small>{formatBytes(f.size)}</small>
+              <button type="button" aria-label={`Quitar ${f.name}`} onClick={() => setFiles((all) => all.filter((_, j) => j !== i))}>
+                <X size={13} />
+              </button>
+            </span>
+          ))}
+          {tooBigForMail && <span className="error">Por mail entran hasta 20 MB: mandalo por la app.</span>}
+          {progress !== null && <span className="muted">Subiendo… {Math.round(progress * 100)}%</span>}
+        </div>
+      )}
       <div className="composer-row">
+        <label className="btn btn-ghost attach-btn" title="Adjuntar archivos (hasta 5)">
+          <Paperclip size={16} aria-hidden />
+          <span className="sr-only">Adjuntar archivos</span>
+          <input
+            type="file"
+            hidden
+            multiple
+            accept={ACCEPT_ATTRIBUTE}
+            onChange={(e) => {
+              const picked = Array.from(e.target.files ?? []);
+              setFiles((all) => [...all, ...picked].slice(0, MAX_FILES_PER_MESSAGE));
+              e.target.value = "";
+            }}
+          />
+        </label>
         <textarea
           rows={2}
           value={text}
@@ -163,7 +219,7 @@ function Composer({ thread, onSent }: { thread: Thread; onSent: () => void }) {
           placeholder="Escribí una respuesta… (Enter envía, Shift+Enter baja de línea)"
           aria-label="Respuesta"
         />
-        <button className="btn btn-primary" disabled={busy || !text.trim()}>
+        <button className="btn btn-primary" disabled={busy || (!text.trim() && !files.length) || tooBigForMail}>
           <Send size={16} /> Enviar
         </button>
       </div>
@@ -594,11 +650,25 @@ export default function ConversacionesPage() {
                   </span>
                   {m.subject && <strong className="bubble-subject">{m.subject}</strong>}
                   <MessageBody m={m} />
-                  {m.attachments?.map((f) => (
-                    <div key={f} className="file-att">
-                      <FileText size={15} aria-hidden /> {f}
-                    </div>
-                  ))}
+                  {attachmentsOf(m.attachments).map((a, i) =>
+                    a.key ? (
+                      <button
+                        key={`${m.id}-${i}`}
+                        type="button"
+                        className="file-att file-att-btn"
+                        onClick={() =>
+                          void downloadFile(`/conversations/${thread.id}/files/${m.id}/${i}`, a.name).catch((e: unknown) => setError(errorText(e)))
+                        }
+                      >
+                        <Download size={15} aria-hidden /> {a.name}
+                        {a.size ? <small className="muted">{formatBytes(a.size)}</small> : null}
+                      </button>
+                    ) : (
+                      <div key={`${m.id}-${i}`} className="file-att" title="El archivo está en el pedido (tablero del sector)">
+                        <FileText size={15} aria-hidden /> {a.name}
+                      </div>
+                    ),
+                  )}
                   {m.jobId && <span className="bubble-job">Pedido creado</span>}
                   <time dateTime={m.createdAt}>
                     {new Date(m.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
