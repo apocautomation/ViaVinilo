@@ -21,7 +21,7 @@ import {
   type SectorCode,
 } from "@viavinilo/contracts";
 import { PrismaService } from "../prisma/prisma.service";
-import { StorageService } from "../storage/storage.service";
+import { StorageService } from "../files/storage.service";
 import { ConversationsService } from "./conversations.service";
 
 /** Lo que entrega multer con el archivo en memoria (no se usan los tipos de @types/multer). */
