@@ -12,6 +12,10 @@ export function TabBar() {
   const is = (p: string) => (p === "/" ? path === "/" || path.startsWith("/pedidos") : path.startsWith(p));
   return (
     <nav className="tabbar" aria-label="Menú">
+      {/* Solo en escritorio, arriba del menú lateral. */}
+      <Link href="/" className="tabbar-brand" aria-label="Via Vinilo, inicio">
+        <img src="/logo-mascota.svg" alt="Via Vinilo" />
+      </Link>
       <Link href="/" className="tab" aria-current={is("/") ? "page" : undefined}>
         <ClipboardList size={22} />
         Pedidos
