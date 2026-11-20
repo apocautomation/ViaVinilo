@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Bot, ExternalLink, FileText, Hand, Link2, Mail, MessagesSquare, Search, Send, Smartphone } from "lucide-react";
+import { Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, Smartphone, X } from "lucide-react";
 import { JOB_STATUS_LABELS, parseMailBody, type JobStatus } from "@viavinilo/contracts";
 import { api, ApiError } from "../../../lib/api";
 import { Help } from "../../help";
 import { Badge, ars } from "../../ui";
+import { CustomerRecord } from "../clientes/customer-record";
 
 /**
  * Bandeja de Conversaciones (D-041, D-045): un hilo por cliente con el chat de la app y los mails
@@ -174,9 +175,7 @@ interface BotStatus {
  * Estado del bot (D-057): es individual, se prende en cada chat con el botón del encabezado.
  * Acá se ve en cuántos chats responde y se puede apagar en todos de una vez.
  */
-function BotBar({ status, onChange }: { status: BotStatus | null; onChange: (s: BotStatus) => void }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+function BotBar({ status }: { status: BotStatus | null }) {
   if (!status) return null;
   const on = status.chatsWithBot > 0;
   return (
@@ -185,25 +184,8 @@ function BotBar({ status, onChange }: { status: BotStatus | null; onChange: (s: 
       <span>
         <b>{on ? `Bot prendido en ${status.chatsWithBot} ${status.chatsWithBot === 1 ? "chat" : "chats"}` : "Bot apagado en todos los chats"}</b>
         {!status.configured && <small className="error">El servidor todavía no tiene la IA local configurada.</small>}
-        {status.configured && !on && <small>Prendelo en cada chat con el botón de arriba del hilo.</small>}
-        {error && <small className="error">{error}</small>}
+        {status.configured && <small>Se prende en cada chat, o en todos con el menú ☰ del hilo.</small>}
       </span>
-      {on && (
-        <button
-          className="btn btn-ghost btn-sm"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true);
-            setError("");
-            api<BotStatus>("/conversations/bot/off", { method: "POST" })
-              .then(onChange)
-              .catch((e: unknown) => setError(errorText(e)))
-              .finally(() => setBusy(false));
-          }}
-        >
-          Apagar en todos
-        </button>
-      )}
     </div>
   );
 }
@@ -238,6 +220,69 @@ function MessageBody({ m }: { m: Message }) {
   );
 }
 
+/** Acciones masivas del bot (D-058): prender o apagar en todos los chats de una vez, con confirmación. */
+function BotBulkMenu({ onDone }: { onDone: (s: BotStatus) => void }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState<null | "on" | "off">(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const close = () => {
+    setOpen(false);
+    setConfirm(null);
+    setError("");
+  };
+  async function run(kind: "on" | "off") {
+    setBusy(true);
+    setError("");
+    try {
+      onDone(await api<BotStatus>(`/conversations/bot/${kind}`, { method: "POST" }));
+      close();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="menu-wrap">
+      <button className="btn btn-ghost btn-sm icon-only" aria-label="Acciones del bot en todos los chats" aria-expanded={open} onClick={() => (open ? close() : setOpen(true))}>
+        <Menu size={16} aria-hidden />
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          {confirm ? (
+            <div className="menu-confirm">
+              <p>
+                {confirm === "on"
+                  ? "El bot va a responder en todos los chats de clientes. Los que piden asesor siguen esperando a una persona."
+                  : "El bot deja de responder en todos los chats."}
+              </p>
+              <div className="menu-confirm-actions">
+                <button className="btn btn-ghost btn-sm" onClick={() => setConfirm(null)} disabled={busy}>
+                  Cancelar
+                </button>
+                <button className={`btn btn-sm ${confirm === "on" ? "btn-primary" : "btn-danger"}`} onClick={() => void run(confirm)} disabled={busy}>
+                  {confirm === "on" ? "Sí, prender en todos" : "Sí, apagar en todos"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <button role="menuitem" className="menu-item" onClick={() => setConfirm("on")}>
+                <Bot size={15} aria-hidden /> Prender el bot en todos los chats
+              </button>
+              <button role="menuitem" className="menu-item" onClick={() => setConfirm("off")}>
+                <BotOff size={15} aria-hidden /> Apagar el bot en todos los chats
+              </button>
+            </>
+          )}
+          {error && <p className="error">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ConversacionesPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["value"]>("ALL");
   const [search, setSearch] = useState("");
@@ -248,6 +293,8 @@ export default function ConversacionesPage() {
   const [error, setError] = useState("");
   const [bot, setBot] = useState<BotStatus | null>(null);
   const [botBusy, setBotBusy] = useState(false);
+  /** Ficha del cliente abierta en el panel (D-058). */
+  const [recordOpen, setRecordOpen] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -333,7 +380,7 @@ export default function ConversacionesPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          <BotBar status={bot} onChange={setBot} />
+          <BotBar status={bot} />
           <div className="chip-row">
             {FILTERS.map((f) => (
               <button key={f.value} className="fchip" aria-pressed={filter === f.value} onClick={() => setFilter(f.value)}>
@@ -379,15 +426,26 @@ export default function ConversacionesPage() {
         <>
           <section className="thread">
             <div className="thread-head">
+              {thread.customer ? (
+                <button className="thread-who" title="Ver y editar la ficha del cliente" onClick={() => setRecordOpen(true)}>
+                  <span className="avatar">{initials(nameOf(thread))}</span>
+                  <span className="title">
+                    <strong>{nameOf(thread)}</strong>
+                    <small>
+                      Cliente N.º {thread.customer.customerNumber}
+                      {thread.customer.businessName ? ` · ${thread.customer.businessName}` : ""} · Ver ficha
+                    </small>
+                  </span>
+                </button>
+              ) : (
+                <>
               <span className="avatar">{initials(nameOf(thread))}</span>
               <span className="title">
                 <strong>{nameOf(thread)}</strong>
-                <small>
-                  {thread.customer
-                    ? `Cliente N.º ${thread.customer.customerNumber}${thread.customer.businessName ? ` · ${thread.customer.businessName}` : ""}`
-                    : `${thread.contactEmail} · todavía no es cliente`}
-                </small>
+                <small>{`${thread.contactEmail} · todavía no es cliente`}</small>
               </span>
+                </>
+              )}
               {thread.customer && (
                 <button
                   className={`btn btn-sm ${thread.botEnabled ? "btn-soft" : "btn-ghost"}`}
@@ -400,6 +458,12 @@ export default function ConversacionesPage() {
                   <Bot size={15} aria-hidden /> {thread.botEnabled ? "Bot prendido en este chat" : "Bot apagado en este chat"}
                 </button>
               )}
+              <BotBulkMenu
+                onDone={(s) => {
+                  setBot(s);
+                  void loadThread(thread.id, false).then(loadList);
+                }}
+              />
             </div>
             {thread.needsHuman && (
               <div className="handoff-note">
@@ -464,9 +528,9 @@ export default function ConversacionesPage() {
                   <dd>{thread.customer.appPasswordSetAt ? "Activa" : "Sin acceso"}</dd>
                 </dl>
                 {thread.customer.internalNotes && <p className="muted ctx-notes">{thread.customer.internalNotes}</p>}
-                <Link href={`/ventas/clientes/${thread.customer.id}`} className="btn btn-ghost">
-                  Ver ficha
-                </Link>
+                <button className="btn btn-ghost" onClick={() => setRecordOpen(true)}>
+                  Ver y editar ficha
+                </button>
               </div>
             ) : (
               <div className="ctx-card">
@@ -511,6 +575,25 @@ export default function ConversacionesPage() {
             </span>
           </div>
         </section>
+      )}
+
+      {recordOpen && thread?.customer && (
+        <div className="drawer-backdrop" onClick={(e) => e.target === e.currentTarget && setRecordOpen(false)}>
+          <aside className="drawer" role="dialog" aria-modal="true" aria-label="Ficha del cliente">
+            <div className="drawer-head">
+              <strong>Ficha del cliente</strong>
+              <button className="btn btn-ghost btn-sm icon-only" aria-label="Cerrar la ficha" onClick={() => setRecordOpen(false)}>
+                <X size={16} aria-hidden />
+              </button>
+            </div>
+            <CustomerRecord
+              key={thread.customer.id}
+              id={thread.customer.id}
+              embedded
+              onChanged={() => void loadThread(thread.id, false).then(loadList)}
+            />
+          </aside>
+        </div>
       )}
     </div>
   );
