@@ -955,6 +955,17 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Paperclip**: no se usa en el camino del chat. En el proyecto de Trip se vio que no sostiene la latencia de un chat; ahí quedó para gobierno y auditoría de agentes. Si se quiere sumar para eso, es un paso aparte.
 - **Por qué**: Ezequiel: "que los mensajes queden legibles… cargalo tal cual viene pero ordenado", "que sea individual", "el bot va en local… con Ollama".
 
+### D-058 · 20/11/2026 · Ezequiel · ficha del cliente en Conversaciones, acciones masivas del bot e íconos
+- **Ficha en Conversaciones**:
+  - Se toca el nombre del cliente en el hilo (o "Ver y editar ficha") y se abre la ficha completa en un panel, sin salir del chat.
+  - Es la misma ficha de Clientes (componente compartido `customer-record.tsx`). Al guardar, el chat y la lista se actualizan.
+- **Alta pendiente editable sin DNI**: en un alta pendiente se puede corregir el nombre o los contactos sin tener todavía DNI ni apellido. Se exigen al aprobar (D-054). Antes el formulario no dejaba guardar.
+- **Acciones masivas del bot**:
+  - menú ☰ al lado del botón del bot del chat: "Prender el bot en todos los chats" y "Apagar el bot en todos los chats", con confirmación y auditoría;
+  - "Prender en todos" se aplica solo a chats de clientes. Los que piden asesor siguen esperando a una persona.
+- **Íconos de la pestaña**: la app de clientes usa el dibujito (la mascota con los rollos). El ERP usa la "V" del logo de Via Vinilo sobre un fondo claro, para que se vea en cualquier barra de pestañas.
+- **Por qué**: Ezequiel: "que se pueda tocar el cliente y se abra acá la ficha para editar", "3 barritas… acciones masivas", y los logos.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

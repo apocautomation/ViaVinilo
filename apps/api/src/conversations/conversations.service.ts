@@ -57,6 +57,19 @@ export class ConversationsService {
     return this.botStatus();
   }
 
+  /**
+   * "Prender en todos" (D-058): prende el bot en todos los chats de clientes. Los que están
+   * esperando a un asesor siguen esperando: el bot no responde ahí hasta que contesta una persona.
+   */
+  async turnBotOnEverywhere(userId: string) {
+    const { count } = await this.prisma.conversation.updateMany({
+      where: { botEnabled: false, customerId: { not: null } },
+      data: { botEnabled: true },
+    });
+    await this.audit.log({ entity: "Conversation", entityId: "*", action: "bot_on_everywhere", userId, after: { chats: count } });
+    return this.botStatus();
+  }
+
   /** Prende o apaga el bot en un chat. Prenderlo también saca la marca "Pide asesor". */
   async setBotForChat(id: string, enabled: boolean) {
     const conv = await this.prisma.conversation.findUnique({ where: { id }, select: { customerId: true } });

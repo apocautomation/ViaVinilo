@@ -22,6 +22,13 @@ export class ConversationsController {
     return this.conversations.botStatus();
   }
 
+  /** Prende el bot en todos los chats de clientes de una vez (D-058, queda en auditoría). */
+  @Post("bot/on")
+  @HttpCode(200)
+  turnBotOn(@CurrentUser() user: AuthUser) {
+    return this.conversations.turnBotOnEverywhere(user.id);
+  }
+
   /** Apaga el bot en todos los chats de una vez (queda en auditoría). */
   @Post("bot/off")
   @HttpCode(200)

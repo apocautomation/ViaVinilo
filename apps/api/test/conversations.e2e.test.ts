@@ -169,6 +169,16 @@ describe("bot del chat de la app (D-056, D-057)", () => {
     expect((await lastIn()).botStatus).toBeNull();
   });
 
+  it("D-058: 'Prender en todos' lo prende en todos los chats de clientes (no en los de quien no es cliente) y queda en auditoría", async () => {
+    const res = await as("attention").post("/conversations/bot/on");
+    expect(res.status).toBe(200);
+    const withCustomer = await prisma.conversation.count({ where: { customerId: { not: null } } });
+    expect(res.body.chatsWithBot).toBe(withCustomer);
+    expect(await prisma.conversation.count({ where: { customerId: null, botEnabled: true } })).toBe(0);
+    expect(await prisma.auditLog.findFirst({ where: { action: "bot_on_everywhere" } })).not.toBeNull();
+    await as("attention").post("/conversations/bot/off");
+  });
+
   it("D-056: un chat 'Pide asesor' no le pasa mensajes al bot; cuando responde una persona deja de estar marcado", async () => {
     const id = await convId();
     await prisma.conversation.update({ where: { id }, data: { botEnabled: true, needsHuman: true, needsHumanReason: "Reclamo" } });

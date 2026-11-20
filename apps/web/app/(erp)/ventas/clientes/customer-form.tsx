@@ -69,9 +69,10 @@ export function initialValues(c?: Customer): CustomerFormValues {
 export function toPayload(v: CustomerFormValues, mode: "create" | "edit") {
   const opt = (s: string) => (s.trim() ? s.trim() : mode === "edit" ? null : undefined);
   return {
-    firstName: v.firstName,
-    lastName: v.lastName,
-    dni: v.dni,
+    // D-058: al editar, un dato obligatorio vacío no se manda (un alta pendiente todavía no tiene DNI).
+    firstName: mode === "edit" && !v.firstName.trim() ? undefined : v.firstName,
+    lastName: mode === "edit" && !v.lastName.trim() ? undefined : v.lastName,
+    dni: mode === "edit" && !v.dni.trim() ? undefined : v.dni,
     ...(mode === "create"
       ? { emails: v.emails.map((e) => e.trim()).filter(Boolean), phones: v.phones.map((p) => p.trim()).filter(Boolean) }
       : {}),
@@ -167,6 +168,7 @@ export function CustomerForm({
   submitLabel,
   onSubmit,
   contacts,
+  pendingSignup = false,
 }: {
   mode: "create" | "edit";
   initial: CustomerFormValues;
@@ -174,6 +176,8 @@ export function CustomerForm({
   onSubmit: (values: CustomerFormValues) => Promise<void>;
   /** En la ficha, los contactos se editan con su propio bloque. */
   contacts?: ReactNode;
+  /** Alta pendiente (D-058): se puede corregir sin tener todavía DNI ni apellido; se piden al aprobar. */
+  pendingSignup?: boolean;
 }) {
   const [v, setV] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -200,13 +204,13 @@ export function CustomerForm({
           <input value={v.firstName} onChange={(e) => set("firstName", e.target.value)} required autoComplete="off" />
         </Field>
         <Field label="Apellido">
-          <input value={v.lastName} onChange={(e) => set("lastName", e.target.value)} required autoComplete="off" />
+          <input value={v.lastName} onChange={(e) => set("lastName", e.target.value)} required={!pendingSignup} autoComplete="off" />
         </Field>
         <Field label="DNI">
           <input
             value={v.dni}
             onChange={(e) => set("dni", maskDni(e.target.value))}
-            required
+            required={!pendingSignup}
             inputMode="numeric"
             placeholder="30.111.222"
           />
