@@ -857,6 +857,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - El asistente IA sigue siendo de la E2 (contrato).
   - Hoy las respuestas de DTF salen desde `dtf@`, que tiene el envío bloqueado (I-22): hasta que Hostinger la desbloquee, esas respuestas van a fallar y quedan en la cola con el error.
 
+### D-052 · 20/11/2026 · Ezequiel · lectura de mails prendida y Pedidos con datos reales
+- **Definición**:
+  - **Lectura de mails prendida en producción** (`MAIL_SOURCE=hostinger-api`) desde el 20/11, "para que entren datos". Lee las 6 casillas de sector cada minuto; arrancó desde ese momento, sin importar el historial.
+    - **No sale ningún mail automático**: `SMTP_URL` está vacío, así que el mail a remitentes nuevos (D-038) se saltea.
+    - **El bot sigue apagado**: todavía no existe, y cuando se haga arranca apagado en todos los chats.
+    - Los mails no se marcan como leídos en Hostinger.
+  - **Ventas → Pedidos con datos reales**: `GET /jobs`, con pestañas (En curso / Listos / Entregados / Todos), sector, canal y búsqueda por N.º, cliente o detalle. Producción ve solo sus sectores. Se borró la vista previa con pedidos inventados.
+- **Por qué**: Ezequiel: "lo que es pedido limpialo, que no quede nada de esta información falsa en el sistema".
+- **Pendiente**: las pantallas de Administración (comprobantes, cobranzas, compras, IVA, etc.) y Configuración siguen siendo vistas previas de la E3 con datos de ejemplo, marcadas "Vista previa · Etapa 3".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

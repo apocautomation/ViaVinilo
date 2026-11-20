@@ -48,7 +48,7 @@ export const NAV: NavSection[] = [
     title: "Ventas",
     items: [
       { href: "/ventas/conversaciones", label: "Conversaciones", icon: MessagesSquare, stage: 1 },
-      { href: "/ventas/pedidos", label: "Pedidos", icon: ClipboardList, stage: 1, preview: true },
+      { href: "/ventas/pedidos", label: "Pedidos", icon: ClipboardList, stage: 1 },
       { href: "/ventas/clientes", label: "Clientes", icon: Users, stage: 1 },
     ],
   },

@@ -326,3 +326,29 @@ describe("tiempo real", () => {
     expect(versions[1]).not.toBe(versions[0]);
   });
 });
+
+describe("listado de pedidos del ERP (Ventas → Pedidos)", () => {
+  it("lista los pedidos reales por pestaña y producción solo ve los de su sector", async () => {
+    const enCurso = await newJob("DTF");
+    const listo = await newJob("DTF", { status: "READY" });
+    const otroSector = await newJob("GRAN_FORMATO");
+
+    const active = await http("attention").get("/jobs?tab=ACTIVE");
+    expect(active.status).toBe(200);
+    const ids = active.body.items.map((j: { id: string }) => j.id);
+    expect(ids).toEqual(expect.arrayContaining([enCurso.id, otroSector.id]));
+    expect(ids).not.toContain(listo.id);
+    expect(active.body.items[0]).toHaveProperty("label");
+
+    const ready = await http("attention").get("/jobs?tab=READY");
+    expect(ready.body.items.map((j: { id: string }) => j.id)).toContain(listo.id);
+
+    const prod = await http("production").get("/jobs?tab=ALL");
+    expect(prod.body.items.every((j: { sector: { code: string } }) => j.sector.code === "DTF")).toBe(true);
+
+    const bySector = await http("owner").get("/jobs?tab=ALL&sector=GRAN_FORMATO");
+    expect(bySector.body.items.map((j: { id: string }) => j.id)).toContain(otroSector.id);
+    const byNumber = await http("owner").get(`/jobs?tab=ALL&search=${otroSector.number}`);
+    expect(byNumber.body.items.map((j: { id: string }) => j.id)).toContain(otroSector.id);
+  });
+});
