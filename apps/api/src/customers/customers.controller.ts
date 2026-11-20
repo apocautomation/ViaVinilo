@@ -68,6 +68,25 @@ export class CustomersController {
     return this.customers.approve(id, user.id);
   }
 
+  /** D-054: rechaza un alta pendiente; queda bloqueado con el motivo. */
+  @Post(":id/reject")
+  @HttpCode(200)
+  @Roles("ATTENTION")
+  reject(
+    @Param("id") id: string,
+    @ZodBody(blockCustomerSchema) body: { reason: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.customers.reject(id, body.reason, user.id);
+  }
+
+  /** D-054: posibles duplicados de un alta pendiente (mismo teléfono, nombre o N.º de cliente). */
+  @Get(":id/matches")
+  @Roles("ATTENTION")
+  matches(@Param("id") id: string) {
+    return this.customers.matches(id);
+  }
+
   @Post(":id/block")
   @HttpCode(200)
   @Roles("ATTENTION")

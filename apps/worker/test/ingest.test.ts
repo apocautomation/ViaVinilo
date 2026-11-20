@@ -187,7 +187,7 @@ describe("ingesta de un mail (SPEC E1.1)", () => {
 });
 
 describe("remitentes sin alta (D-014)", () => {
-  it("crea el cliente pendiente, la orden en 'Alta pendiente' y manda el mail de alta una sola vez", async () => {
+  it("D-054: crea el cliente pendiente, la orden entra igual al tablero y manda el mail de alta una sola vez", async () => {
     const mail = (subject: string) =>
       buildMail({
         from: "Ana Gómez <ana@nuevo.test>",
@@ -208,9 +208,54 @@ describe("remitentes sin alta (D-014)", () => {
     });
     expect(customer.status).toBe("PENDING");
     expect(customer.internalNotes).toBe("Nombre en el mail: Ana Gómez");
-    expect(customer.jobs.map((j) => j.status)).toEqual(["PENDING_SIGNUP", "PENDING_SIGNUP"]);
+    expect([customer.firstName, customer.lastName]).toEqual(["Ana", "Gómez"]);
+    expect(customer.jobs.map((j) => j.status)).toEqual(["RECEIVED", "RECEIVED"]);
     // Dos mails seguidos: una sola invitación.
     expect(invites).toEqual([{ to: "ana@nuevo.test", sector: "DTF" }]);
+  });
+});
+
+describe("altas desde el mail (D-054)", () => {
+  it("D-054: completa el alta pendiente con la ficha que escribe el cliente en el mail", async () => {
+    const raw = await buildMail({
+      from: "ramirogarnica@nuevo.test",
+      to: "dtf@viavinilo.test",
+      subject: "DARK2",
+      messageId: nextId(),
+      text: [
+        "Nombre o Número de Cliente: RAMIRO GARNICA",
+        "Nombre del Archivo: DARK2",
+        "Material: DTF TEXTIL",
+        "Tamaño:   0,58 CM x 0,35 CM",
+        "Teléfono: 387 466-9944",
+        "lugar a retirar: cALLE SAN JUAN",
+      ].join("\n"),
+      attachments: [fakePdf("DARK2.pdf")],
+    });
+    const r = await ingestMail(deps(), dtf, raw);
+    expect(r.result).toBe("PENDING_SIGNUP");
+    const c = await prisma.customer.findFirstOrThrow({
+      where: { emails: { some: { email: "ramirogarnica@nuevo.test" } } },
+      include: { phones: true, jobs: true },
+    });
+    expect(c.status).toBe("PENDING");
+    expect([c.firstName, c.lastName, c.searchText]).toEqual(["Ramiro", "Garnica", "ramiro garnica"]);
+    expect(c.phones.map((p) => p.phone)).toEqual(["+5493874669944"]);
+    expect(c.internalNotes).toBe("Retira en: Calle San Juan");
+    expect(c.jobs[0]!.status).toBe("RECEIVED");
+  });
+
+  it("D-054: si dice un número de cliente lo anota para verificar, y el próximo mail con nombre lo completa", async () => {
+    const mail = (text: string) =>
+      buildMail({ from: "sinnombre@nuevo.test", to: "dtf@viavinilo.test", subject: "x", messageId: nextId(), text, attachments: [fakePdf("a.pdf")] });
+    await ingestMail(deps(), dtf, await mail("Nombre o Número de Cliente: 1234"));
+    let c = await prisma.customer.findFirstOrThrow({ where: { emails: { some: { email: "sinnombre@nuevo.test" } } } });
+    expect(c.firstName).toBeNull();
+    expect(c.internalNotes).toBe("Dice ser el cliente N.º 1234");
+
+    await ingestMail(deps(), dtf, await mail("Nombre: Lucía de la Fuente"));
+    c = await prisma.customer.findUniqueOrThrow({ where: { id: c.id } });
+    expect([c.firstName, c.lastName]).toEqual(["Lucía", "de la Fuente"]);
   });
 });
 

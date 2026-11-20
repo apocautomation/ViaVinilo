@@ -464,7 +464,7 @@ model FileErrorReason {
 /// Resultado de procesar un mail de una casilla de sector (actualización §2.2: loguear y monitorear).
 enum MailIngestResult {
   CREATED // se creó la orden
-  PENDING_SIGNUP // remitente sin alta: orden en "Alta pendiente" (D-014)
+  PENDING_SIGNUP // remitente con alta pendiente: la orden entra igual al tablero (D-054)
   DUPLICATE // ese Message-ID ya había creado una orden en el sector
   SKIPPED_NO_FILES // sin adjuntos ni links (I-15)
   SKIPPED_AUTO_REPLY // respuesta automática, rebote o lista

@@ -882,6 +882,23 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Por qué**: Ezequiel pidió armar la Ayuda "con la info de Runamatic y lo que sabés del negocio" antes del bot, que va a usar el mismo contenido.
 - **Abierto**: la seña por servicio (I-27).
 
+### D-054 · 20/11/2026 · Ezequiel · el alta pendiente no frena el pedido y se completa con los datos del mail
+- **Definición**:
+  - Cuando escribe alguien que no es cliente, el sistema crea el **alta pendiente de aprobación** con lo que escribió en el mail. Lee la ficha que suelen mandar ("Nombre o Número de Cliente", "Teléfono", "Lugar a retirar"):
+    - nombre y apellido; si no hay ficha, usa el nombre del remitente cuando parece de una persona;
+    - teléfono (si no lo tiene otro cliente);
+    - el N.º de cliente que dice tener y la sucursal de retiro quedan en las notas internas.
+    - Un alta pendiente sin nombre lo toma del próximo mail que lo traiga. Nunca se pisa lo que cargó un asesor.
+  - **El alta pendiente es solo una formalidad**: el cliente hace todo el proceso. Sus pedidos entran a "Archivo recibido" y van al tablero, igual que los de un cliente aprobado. Cambia D-014, donde quedaban frenados en "Alta pendiente".
+    - Al subir esto, una migración pasa al tablero los pedidos que ya estaban frenados.
+    - Hay un script de una sola vez (`node dist/backfill-pending.js` en el worker) que completa las altas viejas con los mails ya guardados.
+  - **ERP → ficha del cliente pendiente**:
+    - un aviso explica qué verificar;
+    - muestra los **clientes parecidos** (mismo teléfono, mismo nombre o el N.º que dijo tener), para no duplicar a los importados de Runamatic que escriben desde un email nuevo;
+    - botones **Aprobar alta** (exige nombre, apellido, DNI, email y teléfono, como antes) y **Rechazar** (pide motivo, queda bloqueado y en auditoría; los pedidos ya mandados siguen en el tablero).
+  - **Por ahora la lectura es por reglas, no con IA.** Cuando esté el bot, él completa lo que esta lectura no entienda.
+- **Por qué**: Ezequiel: "un cliente pendiente de alta puede hacer todo el proceso, solo es una formalidad para que tengan que verificar los datos". Entró el primer pedido real de alguien sin alta (Ramiro Garnica, DTF) y quedó como "Cliente N.º 1792" sin datos.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

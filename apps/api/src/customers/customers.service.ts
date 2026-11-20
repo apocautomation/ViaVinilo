@@ -308,6 +308,37 @@ export class CustomersService {
     }
   }
 
+  /**
+   * D-054: un asesor rechaza un alta pendiente (datos falsos, no es del gremio, spam). Queda bloqueado
+   * con el motivo: sus mails nuevos ya no crean pedidos y no puede entrar a la app.
+   */
+  async reject(id: string, reason: string, userId: string) {
+    const customer = await this.get(id);
+    if (customer.status !== "PENDING") throw new UnprocessableEntityException("Solo se pueden rechazar altas pendientes");
+    return this.changeStatus(customer, "BLOCKED", "reject", userId, {}, reason);
+  }
+
+  /**
+   * D-054: clientes que pueden ser la misma persona que un alta pendiente: mismo teléfono, mismo
+   * nombre y apellido, o el número de cliente que dijo tener en el mail. Sirve para no duplicar a los
+   * clientes importados de Runamatic que escriben desde un email nuevo.
+   */
+  async matches(id: string) {
+    const customer = await this.get(id);
+    const claimed = /Dice ser el cliente N\.º (\d+)/.exec(customer.internalNotes ?? "")?.[1];
+    const or: Prisma.CustomerWhereInput[] = [];
+    if (customer.phones.length) or.push({ phones: { some: { phone: { in: customer.phones.map((p) => p.phone) } } } });
+    if (customer.searchText) or.push({ searchText: customer.searchText });
+    if (claimed) or.push({ customerNumber: Number(claimed) });
+    if (!or.length) return [];
+    return this.prisma.customer.findMany({
+      where: { id: { not: id }, deletedAt: null, OR: or },
+      select: { id: true, customerNumber: true, firstName: true, lastName: true, businessName: true, status: true },
+      orderBy: { customerNumber: "asc" },
+      take: 10,
+    });
+  }
+
   async block(id: string, reason: string, userId: string) {
     const customer = await this.get(id);
     if (customer.status === "BLOCKED") throw new UnprocessableEntityException("El cliente ya está bloqueado");

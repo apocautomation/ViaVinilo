@@ -10,6 +10,15 @@ import { Badge, PageHead } from "../../../ui";
 import { formatPhone, fullName, STATUS_TONE, type Customer } from "../customer";
 import { CustomerForm, generateAppPassword, initialValues, toPayload } from "../customer-form";
 
+interface Match {
+  id: string;
+  customerNumber: number;
+  firstName: string | null;
+  lastName: string | null;
+  businessName: string | null;
+  status: Customer["status"];
+}
+
 const errorText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal. Probá de nuevo.");
 
 /** Campo + botón "Agregar". Enter agrega sin mandar el formulario de la ficha. */
@@ -184,7 +193,29 @@ function AppPasswordDialog({ onClose, onConfirm }: { onClose: () => void; onConf
   );
 }
 
-function BlockDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (reason: string) => Promise<void> }) {
+const BLOCK_TEXT = {
+  block: {
+    title: "Bloquear cliente",
+    help: "No va a poder entrar a la app y sus mails nuevos no van a crear trabajos.",
+    button: "Bloquear",
+  },
+  reject: {
+    title: "Rechazar alta",
+    help: "Queda bloqueado: no entra a la app y sus mails nuevos no crean pedidos. Los pedidos que ya mandó siguen en el tablero.",
+    button: "Rechazar alta",
+  },
+};
+
+function BlockDialog({
+  kind = "block",
+  onClose,
+  onConfirm,
+}: {
+  kind?: keyof typeof BLOCK_TEXT;
+  onClose: () => void;
+  onConfirm: (reason: string) => Promise<void>;
+}) {
+  const text = BLOCK_TEXT[kind];
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   return (
@@ -197,8 +228,8 @@ function BlockDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (
           onConfirm(reason).catch((err: unknown) => setError(errorText(err)));
         }}
       >
-        <h3>Bloquear cliente</h3>
-        <p className="muted">No va a poder entrar a la app y sus mails nuevos no van a crear trabajos.</p>
+        <h3>{text.title}</h3>
+        <p className="muted">{text.help}</p>
         <label className="field">
           Motivo
           <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} required autoFocus />
@@ -208,7 +239,7 @@ function BlockDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn btn-danger">Bloquear</button>
+          <button className="btn btn-danger">{text.button}</button>
         </div>
       </form>
     </div>
@@ -221,7 +252,8 @@ function CustomerDetail() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(isNew ? "Cliente dado de alta. Pasale por WhatsApp su email y la contraseña de la app." : "");
-  const [blocking, setBlocking] = useState(false);
+  const [blocking, setBlocking] = useState<false | "block" | "reject">(false);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [settingPassword, setSettingPassword] = useState(false);
 
   const load = useCallback(async () => {
@@ -232,6 +264,11 @@ function CustomerDetail() {
     }
   }, [id]);
   useEffect(() => void load(), [load]);
+
+  useEffect(() => {
+    if (customer?.status !== "PENDING") return setMatches([]);
+    api<Match[]>(`/customers/${customer.id}/matches`).then(setMatches).catch(() => setMatches([]));
+  }, [customer?.id, customer?.status]);
 
   async function action(path: string, body?: object, done?: string) {
     setError("");
@@ -291,8 +328,13 @@ function CustomerDetail() {
                 Aprobar alta
               </button>
             )}
+            {customer.status === "PENDING" && (
+              <button className="btn btn-ghost" onClick={() => setBlocking("reject")}>
+                Rechazar
+              </button>
+            )}
             {customer.status === "ACTIVE" && (
-              <button className="btn btn-ghost" onClick={() => setBlocking(true)}>
+              <button className="btn btn-ghost" onClick={() => setBlocking("block")}>
                 Bloquear
               </button>
             )}
@@ -311,6 +353,36 @@ function CustomerDetail() {
         </div>
       )}
       {error && <p className="error">{error}</p>}
+
+      {customer.status === "PENDING" && (
+        <section className="pending-box">
+          <strong>Alta pendiente de aprobación</strong>
+          <p>
+            Se creó sola con los datos de su mail. Sus pedidos ya entran al tablero: aprobar es solo verificar. Revisá nombre y
+            teléfono, cargá el DNI y aprobá. Si los datos son falsos, rechazala.
+          </p>
+          {matches.length > 0 && (
+            <>
+              <p>
+                <b>¿Ya es cliente?</b> Hay {matches.length === 1 ? "un cliente parecido" : `${matches.length} clientes parecidos`}:
+              </p>
+              <ul>
+                {matches.map((m) => (
+                  <li key={m.id}>
+                    <Link href={`/ventas/clientes/${m.id}`}>
+                      N.º {m.customerNumber} · {[m.firstName, m.lastName].filter(Boolean).join(" ") || m.businessName || "Sin nombre"}
+                    </Link>{" "}
+                    <span className="muted">({CUSTOMER_STATUS_LABELS[m.status]})</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="muted">
+                Si es el mismo, sumale este email a esa ficha y rechazá esta alta con el motivo "duplicado".
+              </p>
+            </>
+          )}
+        </section>
+      )}
 
       <CustomerForm
         key={customer.id}
@@ -349,8 +421,9 @@ function CustomerDetail() {
       {blocking && (
         <BlockDialog
           onClose={() => setBlocking(false)}
+          kind={blocking}
           onConfirm={async (reason) => {
-            await action("block", { reason }, "Cliente bloqueado.");
+            await action(blocking, { reason }, blocking === "reject" ? "Alta rechazada: quedó bloqueado." : "Cliente bloqueado.");
             setBlocking(false);
           }}
         />
