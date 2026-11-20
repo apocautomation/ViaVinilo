@@ -1,3 +1,4 @@
+import { parseAmount } from "./format";
 import { z } from "zod";
 import { jobStatusSchema, type JobStatus } from "./job-status";
 
@@ -95,8 +96,9 @@ export const transitionSchema = z
     /** Obligatorio para "Cotizado" si la orden no tiene precio (R-JOB-2). Pesos con 2 decimales. */
     quotedAmount: z
       .union([z.string(), z.number()])
-      .transform((v) => String(v).replace(",", "."))
-      .refine((v) => /^\d{1,12}(\.\d{1,2})?$/.test(v) && Number(v) > 0, "Ingresá un precio válido")
+      // D-055: se escribe "18.500,50"; se guarda "18500.50".
+      .transform((v) => parseAmount(v) ?? "")
+      .refine((v) => v !== "" && Number(v) > 0, "Ingresá un precio válido")
       .optional(),
     estimatedReadyAt: z.coerce.date().optional(),
     /** Solo el dueño: imprimir sin seña (R-JOB-3). */

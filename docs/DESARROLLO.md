@@ -899,6 +899,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Por ahora la lectura es por reglas, no con IA.** Cuando esté el bot, él completa lo que esta lectura no entienda.
 - **Por qué**: Ezequiel: "un cliente pendiente de alta puede hacer todo el proceso, solo es una formalidad para que tengan que verificar los datos". Entró el primer pedido real de alguien sin alta (Ramiro Garnica, DTF) y quedó como "Cliente N.º 1792" sin datos.
 
+### D-055 · 20/11/2026 · Ezequiel · CUIT con guiones y montos con puntos, al escribir y al mostrar
+- **Definición**: los campos se formatean mientras se escribe, y se ven igual en pantalla:
+  - **CUIT**: `20-12345678-9`.
+  - **DNI**: `30.111.222`.
+  - **Montos en pesos**: puntos de miles y coma decimal (`18.500,50`). Un punto tipeado al final (teclado numérico) se toma como la coma. En pantalla siempre `$ 18.500,50`.
+  - En la base no cambia nada: CUIT y DNI solo dígitos, montos `Decimal` con punto.
+  - Las máscaras están en `@viavinilo/contracts` (`maskCuit`, `maskDni`, `maskAmount`, `parseAmount`).
+  - La API acepta el precio escrito con puntos de miles. Antes "18.500,50" se rechazaba.
+- **Por qué**: Ezequiel: "CUIT siempre va con los guiones, y los valores monetarios siempre con los puntos, tanto cuando se escriben como cuando se ven en pantalla".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

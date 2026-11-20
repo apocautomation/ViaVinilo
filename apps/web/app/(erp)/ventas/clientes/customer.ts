@@ -1,3 +1,4 @@
+import { maskCuit, maskDni } from "@viavinilo/contracts";
 import type { CustomerStatus, NotificationPrefs, TaxCondition } from "@viavinilo/contracts";
 import type { Tone } from "../../ui";
 
@@ -49,14 +50,10 @@ export function formatPhone(phone: string): string {
 }
 
 /** 30500010912 → 30-50001091-2 */
-export function formatCuit(cuit: string): string {
-  return cuit.length === 11 ? `${cuit.slice(0, 2)}-${cuit.slice(2, 10)}-${cuit.slice(10)}` : cuit;
-}
+export const formatCuit = (cuit: string) => maskCuit(cuit);
 
 /** 30111222 → 30.111.222 */
-export function formatDni(dni: string): string {
-  return dni.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-}
+export const formatDni = (dni: string) => maskDni(dni);
 
 /** Estado del acceso a la app para la lista y la ficha (D-049). */
 export function appAccess(c: Pick<Customer, "appPasswordSetAt" | "appInvitedAt" | "emails">): string {
