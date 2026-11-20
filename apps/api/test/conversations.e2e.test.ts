@@ -191,6 +191,17 @@ describe("bot del chat de la app (D-056, D-057)", () => {
     expect((await as("attention").get("/conversations?filter=HUMAN")).body.total).toBe(0);
   });
 
+  it("D-060: los avisos de estado arrancan apagados y solo el dueño los prende", async () => {
+    expect((await as("attention").get("/conversations/notices")).body).toEqual({ enabled: false, since: null });
+    const put = (who: "attention" | "owner", enabled: boolean) =>
+      http().put("/conversations/notices").set("Authorization", `Bearer ${tokens[who]}`).send({ enabled });
+    expect((await put("attention", true)).status).toBe(403);
+    const on = await put("owner", true);
+    expect(on.body.enabled).toBe(true);
+    expect(typeof on.body.since).toBe("string");
+    expect((await put("owner", false)).body.enabled).toBe(false);
+  });
+
   it("D-056: el bot no se puede prender en el hilo de alguien que no es cliente", async () => {
     const stranger = await prisma.conversation.findFirstOrThrow({ where: { customerId: null } });
     expect((await as("attention").post(`/conversations/${stranger.id}/bot`, { enabled: true })).status).toBe(422);

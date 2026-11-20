@@ -50,6 +50,32 @@ export class ConversationsService {
     return { configured, model: configured ? process.env.BOT_MODEL?.trim() || null : null, chatsWithBot, needsHuman };
   }
 
+  // ───────────── Avisos automáticos de estado (D-060) ─────────────
+
+  async noticesStatus() {
+    const row = await this.prisma.appSetting.findUnique({ where: { key: "customer-notices" } });
+    const v = row?.value as { enabled?: unknown; since?: unknown } | null;
+    return { enabled: v?.enabled === true, since: typeof v?.since === "string" ? v.since : null };
+  }
+
+  /**
+   * Prende o apaga los avisos al cliente (chat de la app y mail). Al prenderlos se guarda desde
+   * cuándo: solo se avisan los cambios de estado de ahí en adelante.
+   */
+  async setNotices(enabled: boolean, userId: string) {
+    const before = await this.noticesStatus();
+    const value = { enabled, since: enabled ? new Date().toISOString() : before.since };
+    await this.prisma.$transaction(async (tx) => {
+      await tx.appSetting.upsert({
+        where: { key: "customer-notices" },
+        create: { key: "customer-notices", value, updatedById: userId },
+        update: { value, updatedById: userId },
+      });
+      await this.audit.log({ entity: "AppSetting", entityId: "customer-notices", action: "update", userId, before: { enabled: before.enabled }, after: { enabled } }, tx);
+    });
+    return this.noticesStatus();
+  }
+
   /** "Apagar en todos" (D-057): por si el bot responde mal, se apaga en todos los chats de una vez. */
   async turnBotOffEverywhere(userId: string) {
     const { count } = await this.prisma.conversation.updateMany({ where: { botEnabled: true }, data: { botEnabled: false } });

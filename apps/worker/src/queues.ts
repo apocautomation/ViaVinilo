@@ -12,6 +12,8 @@ export const QUEUES = {
   outbox: "outbox",
   /** Respuestas del bot en el chat de la app (D-056). */
   bot: "bot-replies",
+  /** Avisos automáticos de estado al cliente (D-060). */
+  notices: "status-notices",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

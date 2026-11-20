@@ -25,6 +25,10 @@ export interface BotContext {
   pendingSignup: boolean;
   jobs: BotJob[];
   now: Date;
+  /** Ya hubo mensajes en esta conversación: no se vuelve a saludar (D-060). */
+  alreadyTalking?: boolean;
+  /** Los avisos automáticos de estado están prendidos: el bot puede decir "te avisamos" (D-060). */
+  noticesOn?: boolean;
 }
 
 const ars = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
@@ -88,10 +92,12 @@ function customerBlock(c: BotContext): string {
           ].join(""),
         )
         .join("\n")
-    : "- No tiene pedidos cargados.";
+    : "- No tiene pedidos cargados. Si pregunta por un pedido, decile que todavía no hay ninguno en el sistema y pedile que mande el archivo por mail (si ya lo mandó, que puede tardar unos minutos en aparecer).";
   return `## Cliente con el que hablás
 - ${c.customerName} (cliente N.º ${c.customerNumber})${c.pendingSignup ? " · su alta está pendiente de aprobación: igual puede hacer pedidos" : ""}
 - Ahora es ${when(c.now)} (hora de Salta).
+- ${c.alreadyTalking ? "Ya vienen hablando: NO saludes de nuevo, seguí la conversación." : "Es el primer mensaje: saludá una sola vez, por el nombre."}
+- ${c.noticesOn ? "Los avisos automáticos están prendidos: cuando el pedido cambia de estado, al cliente le llega un aviso por este chat y por mail." : "Los avisos automáticos todavía no están prendidos: no prometas avisarle; que lo consulte por acá."}
 
 ## Sus pedidos en el sistema (los más recientes)
 ${jobs}`;
@@ -106,7 +112,23 @@ export function buildSystemPrompt(c: BotContext): string {
 - Siempre de "vos" (tenés, podés, mandá), nunca de "tú" ni de "usted".
 - Nunca inventes precios, plazos ni datos. Si no está en este texto o en los pedidos del cliente, no lo sabés.
 - No digas por qué sucursal se retira un pedido: eso lo aclara el cliente en el mail con el archivo.
+- Repetí las medidas EXACTAMENTE como las escribió el cliente (si dice 5.10 × 1.10, son metros). Nunca las conviertas ni las recalcules.
 - Si el cliente dice "gracias" o "después lo paso a buscar", agradecé y cerrá.
+
+# Cómo es un pedido (no te saltees pasos)
+1. El cliente manda el archivo POR MAIL a la casilla del servicio, con sus datos (la app todavía no recibe archivos).
+2. Via Vinilo revisa el archivo. Si tiene un problema, queda "Archivo con error" y hay que mandarlo de nuevo.
+3. Se cotiza: queda "Cotizado" con el precio.
+4. Si corresponde seña, se paga y queda "Seña recibida". Recién ahí entra a producción.
+5. Se imprime y queda "Terminado, listo para retirar". Después, "Entregado".
+Si el cliente te cuenta un trabajo nuevo (medidas, material, cantidades) y no hay un pedido con ese archivo, NO digas que va a estar listo: pedile que mande el archivo por mail a la casilla del servicio, con los datos, y explicale que después le pasan el precio.
+
+# A qué casilla va cada trabajo
+- Lonas (front, blackout), vinilos y banners con tinta solvente → Ecosolvente → granformato@viavinilo.com.
+- Si el cliente dice "látex" → latex@viavinilo.com. Rígidos (PVC, acrílico, MDF, chapa) → UV sobre rígidos → granformato@viavinilo.com.
+- Remeras o prendas con transfer → DTF Textil → dtf@viavinilo.com. Tazas, lapiceras u objetos → DTF UV → dtfuv@viavinilo.com.
+- Telas por metro → Calandra → calandra@viavinilo.com. Papel para sublimar → sublimacion@viavinilo.com. Cortes y troquelados → cortes@viavinilo.com.
+- Si no estás seguro de qué servicio es, preguntale el material antes de darle una casilla.
 
 # Qué podés hacer
 - Explicar cómo preparar y mandar archivos, a qué casilla, horarios, sucursales, señas y medios de pago.

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, SlidersHorizontal, Smartphone, X } from "lucide-react";
+import { Bell, Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, SlidersHorizontal, Smartphone, X } from "lucide-react";
 import { JOB_STATUS_LABELS, parseMailBody, type JobStatus } from "@viavinilo/contracts";
-import { api, ApiError } from "../../../lib/api";
+import { api, ApiError, getUser } from "../../../lib/api";
 import { Help } from "../../help";
 import { Badge, ars } from "../../ui";
 import { CustomerRecord } from "../clientes/customer-record";
@@ -214,7 +214,25 @@ function MessageBody({ m }: { m: Message }) {
 /** Acciones masivas del bot (D-058): prender o apagar en todos los chats de una vez, con confirmación. */
 function BotBulkMenu({ onDone }: { onDone: (s: BotStatus) => void }) {
   const [open, setOpen] = useState(false);
-  const [confirm, setConfirm] = useState<null | "on" | "off">(null);
+  const [confirm, setConfirm] = useState<null | "on" | "off" | "notices">(null);
+  const [notices, setNotices] = useState<boolean | null>(null);
+  const isOwner = getUser()?.roles.includes("OWNER") ?? false;
+  useEffect(() => {
+    if (open && isOwner) api<{ enabled: boolean }>("/conversations/notices").then((r) => setNotices(r.enabled)).catch(() => setNotices(null));
+  }, [open, isOwner]);
+  async function toggleNotices() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await api<{ enabled: boolean }>("/conversations/notices", { method: "PUT", body: JSON.stringify({ enabled: !notices }) });
+      setNotices(r.enabled);
+      setConfirm(null);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const close = () => {
@@ -241,7 +259,23 @@ function BotBulkMenu({ onDone }: { onDone: (s: BotStatus) => void }) {
       </button>
       {open && (
         <div className="menu" role="menu">
-          {confirm ? (
+          {confirm === "notices" ? (
+            <div className="menu-confirm">
+              <p>
+                {notices
+                  ? "Se dejan de mandar los avisos de estado a los clientes."
+                  : "A cada cliente le llega un aviso por el chat de la app y por mail cuando su pedido pasa a Archivo recibido, Archivo con error, Cotizado (con la seña si corresponde) y Terminado, listo para retirar. Solo de los cambios que pasen desde ahora."}
+              </p>
+              <div className="menu-confirm-actions">
+                <button className="btn btn-ghost btn-sm" onClick={() => setConfirm(null)} disabled={busy}>
+                  Cancelar
+                </button>
+                <button className={`btn btn-sm ${notices ? "btn-danger" : "btn-primary"}`} onClick={() => void toggleNotices()} disabled={busy}>
+                  {notices ? "Sí, apagar los avisos" : "Sí, prender los avisos"}
+                </button>
+              </div>
+            </div>
+          ) : confirm ? (
             <div className="menu-confirm">
               <p>
                 {confirm === "on"
@@ -265,6 +299,11 @@ function BotBulkMenu({ onDone }: { onDone: (s: BotStatus) => void }) {
               <button role="menuitem" className="menu-item" onClick={() => setConfirm("off")}>
                 <BotOff size={15} aria-hidden /> Apagar el bot en todos los chats
               </button>
+              {isOwner && notices !== null && (
+                <button role="menuitem" className="menu-item" onClick={() => setConfirm("notices")}>
+                  <Bell size={15} aria-hidden /> Avisos de estado a clientes: {notices ? "prendidos" : "apagados"}
+                </button>
+              )}
             </>
           )}
           {error && <p className="error">{error}</p>}

@@ -979,6 +979,34 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Al no tener un chat abierto, el aviso queda centrado.
 - **Por qué**: Ezequiel: "me gusta mucho más como se ve en el soft que ya tienen, sin los colores; creo que está mejor distribuido el espacio", y "sacá este cartel".
 
+### D-060 · 20/11/2026 · Ezequiel · el bot sigue el proceso del pedido; avisos de estado al cliente
+- **Problema**: en la primera prueba real el bot:
+  - saludaba en cada mensaje;
+  - hablaba de "tú";
+  - convirtió "5.10 × 1.10" en "51 × 110 cm";
+  - prometió "te avisamos cuando esté listo" sin que hubiera pedido ni archivo.
+
+  En otra prueba inventó "el archivo se ha recibido". El modelo local de 3B no alcanza para los pasos clave. El de 7B tampoco: en el VPS tardó de 8 a 16 s y también se equivocó en datos.
+- **Definición**: el bot responde sin IA los pasos que no pueden fallar, y la IA queda para el resto.
+  - **Flujos fijos**:
+    - el saludo, una vez por conversación;
+    - el trabajo nuevo: pide el archivo por mail a la casilla correcta según el material, sin decir que llegó ni cuándo está;
+    - "¿está listo?": responde con los pedidos reales; sin pedidos, lo dice;
+    - formato por servicio, sucursal y horario por servicio (DTF y DTF UV en San Juan; el resto en Av. Chile) y tiempos de entrega.
+  - **El prompt de la IA**:
+    - sabe el orden del pedido: archivo por mail → revisión → Cotizado → Seña recibida → Impreso → Terminado, listo para retirar;
+    - repite las medidas tal cual;
+    - sabe qué casilla corresponde a cada material;
+    - no saluda si ya hubo respuesta en el hilo (memoria por conversación: lee los últimos 12 mensajes).
+  - **Controles fijos sobre la respuesta de la IA**: pasa a "vos" las formas de "tú", corrige las casillas mal escritas ("látex@" → "latex@") y, con los avisos apagados, saca cualquier "te avisamos".
+- **Avisos de estado al cliente** (arrancan apagados):
+  - van por el chat de la app y por mail (desde soporte@, por la cola de mails), nunca por WhatsApp (R-NOT-1);
+  - se mandan cuando el pedido pasa a **Archivo recibido**, **Archivo con error** (con el motivo), **Cotizado** (precio, la seña si corresponde y cómo pagarla según el sector) y **Terminado, listo para retirar** (sucursal y horario);
+  - los prende solo el dueño, desde el menú ☰ de Conversaciones (queda en auditoría), y solo avisan los cambios desde ese momento;
+  - si el cliente no quiere mails, solo le llega por el chat.
+- **Pestaña "Enviar" de la app**: simulaba un envío ("¡Recibimos tu trabajo!") sin mandar nada. Ahora explica a qué casilla mandar el archivo según el servicio y abre el correo con la casilla y los datos del cliente ya cargados. Subir archivos desde la app sigue pendiente (I-19).
+- **Por qué**: Ezequiel: "antes de avisarle si está listo hay que pedirle el archivo, verificarlo, la cotización, la seña si es necesaria y recién ahí se le avisa", "¿podemos automatizar eso por la app o por mail cuando pase a listo para retirar?".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

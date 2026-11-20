@@ -1,10 +1,20 @@
 import type { PrismaClient } from "@prisma/client";
 import { formatJobNumber, JOB_STATUS_LABELS } from "@viavinilo/contracts";
+import { fixedFlow } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildSystemPrompt } from "./prompt";
+import { dropNoticePromises, fixMailboxes } from "./guard";
+import { toVoseo } from "./voseo";
 
 const HISTORY = 12;
+
+/** Avisos automáticos de estado al cliente (D-060). Sin fila = apagados. */
+export const NOTICES_SETTING_KEY = "customer-notices";
+export async function noticesOn(prisma: PrismaClient): Promise<boolean> {
+  const row = await prisma.appSetting.findUnique({ where: { key: NOTICES_SETTING_KEY } });
+  return (row?.value as { enabled?: unknown } | null)?.enabled === true;
+}
 const PREVIEW_CHARS = 140;
 const preview = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, PREVIEW_CHARS);
 
@@ -71,22 +81,28 @@ export async function processBotReplies(
       take: HISTORY,
       select: { direction: true, channel: true, body: true, fromBot: true },
     });
+    const notices = await noticesOn(prisma);
+    const alreadyTalking = history.some((m) => m.direction === "OUT");
+    const botJobs = jobs.map((j) => ({
+      label: formatJobNumber(j.number),
+      sector: j.sector.name,
+      status: JOB_STATUS_LABELS[j.status],
+      description: j.description,
+      quotedAmount: j.quotedAmount?.toString() ?? null,
+      depositRequired: j.depositRequired,
+      depositPaid: j.depositPaidAt !== null,
+      estimatedReadyAt: j.estimatedReadyAt,
+      createdAt: j.createdAt,
+    }));
     const system = buildSystemPrompt({
       customerName: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.businessName || "Cliente",
       customerNumber: customer.customerNumber,
       pendingSignup: customer.status === "PENDING",
-      jobs: jobs.map((j) => ({
-        label: formatJobNumber(j.number),
-        sector: j.sector.name,
-        status: JOB_STATUS_LABELS[j.status],
-        description: j.description,
-        quotedAmount: j.quotedAmount?.toString() ?? null,
-        depositRequired: j.depositRequired,
-        depositPaid: j.depositPaidAt !== null,
-        estimatedReadyAt: j.estimatedReadyAt,
-        createdAt: j.createdAt,
-      })),
+      jobs: botJobs,
       now: now(),
+      // D-060: memoria por conversación. Si ya hubo una respuesta en el hilo, no se saluda de nuevo.
+      alreadyTalking,
+      noticesOn: notices,
     });
     const turns: ChatTurn[] = [
       { role: "system", content: system },
@@ -98,7 +114,17 @@ export async function processBotReplies(
 
     let answer: BotAnswer;
     try {
-      answer = fixed ? { reply: handoffReply(now()), handoff: true, reason: fixed } : await llm(turns);
+      // D-060: los pasos clave del pedido (saludo, trabajo nuevo, "¿está listo?") van por flujos fijos.
+      const flow = fixed ? null : fixedFlow(incoming.body, { firstName: customer.firstName, alreadyTalking, noticesOn: notices, jobs: botJobs });
+      answer = fixed
+        ? { reply: handoffReply(now()), handoff: true, reason: fixed }
+        : flow
+          ? { reply: flow, handoff: false, reason: null }
+          : await llm(turns);
+      // D-060: controles fijos sobre lo que escribió el modelo.
+      let reply = fixMailboxes(toVoseo(answer.reply));
+      if (!notices) reply = dropNoticePromises(reply);
+      answer = { ...answer, reply };
     } catch (err) {
       // Sin respuesta del bot el mensaje queda para el equipo, como si el bot estuviera apagado.
       console.error(`[bot] no pudo responder en la conversación ${conv.id}:`, err instanceof Error ? err.message : err);
