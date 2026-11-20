@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { CONVERSATION_FILTERS, formatJobNumber, normalizeSearch, type MessageChannel } from "@viavinilo/contracts";
+import { CONVERSATION_FILTERS, formatJobNumber, isResetCommand, normalizeSearch, RESET_REPLY, type MessageChannel } from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -309,7 +309,20 @@ export class ConversationsService {
       }
     }
     const conversationId = conv.id;
-        // D-057: el bot es individual por chat: responde donde está prendido.
+    // D-061: "/reset" borra la memoria del bot con este cliente y responde al toque.
+    if (isResetCommand(text)) {
+      return this.prisma.$transaction(async (tx) => {
+        const msg = await tx.message.create({ data: { conversationId, direction: "IN", channel: "APP", body: text }, select: appMessageSelect });
+        const at = new Date(msg.createdAt.getTime() + 1);
+        await tx.message.create({ data: { conversationId, direction: "OUT", channel: "APP", body: RESET_REPLY, fromBot: true, createdAt: at } });
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { botResetAt: at, needsHuman: false, needsHumanReason: null, lastMessageAt: at, lastMessagePreview: RESET_REPLY, customerUnread: { increment: 1 } },
+        });
+        return msg;
+      });
+    }
+    // D-057: el bot es individual por chat: responde donde está prendido.
     const forBot = conv.botEnabled && !conv.needsHuman;
     return this.prisma.$transaction(async (tx) => {
       const msg = await tx.message.create({

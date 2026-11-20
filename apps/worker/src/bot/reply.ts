@@ -3,7 +3,7 @@ import { formatJobNumber, JOB_STATUS_LABELS } from "@viavinilo/contracts";
 import { fixedFlow } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
-import { buildSystemPrompt } from "./prompt";
+import { buildSystemPrompt, type BotJob } from "./prompt";
 import { dropNoticePromises, fixMailboxes } from "./guard";
 import { toVoseo } from "./voseo";
 
@@ -17,6 +17,33 @@ export async function noticesOn(prisma: PrismaClient): Promise<boolean> {
 }
 const PREVIEW_CHARS = 140;
 const preview = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, PREVIEW_CHARS);
+
+/**
+ * Cómo decide el bot la respuesta a un mensaje (D-060, D-061). La usan el worker y la prueba de
+ * punta a punta (bot-dry-run), para que lo probado sea exactamente lo que corre.
+ * 1. Derivación fija a un asesor (cancelar, reclamos, precios, comprobantes, pedir una persona).
+ * 2. Flujos fijos (saludo, trabajo nuevo, "¿está listo?", formatos, sucursales, tiempos).
+ * 3. La IA, con controles sobre lo que escribe (vos, casillas, promesas de aviso).
+ */
+export async function decideAnswer(input: {
+  text: string;
+  firstName: string | null;
+  alreadyTalking: boolean;
+  noticesOn: boolean;
+  jobs: BotJob[];
+  turns: ChatTurn[];
+  llm: Llm;
+  now: Date;
+}): Promise<BotAnswer & { source: "handoff" | "flow" | "ai" }> {
+  const fixed = fixedHandoff(input.text);
+  if (fixed) return { reply: handoffReply(input.now), handoff: true, reason: fixed, source: "handoff" };
+  const flow = fixedFlow(input.text, { firstName: input.firstName, alreadyTalking: input.alreadyTalking, noticesOn: input.noticesOn, jobs: input.jobs });
+  if (flow) return { reply: flow, handoff: false, reason: null, source: "flow" };
+  const answer = await input.llm(input.turns);
+  let reply = fixMailboxes(toVoseo(answer.reply));
+  if (!input.noticesOn) reply = dropNoticePromises(reply);
+  return { ...answer, reply, source: "ai" };
+}
 
 export interface BotRunResult {
   answered: number;
@@ -68,7 +95,6 @@ export async function processBotReplies(
     const customer = conv.customer;
     // D-057: los casos que siempre van a un asesor no pasan por la IA.
     const incoming = await prisma.message.findUniqueOrThrow({ where: { id: msg.id }, select: { body: true } });
-    const fixed = fixedHandoff(incoming.body);
     const jobs = await prisma.jobOrder.findMany({
       where: { customerId: customer.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
@@ -76,7 +102,8 @@ export async function processBotReplies(
       include: { sector: { select: { name: true } } },
     });
     const history = await prisma.message.findMany({
-      where: { conversationId: conv.id, createdAt: { lte: msg.createdAt } },
+      // D-061: después de un "/reset", el bot solo lee desde ahí.
+      where: { conversationId: conv.id, createdAt: { lte: msg.createdAt, ...(conv.botResetAt ? { gt: conv.botResetAt } : {}) } },
       orderBy: { createdAt: "desc" },
       take: HISTORY,
       select: { direction: true, channel: true, body: true, fromBot: true },
@@ -114,17 +141,16 @@ export async function processBotReplies(
 
     let answer: BotAnswer;
     try {
-      // D-060: los pasos clave del pedido (saludo, trabajo nuevo, "¿está listo?") van por flujos fijos.
-      const flow = fixed ? null : fixedFlow(incoming.body, { firstName: customer.firstName, alreadyTalking, noticesOn: notices, jobs: botJobs });
-      answer = fixed
-        ? { reply: handoffReply(now()), handoff: true, reason: fixed }
-        : flow
-          ? { reply: flow, handoff: false, reason: null }
-          : await llm(turns);
-      // D-060: controles fijos sobre lo que escribió el modelo.
-      let reply = fixMailboxes(toVoseo(answer.reply));
-      if (!notices) reply = dropNoticePromises(reply);
-      answer = { ...answer, reply };
+      answer = await decideAnswer({
+        text: incoming.body,
+        firstName: customer.firstName,
+        alreadyTalking,
+        noticesOn: notices,
+        jobs: botJobs,
+        turns,
+        llm,
+        now: now(),
+      });
     } catch (err) {
       // Sin respuesta del bot el mensaje queda para el equipo, como si el bot estuviera apagado.
       console.error(`[bot] no pudo responder en la conversación ${conv.id}:`, err instanceof Error ? err.message : err);

@@ -209,6 +209,8 @@ model Conversation {
   /// El bot derivó a un asesor (o el cliente lo pidió): lo resuelve una persona (D-056).
   needsHuman         Boolean   @default(false)
   needsHumanReason   String?
+  /// "/reset" (D-061): el bot solo lee la conversación desde acá. El equipo sigue viendo todo el hilo.
+  botResetAt         DateTime?
   messages           Message[]
   createdAt          DateTime  @default(now())
 
@@ -497,6 +499,7 @@ enum MailIngestResult {
   SKIPPED_NO_FILES // sin adjuntos ni links (I-15)
   SKIPPED_AUTO_REPLY // respuesta automática, rebote o lista
   REJECTED_BLOCKED // cliente bloqueado (I-14)
+  COMMAND // un comando como "/reset" (D-061): no crea orden
   ERROR
 }
 

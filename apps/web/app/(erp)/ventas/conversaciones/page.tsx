@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Bell, Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, SlidersHorizontal, Smartphone, X } from "lucide-react";
+import { Bell, BellOff, Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, SlidersHorizontal, Smartphone, X } from "lucide-react";
 import { JOB_STATUS_LABELS, parseMailBody, type JobStatus } from "@viavinilo/contracts";
 import { api, ApiError, getUser } from "../../../lib/api";
 import { Help } from "../../help";
@@ -218,8 +218,8 @@ function BotBulkMenu({ onDone }: { onDone: (s: BotStatus) => void }) {
   const [notices, setNotices] = useState<boolean | null>(null);
   const isOwner = getUser()?.roles.includes("OWNER") ?? false;
   useEffect(() => {
-    if (open && isOwner) api<{ enabled: boolean }>("/conversations/notices").then((r) => setNotices(r.enabled)).catch(() => setNotices(null));
-  }, [open, isOwner]);
+    if (open) api<{ enabled: boolean }>("/conversations/notices").then((r) => setNotices(r.enabled)).catch(() => setNotices(null));
+  }, [open]);
   async function toggleNotices() {
     setBusy(true);
     setError("");
@@ -299,11 +299,29 @@ function BotBulkMenu({ onDone }: { onDone: (s: BotStatus) => void }) {
               <button role="menuitem" className="menu-item" onClick={() => setConfirm("off")}>
                 <BotOff size={15} aria-hidden /> Apagar el bot en todos los chats
               </button>
-              {isOwner && notices !== null && (
-                <button role="menuitem" className="menu-item" onClick={() => setConfirm("notices")}>
-                  <Bell size={15} aria-hidden /> Avisos de estado a clientes: {notices ? "prendidos" : "apagados"}
-                </button>
-              )}
+              <div className="menu-section">
+                Avisos automáticos a clientes
+                <span className={`menu-state${notices ? " on" : ""}`}>{notices === null ? "…" : notices ? "Prendidos" : "Apagados"}</span>
+              </div>
+              <button
+                role="menuitem"
+                className="menu-item"
+                disabled={!isOwner || notices !== false}
+                title={isOwner ? undefined : "Solo el dueño puede prender los avisos: salen mails reales a los clientes"}
+                onClick={() => setConfirm("notices")}
+              >
+                <Bell size={15} aria-hidden /> Prender los avisos automáticos
+              </button>
+              <button
+                role="menuitem"
+                className="menu-item"
+                disabled={!isOwner || notices !== true}
+                title={isOwner ? undefined : "Solo el dueño puede apagar los avisos"}
+                onClick={() => setConfirm("notices")}
+              >
+                <BellOff size={15} aria-hidden /> Apagar los avisos automáticos
+              </button>
+              {!isOwner && <p className="menu-note">Los avisos los prende o apaga el dueño.</p>}
             </>
           )}
           {error && <p className="error">{error}</p>}

@@ -133,6 +133,21 @@ describe("bot del chat de la app (D-056)", () => {
     expect(replies[2]).toMatch(/VV-\d+ \(DTF, Remeras logo\): Terminado, listo para retirar/);
   });
 
+  it("D-061: después de un /reset el bot no recuerda nada anterior y vuelve a saludar", async () => {
+    await botOn();
+    const t = Date.now();
+    await prisma.message.create({ data: { conversationId, direction: "IN", channel: "APP", body: "algo viejo", createdAt: new Date(t - 9000) } });
+    await prisma.message.create({ data: { conversationId, direction: "OUT", channel: "APP", body: "respuesta vieja", fromBot: true, createdAt: new Date(t - 8000) } });
+    await prisma.conversation.update({ where: { id: conversationId }, data: { botResetAt: new Date(t - 5000) } });
+    await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t - 1000));
+    const { llm, calls } = fakeLlm({ reply: "Te cuento." });
+    await processBotReplies(prisma, llm);
+    const turns = calls[0]!;
+    expect(turns.map((x) => x.content)).not.toContain("algo viejo");
+    expect(turns.map((x) => x.content)).not.toContain("respuesta vieja");
+    expect(turns[0]!.content).toContain("Es el primer mensaje: saludá una sola vez");
+  });
+
   it("D-057: cancelar, reclamos, precios, comprobantes o pedir una persona van a un asesor sin pasar por la IA", async () => {
     await botOn();
     await customerWrites("Hola, ¿cuánto sale el metro de DTF?");

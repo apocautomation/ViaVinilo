@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, type MailIngestResult, type PrismaClient, type Sector } from "@prisma/client";
 import type { FileStorage } from "../storage";
-import { customerSearchText } from "@viavinilo/contracts";
+import { customerSearchText, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
 import { extractContact } from "./contact";
 import { recordInboundMail } from "./conversation";
 import { parseMail, type ParsedMail } from "./parse";
@@ -93,6 +93,30 @@ async function decide(
     const error = "Mail de una casilla de Via Vinilo sin el remitente original: cargá el pedido a mano";
     await log(deps, sector, received, "ERROR", { error });
     return { ...base, result: "ERROR", error };
+  }
+
+  // D-061: "/reset" por mail borra la memoria del bot con ese cliente y se le responde en el mismo hilo.
+  if (isResetCommand(mail.text) && mail.files.length === 0) {
+    const customerId = await knownCustomerId();
+    await toInbox(customerId);
+    if (customerId && mail.fromEmail) {
+      const conv = await prisma.conversation.findUnique({ where: { customerId }, select: { id: true } });
+      if (conv) {
+        const subject = mail.subject ? (/^re:/i.test(mail.subject) ? mail.subject : `Re: ${mail.subject}`) : "Via Vinilo";
+        await prisma.$transaction(async (tx) => {
+          const out = await tx.outboundEmail.create({
+            data: { to: mail.fromEmail!, subject, text: RESET_REPLY, kind: "bot-reset", customerId, fromAddress: sector.inboxEmail, inReplyToUid: meta.uid ?? null },
+          });
+          const at = new Date();
+          await tx.message.create({
+            data: { conversationId: conv.id, direction: "OUT", channel: "MAIL", sectorId: sector.id, subject, body: RESET_REPLY, fromBot: true, outboundEmailId: out.id, createdAt: at },
+          });
+          await tx.conversation.update({ where: { id: conv.id }, data: { botResetAt: at, needsHuman: false, needsHumanReason: null, lastMessageAt: at, lastMessagePreview: RESET_REPLY } });
+        });
+      }
+    }
+    await log(deps, sector, received, "COMMAND");
+    return { ...base, result: "COMMAND" };
   }
 
   if (mail.isAutoReply) {
