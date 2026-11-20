@@ -784,7 +784,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Envío de mails en cola** (`OutboundEmail`):
     - la API anota el mail y el worker lo manda **despacio**, para no quedar bloqueados por spam como `dtf@` (I-22);
     - después de enviarlo se borra el link del texto guardado.
-    - El envío usa la API de mail de Hostinger desde una casilla que pueda enviar (`MAIL_SENDER_ADDRESS`). **Pendiente**: que Ezequiel elija la casilla y ampliar el token a esa casilla.
+    - El envío usa la API de mail de Hostinger desde una casilla que pueda enviar (`MAIL_SENDER_ADDRESS`). **Hecho el 20/11**:
+      - sale desde **`soporte@viavinilo.com`** (lo eligió Ezequiel);
+      - se creó un token nuevo con las 6 casillas de sector más `soporte@`, y se revocó el anterior;
+      - envío real probado: invitación al cliente N.º 1, enviada, con el link borrado de lo guardado.
+  - **Importación hecha en producción (20/11)**: 1789 clientes de Runamatic (más el N.º 1 que ya estaba), 374 con email y 1769 con celular. Primero se hizo una prueba en seco. El CSV se borró del servidor al terminar.
   - **Links de activación** (`AppActivation`):
     - duran 48 h y se usan una sola vez;
     - se guarda solo el hash;
