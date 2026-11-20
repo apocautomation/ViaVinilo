@@ -1387,8 +1387,22 @@ table.data tfoot td {
 .muted {
   color: var(--color-text-muted);
 }
+/* D-053: centrada en pantallas anchas, sin el hueco vacío a la derecha. */
 .page-narrow {
   max-width: 980px;
+  width: 100%;
+  margin-inline: auto;
+}
+.contact-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .contact-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .back-link {
   display: inline-flex;

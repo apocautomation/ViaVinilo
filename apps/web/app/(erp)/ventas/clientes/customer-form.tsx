@@ -128,7 +128,7 @@ function ContactList({
   placeholder: string;
 }) {
   return (
-    <div className="field field-wide">
+    <div className="field">
       {label}
       {values.map((v, i) => (
         <div key={i} className="contact-row">
@@ -224,8 +224,10 @@ export function CustomerForm({
             </>
           }
         >
-          <ContactList label="Emails" type="email" placeholder="cliente@email.com" values={v.emails} onChange={(x) => set("emails", x)} />
-          <ContactList label="Teléfonos (WhatsApp)" type="tel" placeholder="387 466-9944" values={v.phones} onChange={(x) => set("phones", x)} />
+          <div className="field-wide contact-pair">
+            <ContactList label="Emails" type="email" placeholder="cliente@email.com" values={v.emails} onChange={(x) => set("emails", x)} />
+            <ContactList label="Teléfonos (WhatsApp)" type="tel" placeholder="387 466-9944" values={v.phones} onChange={(x) => set("phones", x)} />
+          </div>
           <div className="field field-wide">
             Contraseña de la app
             <div className="contact-row">

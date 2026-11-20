@@ -134,6 +134,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-24 | ¿El error de archivo es automático o lo confirma el operador? (D-050) | El contrato (E1.3) dice que la IA sugiere "Archivo con error" y el operador confirma. Ezequiel le dijo a Verónica que se mueve solo. | E1 | Abierto. Propuesta: automático solo cuando el control es seguro (formato equivocado, resolución efectiva muy por debajo del mínimo); en los casos dudosos (por ejemplo, sospecha de imagen agrandada) se marca para revisar y confirma el operador. Confirmar con Ezequiel. |
 | I-25 | Cómo se reconoce la seña (D-050) | "Cuando el cliente pase el comprobante, pasa a Seña recibida": falta definir si alcanza con que mande una imagen o si alguien la verifica. | E1 | Abierto. Propuesta: el asesor ve el comprobante en Conversaciones y toca "Seña recibida" (un clic, queda auditado). La lectura automática del monto queda para después. |
 | I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | Abierto. Preguntar el lunes 23/11 si TPU y Embroidery tienen tablero propio o van en DTF, y si Corte va dentro de Gran Formato. |
+| I-27 | Seña por servicio en la Ayuda de la app (D-053) | Los agentes de Runamatic no coinciden: los de sector piden 50% siempre; el agente "SISTEMA NUEVO" la pide según metros (DTF Textil, Sublimación y Calandra desde 10 m; DTF UV desde 3 m; TPU siempre). La Ayuda muestra la del agente más nuevo. | E1 | Abierto. Confirmar con Verónica y corregir `apps/pwa/app/(app)/ayuda/content.ts`. |
 
 ## 4. Bitácora de decisiones
 
@@ -866,6 +867,20 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Ventas → Pedidos con datos reales**: `GET /jobs`, con pestañas (En curso / Listos / Entregados / Todos), sector, canal y búsqueda por N.º, cliente o detalle. Producción ve solo sus sectores. Se borró la vista previa con pedidos inventados.
 - **Por qué**: Ezequiel: "lo que es pedido limpialo, que no quede nada de esta información falsa en el sistema".
 - **Pendiente**: las pantallas de Administración (comprobantes, cobranzas, compras, IVA, etc.) y Configuración siguen siendo vistas previas de la E3 con datos de ejemplo, marcadas "Vista previa · Etapa 3".
+
+### D-053 · 20/11/2026 · Ezequiel · Ayuda de la app con contenido real y alta de cliente centrada
+- **Definición**:
+  - **App → Ayuda** deja de ser una vista previa ("Etapa 2" y links muertos). Muestra:
+    - cómo preparar y mandar archivos, por servicio: casilla, formato, requisitos, avisos (espejo, formatos bajo responsabilidad) y los instructivos en imagen que ya usa Via Vinilo;
+    - qué tiene que decir el mail y cómo nombrar el archivo;
+    - precios, señas y pagos: no se publican precios (se piden por el chat o se cotizan con el archivo), las señas por servicio y los datos de Macro y Mercado Pago;
+    - horarios de las dos sucursales, con el link al mapa;
+    - 10 preguntas frecuentes reales, el link a la tienda de insumos y "Hablar con un asesor" (va al Chat).
+  - El contenido está en un solo archivo (`apps/pwa/app/(app)/ayuda/content.ts`) para pasarlo a la base cuando el cliente lo edite desde el ERP (E2).
+  - **ERP → Nuevo cliente**: la página angosta se centra en pantallas anchas (antes quedaba pegada a la izquierda con un hueco a la derecha) y los emails y teléfonos van lado a lado.
+- **Fuente**: los prompts de los agentes de Runamatic (`docs/referencias/runamatic-agentes.md`), que es lo que hoy se les dice a los clientes. De la web solo se tomó la explicación de dpi y píxeles (por qué sale pixelado aunque diga 300 dpi). No se inventaron precios.
+- **Por qué**: Ezequiel pidió armar la Ayuda "con la info de Runamatic y lo que sabés del negocio" antes del bot, que va a usar el mismo contenido.
+- **Abierto**: la seña por servicio (I-27).
 
 ## 5. Pendientes del cliente para arrancar la E1
 
