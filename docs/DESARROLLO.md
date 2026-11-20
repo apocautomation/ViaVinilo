@@ -131,6 +131,9 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-21 | Casillas `cortes@` y `tpu@` (D-043) — **Resuelto en D-046**: `cortes@` es el Corte de Gran Formato y `tpu@` es TPU | En Hostinger existen las casillas `cortes@viavinilo.com` y `tpu@viavinilo.com`, pero el sistema tiene 6 sectores y ninguno es Cortes ni TPU. | E1 | Abierto. Preguntar a Ricardo y a Verónica si son sectores que reciben trabajos (y hay que sumarlos con su secuencia de estados) o casillas de otro uso. |
 | I-22 | `dtf@` bloqueada para enviar (D-043) | Hostinger bloqueó el envío de `dtf@viavinilo.com` por "sending_spam". El sistema responde desde la casilla del sector (Reply-To, actualización §2.2), así que las respuestas de DTF no salen. | E1 | Abierto. El cliente tiene que pedirle a Hostinger que la desbloquee y revisar SPF, DKIM y DMARC de `viavinilo.com` (actualización §2.2). Mientras tanto, DTF puede responder desde otra casilla. |
 | I-23 | Migración de clientes sin DNI ni email (D-048) — **Resuelto en D-049** | El alta exige DNI, email y teléfono (actualización §2.1, D-025), y el ingreso a la app necesita email (D-039). En el CSV de Runamatic solo 9 de 1790 tienen DNI y 380 tienen email. | E1 | Abierto. Propuesta: importar como **activos** a los "Cliente Registrado", y también a los que tengan email; marcar "datos a completar" a los que no tienen DNI y pedírselo en el primer ingreso o en el próximo pedido. Los contactos que no tienen email ni son "Cliente Registrado" no se importan como clientes: quedan para Conversaciones cuando escriban. Confirmar con Ezequiel. |
+| I-24 | ¿El error de archivo es automático o lo confirma el operador? (D-050) | El contrato (E1.3) dice que la IA sugiere "Archivo con error" y el operador confirma. Ezequiel le dijo a Verónica que se mueve solo. | E1 | Abierto. Propuesta: automático solo cuando el control es seguro (formato equivocado, resolución efectiva muy por debajo del mínimo); en los casos dudosos (por ejemplo, sospecha de imagen agrandada) se marca para revisar y confirma el operador. Confirmar con Ezequiel. |
+| I-25 | Cómo se reconoce la seña (D-050) | "Cuando el cliente pase el comprobante, pasa a Seña recibida": falta definir si alcanza con que mande una imagen o si alguien la verifica. | E1 | Abierto. Propuesta: el asesor ve el comprobante en Conversaciones y toca "Seña recibida" (un clic, queda auditado). La lectura automática del monto queda para después. |
+| I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | Abierto. Preguntar el lunes 23/11 si TPU y Embroidery tienen tablero propio o van en DTF, y si Corte va dentro de Gran Formato. |
 
 ## 4. Bitácora de decisiones
 
@@ -781,7 +784,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Envío de mails en cola** (`OutboundEmail`):
     - la API anota el mail y el worker lo manda **despacio**, para no quedar bloqueados por spam como `dtf@` (I-22);
     - después de enviarlo se borra el link del texto guardado.
-    - El envío usa la API de mail de Hostinger desde una casilla que pueda enviar (`MAIL_SENDER_ADDRESS`). **Pendiente**: que Ezequiel elija la casilla y ampliar el token a esa casilla.
+    - El envío usa la API de mail de Hostinger desde una casilla que pueda enviar (`MAIL_SENDER_ADDRESS`). **Hecho el 20/11**:
+      - sale desde **`soporte@viavinilo.com`** (lo eligió Ezequiel);
+      - se creó un token nuevo con las 6 casillas de sector más `soporte@`, y se revocó el anterior;
+      - envío real probado: invitación al cliente N.º 1, enviada, con el link borrado de lo guardado.
+  - **Importación hecha en producción (20/11)**: 1789 clientes de Runamatic (más el N.º 1 que ya estaba), 374 con email y 1769 con celular. Primero se hizo una prueba en seco. El CSV se borró del servidor al terminar.
   - **Links de activación** (`AppActivation`):
     - duran 48 h y se usan una sola vez;
     - se guarda solo el hash;
@@ -800,6 +807,27 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - domicilio.
 
     El origen y las etiquetas van a las notas internas. Los emails y teléfonos repetidos se informan y no se duplican.
+
+### D-050 · 20/11/2026 · Verónica + Ezequiel (WhatsApp) · proceso de pedidos: el sistema se adapta a Via Vinilo, no al revés
+- **Lo que contó Verónica**:
+  - En casi todos los sectores el proceso es el mismo: el cliente manda el archivo por mail y recibe un aviso automático de "recibimos tu mail". Ese aviso no dice que el archivo esté bien para imprimir.
+  - Como Hostinger falla y a veces no llega el mail o el aviso, tuvieron que pedirles a los clientes que además manden un WhatsApp ("envié mis archivos", nombre, apellido y mail) como acuse de recibo.
+  - Verónica quiere un manual de procesos **más simple** y que el sistema se adapte a su forma de trabajar.
+- **Lo que definió Ezequiel** (respuesta a Verónica):
+  - **Tres formas de pedir**: mail, envío desde la app y pedido o chat en la app (D-045). Todo llega igual.
+  - **Verificación automática del archivo** (píxeles y formato, D-047). Si no cumple, la orden pasa sola a **"Archivo con error"** y se le pide al cliente que lo vuelva a cargar con las especificaciones.
+  - **Tableros por sector**, como los de Runamatic hoy, pero **automatizados**.
+  - **Cotización desde Conversaciones**: cuando el asesor le pasa el precio al cliente en la bandeja, la orden pasa sola a **"Cotizado"** con ese monto.
+  - **Seña**: cuando el cliente manda el comprobante, la orden pasa a **"Seña recibida"**.
+  - **Los empleados solo hacen 3 movimientos**: "Impreso", "Listo para retirar" y "Entregado". El resto es automático.
+  - **Tableros**: Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación (cada uno ve solo lo suyo). Se pueden cambiar a gusto; se ve en detalle el lunes 23/11.
+- **Por qué**: hoy la gente trabaja alrededor de las fallas del sistema (el WhatsApp extra como acuse). El sistema tiene que dar el acuse solo y mover lo que se puede mover solo.
+- **Impacto y puntos a confirmar**:
+  - **Acuse de recibo automático**: cuando entra un trabajo, sea por mail o por app, el cliente recibe en la app (push) y por mail "Recibimos tu archivo · pedido VV-…". El estado se ve en la app, así que **no hace falta el WhatsApp de aviso**. Necesita la casilla de envío (D-049) y el push (paso 6).
+  - **Choca con el contrato y D-047**: el contrato dice que la IA *sugiere* "Archivo con error" y **el operador confirma** (E1.3). Ahora Ezequiel define que pase **sola**. Ver I-24.
+  - **Seña "automática"**: hay que definir cómo se reconoce el comprobante. Opciones: el asesor toca "Seña recibida" al ver el comprobante en la conversación (un clic), o lectura automática del comprobante (monto y CBU o alias). Ver I-25.
+  - **Tableros**: la lista de Ezequiel no incluye **TPU** ni **Embroidery** (D-046), ni dice dónde va **Corte** (sub-servicio de Gran Formato con casilla propia). Ver I-26.
+  - **"Impreso" de a varios y archivo desde la tarjeta** (D-042) siguen igual.
 
 ### D-051 · 20/11/2026 · Desarrollo · Conversaciones: mails y chat de la app en un hilo por cliente (implementa D-041 y D-045)
 - **Qué se hizo**:
