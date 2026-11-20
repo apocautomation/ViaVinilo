@@ -60,7 +60,7 @@ export default function CuentaPage() {
               <span>{formatPhone(p.phone)}</span>
             </div>
           ))}
-          <Link href="/ayuda/asistente" className="list-link">
+          <Link href="/chat" className="list-link">
             <span className="list-ico">
               <ChevronRight size={18} />
             </span>

@@ -80,6 +80,10 @@ describe("cola de mails a clientes (D-049)", () => {
       body: { to: ["ana@cliente.test"], subject: "Hola", text: "Texto", displayName: "Via Vinilo" },
     });
 
+    // D-045: una respuesta sale desde la casilla del sector y en el mismo hilo del mail original.
+    await send({ to: "ana@cliente.test", subject: "Re: Lona", text: "Sale $ 20.000", from: "SOPORTE@viavinilo.test", inReplyToUid: 501 });
+    expect(calls.at(-1)?.body).toMatchObject({ inReplyTo: { uid: 501, folder: "INBOX" } });
+
     const wrong = hostingerSender({ token: "t", baseUrl: "https://api.test/api/v1" }, "otra@viavinilo.test", fakeFetch);
     await expect(wrong({ to: "a@b.test", subject: "x", text: "y" })).rejects.toThrow(/no tiene acceso a otra@viavinilo.test/);
   });

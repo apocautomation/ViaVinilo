@@ -138,7 +138,7 @@ export default function PedidoPage() {
           ))}
         </section>
 
-        <Link href={`/ayuda/asistente?pedido=${o.num}`} className="btn btn-ghost btn-block">
+        <Link href={`/chat?pedido=${o.num}`} className="btn btn-ghost btn-block">
           <MessageCircle size={18} /> Consultar por este pedido
         </Link>
       </main>

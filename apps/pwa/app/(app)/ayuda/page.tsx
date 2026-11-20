@@ -10,7 +10,7 @@ const FAQ = [
   { q: "¿Cómo sé si llegó mi archivo?", a: "Apenas lo recibimos, el pedido aparece en Pedidos como \"Archivo recibido\" y te llega un aviso." },
   { q: "¿Qué formatos aceptan?", a: "PDF, PNG, TIFF, AI y PSD. Para DTF, con fondo transparente y en tamaño real." },
   { q: "¿Cuándo tengo que pagar seña?", a: "Algunos trabajos requieren seña antes de imprimir. Si es tu caso, lo vas a ver en el pedido cotizado." },
-  { q: "¿Puedo cambiar un pedido ya enviado?", a: "Escribile al asistente o a un asesor antes de que esté impreso. Desde la app no se modifican pedidos." },
+  { q: "¿Puedo cambiar un pedido ya enviado?", a: "Escribinos por el chat antes de que esté impreso. Desde la app no se modifican pedidos." },
 ];
 
 export default function AyudaPage() {
@@ -18,12 +18,12 @@ export default function AyudaPage() {
     <>
       <AppBar title="Ayuda" right={<span className="preview-chip">Etapa 2</span>} />
       <main className="screen">
-        <Link href="/ayuda/asistente" className="hello" style={{ textDecoration: "none" }}>
+        <Link href="/chat" className="hello" style={{ textDecoration: "none" }}>
           <span className="file-ico" style={{ width: 52, height: 52, borderRadius: 14, background: "rgb(255 255 255 / 0.15)", color: "#fff" }}>
             <Sparkles size={26} />
           </span>
           <div style={{ flex: 1 }}>
-            <strong>Preguntale al asistente</strong>
+            <strong>Escribinos por el chat</strong>
             <span>Estado de tus pedidos, precios y horarios.</span>
           </div>
           <ChevronRight size={22} />
@@ -74,7 +74,7 @@ export default function AyudaPage() {
         </section>
 
         <section className="card card-pad" style={{ display: "grid", gap: 10 }}>
-          <strong>¿Un reclamo o algo que el asistente no resuelve?</strong>
+          <strong>¿Un reclamo o algo que no se resuelve por el chat?</strong>
           <a className="btn btn-ghost btn-block" href="#">
             <MessageCircle size={18} /> Hablar con un asesor
           </a>

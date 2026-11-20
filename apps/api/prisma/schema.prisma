@@ -114,6 +114,7 @@ model Customer {
   /// De dónde vino el cliente si se importó (ej. "runamatic"). Null = alta en el ERP (D-049).
   importSource       String?
   activations        AppActivation[]
+  conversation       Conversation?
   approvedAt         DateTime?
   /// Último mail con el link de alta enviado a un remitente nuevo (D-014). Evita mandarlo en cada mail.
   signupInviteSentAt DateTime?
@@ -155,6 +156,73 @@ model CustomerPhone {
   @@index([customerId])
 }
 
+enum MessageChannel {
+  APP
+  MAIL
+}
+
+enum MessageDirection {
+  /// Del cliente hacia Via Vinilo.
+  IN
+  /// De Via Vinilo hacia el cliente.
+  OUT
+}
+
+/**
+ * Un hilo por cliente con todo lo que manda y lo que se le contesta: chat de la app y mails a las
+ * casillas de los sectores (D-041, D-045). Si el remitente de un mail todavía no es cliente, el
+ * hilo queda por su email hasta que se lo da de alta.
+ */
+model Conversation {
+  id                 String    @id @default(cuid())
+  customerId         String?   @unique
+  customer           Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// Email del remitente cuando todavía no es cliente.
+  contactEmail       String?   @unique
+  contactName        String?
+  lastMessageAt      DateTime  @default(now())
+  lastMessagePreview String    @default("")
+  /// Mensajes del cliente que el equipo todavía no vio.
+  staffUnread        Int       @default(0)
+  /// Respuestas por la app que el cliente todavía no vio.
+  customerUnread     Int       @default(0)
+  messages           Message[]
+  createdAt          DateTime  @default(now())
+
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id              String           @id @default(cuid())
+  conversationId  String
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction       MessageDirection
+  channel         MessageChannel
+  /// Casilla del sector por la que entró o salió (solo mail).
+  sectorId        String?
+  sector          Sector?          @relation(fields: [sectorId], references: [id])
+  /// Quién lo mandó (mails entrantes): a esa dirección se responde.
+  fromEmail       String?
+  subject         String?
+  body            String
+  /// Nombres de los archivos adjuntos, para mostrarlos en el hilo.
+  attachments     Json?
+  /// Orden que creó este mensaje, si trajo un trabajo.
+  jobId           String?
+  /// Clave para no repetir un mail entrante: "<sector>:<Message-ID>".
+  externalKey     String?          @unique
+  /// UID del mail en la casilla del sector: para responder en el mismo hilo (API de Hostinger).
+  mailUid         Int?
+  /// Quién del equipo lo escribió (mensajes OUT).
+  authorId        String?
+  author          User?            @relation(fields: [authorId], references: [id])
+  /// Mail en cola para los mensajes OUT por mail (D-049).
+  outboundEmailId String?
+  createdAt       DateTime         @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
 /// Link para que el cliente cree su contraseña de la app (D-049). Se guarda solo el hash.
 model AppActivation {
   id         String    @id @default(cuid())
@@ -181,18 +249,22 @@ enum OutboundEmailStatus {
 
 /// Mails a clientes en cola (D-049). La API los anota y el worker los manda despacio.
 model OutboundEmail {
-  id         String              @id @default(cuid())
-  to         String
-  subject    String
+  id           String              @id @default(cuid())
+  to           String
+  subject      String
   /// Se reemplaza el link por "[link enviado]" una vez enviado: el link de activación no queda guardado.
-  text       String
-  kind       String
-  customerId String?
-  status     OutboundEmailStatus @default(PENDING)
-  attempts   Int                 @default(0)
-  lastError  String?
-  sentAt     DateTime?
-  createdAt  DateTime            @default(now())
+  text         String
+  kind         String
+  customerId   String?
+  /// Casilla desde la que sale (respuestas desde la casilla del sector). Sin valor = MAIL_SENDER_ADDRESS.
+  fromAddress  String?
+  /// Responder en el mismo hilo: UID del mail original en esa casilla (API de Hostinger).
+  inReplyToUid Int?
+  status       OutboundEmailStatus @default(PENDING)
+  attempts     Int                 @default(0)
+  lastError    String?
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
 
   @@index([status, createdAt])
 }
@@ -211,6 +283,7 @@ model User {
   jobEvents         JobEvent[]
   approvedCustomers Customer[]   @relation("CustomerApprovedBy")
   auditLogs         AuditLog[]
+  messages          Message[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   deletedAt         DateTime?
@@ -240,6 +313,7 @@ model Sector {
   jobs       JobOrder[]
   mailbox    MailboxState?
   mailLogs   MailIngestLog[]
+  messages   Message[]
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 }

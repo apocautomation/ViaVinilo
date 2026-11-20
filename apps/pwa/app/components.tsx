@@ -2,13 +2,24 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
-import { Bell, ChevronLeft, CircleHelp, ClipboardList, Plus, UserRound } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Bell, ChevronLeft, ClipboardList, MessageCircle, Plus, UserRound } from "lucide-react";
 import { STATUS_CLASS, STATUS_LABEL, type Order, type Status } from "./data";
+import { api } from "./session";
 
-/** Barra inferior: las 4 cosas que hace un cliente (D-034). */
+/** Barra inferior: las 4 cosas que hace un cliente (D-034). "Chat" va directo en la barra (D-045). */
 export function TabBar() {
   const path = usePathname();
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    const check = () =>
+      api<{ unread: number }>("/app/chat/unread")
+        .then((r) => setUnread(r.unread))
+        .catch(() => undefined);
+    void check();
+    const t = setInterval(check, 30_000);
+    return () => clearInterval(t);
+  }, [path]);
   const is = (p: string) => (p === "/" ? path === "/" || path.startsWith("/pedidos") : path.startsWith(p));
   return (
     <nav className="tabbar" aria-label="Menú">
@@ -26,9 +37,12 @@ export function TabBar() {
         </span>
         Enviar
       </Link>
-      <Link href="/ayuda" className="tab" aria-current={is("/ayuda") ? "page" : undefined}>
-        <CircleHelp size={22} />
-        Ayuda
+      <Link href="/chat" className="tab" aria-current={is("/chat") || is("/ayuda") ? "page" : undefined}>
+        <span className="tab-icon">
+          <MessageCircle size={22} />
+          {unread > 0 && <span className="tab-dot" aria-label={`${unread} mensajes sin leer`} />}
+        </span>
+        Chat
       </Link>
       <Link href="/cuenta" className="tab" aria-current={is("/cuenta") ? "page" : undefined}>
         <UserRound size={22} />

@@ -61,7 +61,7 @@ export async function pollImapSector(
   prisma: PrismaClient,
   sector: Sector,
   open: () => Promise<ImapMailbox>,
-  ingest: (raw: Buffer) => Promise<unknown>,
+  ingest: (raw: Buffer, uid: number) => Promise<unknown>,
 ): Promise<{ processed: number }> {
   const box = await open();
   let processed = 0;
@@ -86,7 +86,7 @@ export async function pollImapSector(
     });
 
     for await (const msg of box.fetchAfter(lastUid)) {
-      await ingest(msg.source);
+      await ingest(msg.source, msg.uid);
       processed++;
       await prisma.mailboxState.update({ where: { sectorId: sector.id }, data: { lastUid: msg.uid } });
     }
