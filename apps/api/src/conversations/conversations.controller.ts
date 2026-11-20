@@ -1,6 +1,6 @@
-import { Controller, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, Param, Post, Put, UseGuards } from "@nestjs/common";
 import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
-import { appChatMessageSchema, listConversationsSchema, sendMessageSchema, type MessageChannel } from "@viavinilo/contracts";
+import { appChatMessageSchema, botToggleSchema, listConversationsSchema, sendMessageSchema, type MessageChannel } from "@viavinilo/contracts";
 import { CurrentCustomer, CurrentUser, CustomerAuth, Roles, type AuthCustomer, type AuthUser } from "../auth/decorators";
 import { ZodBody, ZodQuery } from "../common/zod";
 import { ConversationsService } from "./conversations.service";
@@ -16,6 +16,19 @@ export class ConversationsController {
     return this.conversations.list(query);
   }
 
+  /** Bot (D-056): si está prendido en general y si hay clave de IA en el servidor. */
+  @Get("bot")
+  botStatus() {
+    return this.conversations.botStatus();
+  }
+
+  /** Prender o apagar el bot en general: solo el dueño. */
+  @Put("bot")
+  @Roles("OWNER")
+  setBot(@ZodBody(botToggleSchema) body: { enabled: boolean }, @CurrentUser() user: AuthUser) {
+    return this.conversations.setBotGlobal(body.enabled, user.id);
+  }
+
   @Get(":id")
   get(@Param("id") id: string) {
     return this.conversations.get(id);
@@ -25,6 +38,13 @@ export class ConversationsController {
   @HttpCode(200)
   read(@Param("id") id: string) {
     return this.conversations.markRead(id);
+  }
+
+  /** Prender o apagar el bot en un chat (D-056). */
+  @Post(":id/bot")
+  @HttpCode(200)
+  setChatBot(@Param("id") id: string, @ZodBody(botToggleSchema) body: { enabled: boolean }) {
+    return this.conversations.setBotForChat(id, body.enabled);
   }
 
   @Post(":id/messages")

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { FileText, Mail, MessagesSquare, Search, Send, Smartphone } from "lucide-react";
+import { Bot, FileText, Hand, Mail, MessagesSquare, Search, Send, Smartphone } from "lucide-react";
 import { JOB_STATUS_LABELS, type JobStatus } from "@viavinilo/contracts";
-import { api, ApiError } from "../../../lib/api";
+import { api, ApiError, getUser } from "../../../lib/api";
 import { Help } from "../../help";
 import { Badge, ars } from "../../ui";
 
@@ -17,6 +17,7 @@ type Channel = "APP" | "MAIL";
 const FILTERS = [
   { label: "Todas", value: "ALL" },
   { label: "Sin leer", value: "UNREAD" },
+  { label: "Pide asesor", value: "HUMAN" },
   { label: "App", value: "APP" },
   { label: "Mail", value: "MAIL" },
 ] as const;
@@ -40,6 +41,8 @@ interface ConversationRow {
   lastMessagePreview: string;
   staffUnread: number;
   lastChannel: Channel | null;
+  botEnabled: boolean;
+  needsHuman: boolean;
 }
 interface Message {
   id: string;
@@ -53,9 +56,13 @@ interface Message {
   createdAt: string;
   sector: { name: string } | null;
   author: { name: string } | null;
+  fromBot: boolean;
 }
 interface Thread {
   id: string;
+  botEnabled: boolean;
+  needsHuman: boolean;
+  needsHumanReason: string | null;
   customer: (CustomerRef & { emails: { email: string }[]; phones: { phone: string }[]; internalNotes: string | null; appPasswordSetAt: string | null }) | null;
   contactEmail: string | null;
   contactName: string | null;
@@ -153,6 +160,51 @@ function Composer({ thread, onSent }: { thread: Thread; onSent: () => void }) {
   );
 }
 
+
+interface BotStatus {
+  enabled: boolean;
+  configured: boolean;
+  chatsWithBot: number;
+  needsHuman: number;
+}
+
+/** Interruptor general del bot (D-056). Arranca apagado; lo prende o apaga solo el dueño. */
+function BotBar({ status, onChange }: { status: BotStatus | null; onChange: (s: BotStatus) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!status) return null;
+  const isOwner = getUser()?.roles.includes("OWNER") ?? false;
+  return (
+    <div className={`bot-bar${status.enabled ? " on" : ""}`}>
+      <Bot size={16} aria-hidden />
+      <span>
+        <b>Bot {status.enabled ? "prendido" : "apagado"}</b>
+        {status.enabled
+          ? ` · responde en ${status.chatsWithBot} ${status.chatsWithBot === 1 ? "chat" : "chats"}`
+          : " · no responde en ningún chat"}
+        {!status.configured && <small className="error"> Falta cargar la clave de IA en el servidor.</small>}
+        {error && <small className="error"> {error}</small>}
+      </span>
+      {isOwner && (
+        <button
+          className="btn btn-ghost btn-sm"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError("");
+            api<BotStatus>("/conversations/bot", { method: "PUT", body: JSON.stringify({ enabled: !status.enabled }) })
+              .then(onChange)
+              .catch((e: unknown) => setError(errorText(e)))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {status.enabled ? "Apagar" : "Prender"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ConversacionesPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["value"]>("ALL");
   const [search, setSearch] = useState("");
@@ -161,7 +213,27 @@ export default function ConversacionesPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [thread, setThread] = useState<Thread | null>(null);
   const [error, setError] = useState("");
+  const [bot, setBot] = useState<BotStatus | null>(null);
+  const [botBusy, setBotBusy] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    api<BotStatus>("/conversations/bot").then(setBot).catch(() => setBot(null));
+  }, [thread?.botEnabled, thread?.needsHuman]);
+
+  async function toggleChatBot(enabled: boolean) {
+    if (!thread) return;
+    setBotBusy(true);
+    try {
+      await api(`/conversations/${thread.id}/bot`, { method: "POST", body: JSON.stringify({ enabled }) });
+      await loadThread(thread.id, false);
+      await loadList();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBotBusy(false);
+    }
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), 300);
@@ -228,6 +300,7 @@ export default function ConversacionesPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
+          <BotBar status={bot} onChange={setBot} />
           <div className="chip-row">
             {FILTERS.map((f) => (
               <button key={f.value} className="fchip" aria-pressed={filter === f.value} onClick={() => setFilter(f.value)}>
@@ -249,6 +322,8 @@ export default function ConversacionesPage() {
                     {c.lastChannel && <span className={`mini-tag ${c.lastChannel === "APP" ? "tag-app" : "tag-mail"}`}>{c.lastChannel === "APP" ? "App" : "Mail"}</span>}
                     {!c.customer && <span className="mini-tag tag-human">No es cliente</span>}
                     {c.customer?.status === "PENDING" && <span className="mini-tag tag-human">Alta pendiente</span>}
+                    {c.needsHuman && <span className="mini-tag tag-human">Pide asesor</span>}
+                    {c.botEnabled && <span className="mini-tag tag-app">Bot</span>}
                   </span>
                 </span>
                 <span className="meta">
@@ -280,13 +355,37 @@ export default function ConversacionesPage() {
                     : `${thread.contactEmail} · todavía no es cliente`}
                 </small>
               </span>
+              {thread.customer && (
+                <button
+                  className={`btn btn-sm ${thread.botEnabled ? "btn-soft" : "btn-ghost"}`}
+                  disabled={botBusy}
+                  title={
+                    bot?.enabled
+                      ? "El bot responde los mensajes del chat de la app. Los mails los responde siempre una persona."
+                      : "El bot está apagado en general: aunque lo prendas acá, no responde hasta que el dueño lo prenda."
+                  }
+                  onClick={() => void toggleChatBot(!thread.botEnabled)}
+                >
+                  <Bot size={15} aria-hidden /> {thread.botEnabled ? "Bot prendido en este chat" : "Bot apagado en este chat"}
+                </button>
+              )}
             </div>
+            {thread.needsHuman && (
+              <div className="handoff-note">
+                <Hand size={16} aria-hidden />
+                <span>
+                  <b>Pide un asesor.</b> {thread.needsHumanReason ?? "El bot derivó la conversación."} Respondé vos: el bot quedó
+                  apagado en este chat.
+                </span>
+              </div>
+            )}
             <div className="messages">
               {thread.messages.map((m) => (
                 <div key={m.id} className={`bubble ${m.direction === "IN" ? "in" : "out"}`}>
                   <span className="by">
                     {m.channel === "MAIL" ? <Mail size={12} /> : <Smartphone size={12} />}
-                    {m.direction === "OUT" ? (m.author?.name ?? "Via Vinilo") : m.channel === "MAIL" ? (m.fromEmail ?? "Mail") : "App"}
+                    {m.fromBot && <Bot size={12} aria-hidden />}
+                    {m.direction === "OUT" ? (m.fromBot ? "Bot" : (m.author?.name ?? "Via Vinilo")) : m.channel === "MAIL" ? (m.fromEmail ?? "Mail") : "App"}
                     {m.channel === "MAIL" && m.sector && ` · ${m.sector.name}`}
                   </span>
                   {m.subject && <strong className="bubble-subject">{m.subject}</strong>}

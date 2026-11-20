@@ -10,6 +10,8 @@ export const QUEUES = {
   fileRetention: "file-retention",
   /** Cola de mails a clientes: invitaciones y links de activación (D-049). */
   outbox: "outbox",
+  /** Respuestas del bot en el chat de la app (D-056). */
+  bot: "bot-replies",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

@@ -909,6 +909,30 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - La API acepta el precio escrito con puntos de miles. Antes "18.500,50" se rechazaba.
 - **Por qué**: Ezequiel: "CUIT siempre va con los guiones, y los valores monetarios siempre con los puntos, tanto cuando se escriben como cuando se ven en pantalla".
 
+### D-056 · 20/11/2026 · Ezequiel · bot del chat de la app, apagado por defecto
+- **Definición**:
+  - **Dónde responde**: solo en el **chat de la app**. Los mails los responde siempre una persona. Nunca escribe por WhatsApp (R-NOT-1).
+  - **Arranca apagado.** Responde solo si se cumplen las tres cosas:
+    - el **interruptor general** está prendido (Conversaciones, arriba; lo prende o apaga solo el dueño y queda en auditoría);
+    - el bot está **prendido en ese chat** (botón en el encabezado del hilo; todos arrancan apagados);
+    - hay **clave de IA** en el servidor (`OPENAI_API_KEY`). Si falta, el ERP lo avisa.
+  - **Qué sabe**:
+    - las reglas de los 6 agentes de Runamatic (tono, qué no puede prometer, cuándo derivar);
+    - el mismo contenido de la Ayuda de la app, que ahora vive en `@viavinilo/contracts` (`help`) para que los dos digan lo mismo;
+    - **los pedidos reales del cliente** (estado, precio si está cotizado, seña, fecha estimada). Esto es lo nuevo respecto de Runamatic, que no veía el sistema.
+  - **Qué no hace**: dar precios, cancelar o cambiar pedidos, confirmar pagos, tomar reclamos, diseñar.
+  - **Derivación**: en esos casos (o si el cliente pide una persona) responde que un asesor sigue por el mismo chat. El chat queda marcado **"Pide asesor"** (filtro nuevo en Conversaciones) y el bot se apaga en ese chat. Cuando responde una persona, la marca se va.
+  - **Nunca pisa a una persona**: si alguien del equipo respondió después del mensaje, no responde. Si el cliente mandó varios mensajes seguidos, responde solo el último, leyendo el hilo completo.
+  - Si la IA falla, no responde nada y el mensaje queda para el equipo.
+  - Los mensajes del cliente siguen apareciendo sin leer para el equipo aunque el bot responda: mientras el bot es nuevo, nadie deja de verlos.
+  - En el ERP las respuestas del bot dicen "Bot". En la app, "Asistente virtual de Via Vinilo".
+  - **Técnica**:
+    - el worker revisa cada 5 s los mensajes que esperan al bot;
+    - el modelo es el de `BOT_MODEL` (por defecto `gpt-4.1-mini`);
+    - con `BOT_API_URL` se puede usar otro proveedor compatible con OpenAI, por ejemplo un modelo local con Ollama cuando el VPS alcance (contrato: IA local con OpenAI de respaldo; ver I-20).
+- **Por qué**: Ezequiel: "el bot obviamente apagado… dejalo apagado en todos los chats y sacá el prompt de Runamatic", y que pueda responder "según la info del sistema".
+- **Pendiente**: que el bot complete datos del alta pendiente (D-054) y que responda mails; las dos cosas, solo si Ezequiel lo prioriza.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

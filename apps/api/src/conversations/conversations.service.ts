@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { formatJobNumber, normalizeSearch, type MessageChannel } from "@viavinilo/contracts";
+import { CONVERSATION_FILTERS, formatJobNumber, normalizeSearch, type MessageChannel } from "@viavinilo/contracts";
+import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
+
+/** Interruptor general del bot (D-056). Sin fila = apagado. Lo lee también el worker. */
+const BOT_SETTING_KEY = "bot";
 
 const PREVIEW_CHARS = 140;
 const preview = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, PREVIEW_CHARS);
@@ -19,6 +23,8 @@ const appMessageSelect = {
   body: true,
   attachments: true,
   createdAt: true,
+  /** El cliente sabe cuándo le responde el asistente virtual y no una persona (D-056). */
+  fromBot: true,
 } satisfies Prisma.MessageSelect;
 
 /**
@@ -27,11 +33,62 @@ const appMessageSelect = {
  */
 @Injectable()
 export class ConversationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
-  async list(q: { filter: "ALL" | "UNREAD" | "APP" | "MAIL"; search?: string; page: number; pageSize: number }) {
+  // ───────────── Bot (D-056) ─────────────
+
+  private async botOn(): Promise<boolean> {
+    const row = await this.prisma.appSetting.findUnique({ where: { key: BOT_SETTING_KEY } });
+    return (row?.value as { enabled?: unknown } | null)?.enabled === true;
+  }
+
+  /** Estado del bot para el ERP: si está prendido y si hay clave de IA cargada en el servidor. */
+  async botStatus() {
+    const [enabled, chatsWithBot, needsHuman] = await Promise.all([
+      this.botOn(),
+      this.prisma.conversation.count({ where: { botEnabled: true } }),
+      this.prisma.conversation.count({ where: { needsHuman: true } }),
+    ]);
+    return { enabled, configured: Boolean(process.env.OPENAI_API_KEY?.trim()), chatsWithBot, needsHuman };
+  }
+
+  async setBotGlobal(enabled: boolean, userId: string) {
+    const before = await this.botOn();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.appSetting.upsert({
+        where: { key: BOT_SETTING_KEY },
+        create: { key: BOT_SETTING_KEY, value: { enabled }, updatedById: userId },
+        update: { value: { enabled }, updatedById: userId },
+      });
+      await this.audit.log(
+        { entity: "AppSetting", entityId: BOT_SETTING_KEY, action: "update", userId, before: { enabled: before }, after: { enabled } },
+        tx,
+      );
+    });
+    return this.botStatus();
+  }
+
+  /** Prende o apaga el bot en un chat. Prenderlo también saca la marca "Pide asesor". */
+  async setBotForChat(id: string, enabled: boolean) {
+    const conv = await this.prisma.conversation.findUnique({ where: { id }, select: { customerId: true } });
+    if (!conv) throw new NotFoundException("No encontramos esa conversación");
+    if (enabled && !conv.customerId) {
+      throw new UnprocessableEntityException("El bot solo responde a clientes en el chat de la app.");
+    }
+    return this.prisma.conversation.update({
+      where: { id },
+      data: { botEnabled: enabled, ...(enabled ? { needsHuman: false, needsHumanReason: null } : {}) },
+      select: { id: true, botEnabled: true, needsHuman: true, needsHumanReason: true },
+    });
+  }
+
+  async list(q: { filter: (typeof CONVERSATION_FILTERS)[number]; search?: string; page: number; pageSize: number }) {
     const where: Prisma.ConversationWhereInput = {};
     if (q.filter === "UNREAD") where.staffUnread = { gt: 0 };
+    if (q.filter === "HUMAN") where.needsHuman = true;
     if (q.filter === "APP" || q.filter === "MAIL") where.messages = { some: { channel: q.filter } };
     if (q.search) {
       const terms = normalizeSearch(q.search).split(" ").filter(Boolean);
@@ -134,7 +191,15 @@ export class ConversationsService {
         });
         await tx.conversation.update({
           where: { id },
-          data: { lastMessageAt: msg.createdAt, lastMessagePreview: preview(input.text), customerUnread: { increment: 1 }, staffUnread: 0 },
+          // Cuando responde una persona, el chat deja de estar marcado "Pide asesor" (D-056).
+          data: {
+            lastMessageAt: msg.createdAt,
+            lastMessagePreview: preview(input.text),
+            customerUnread: { increment: 1 },
+            staffUnread: 0,
+            needsHuman: false,
+            needsHumanReason: null,
+          },
         });
         return msg;
       });
@@ -175,7 +240,7 @@ export class ConversationsService {
       });
       await tx.conversation.update({
         where: { id },
-        data: { lastMessageAt: msg.createdAt, lastMessagePreview: preview(input.text), staffUnread: 0 },
+        data: { lastMessageAt: msg.createdAt, lastMessagePreview: preview(input.text), staffUnread: 0, needsHuman: false, needsHumanReason: null },
       });
       return msg;
     });
@@ -198,19 +263,22 @@ export class ConversationsService {
   }
 
   async customerSend(customerId: string, text: string) {
-    let conv = await this.prisma.conversation.findUnique({ where: { customerId }, select: { id: true } });
+    const select = { id: true, botEnabled: true, needsHuman: true } as const;
+    let conv = await this.prisma.conversation.findUnique({ where: { customerId }, select });
     if (!conv) {
       try {
-        conv = await this.prisma.conversation.create({ data: { customerId }, select: { id: true } });
+        conv = await this.prisma.conversation.create({ data: { customerId }, select });
       } catch (err) {
         if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
-        conv = await this.prisma.conversation.findUniqueOrThrow({ where: { customerId }, select: { id: true } });
+        conv = await this.prisma.conversation.findUniqueOrThrow({ where: { customerId }, select });
       }
     }
     const conversationId = conv.id;
+    // D-056: si el bot está prendido (en general y en este chat) el worker responde este mensaje.
+    const forBot = conv.botEnabled && !conv.needsHuman && (await this.botOn());
     return this.prisma.$transaction(async (tx) => {
       const msg = await tx.message.create({
-        data: { conversationId, direction: "IN", channel: "APP", body: text },
+        data: { conversationId, direction: "IN", channel: "APP", body: text, ...(forBot ? { botStatus: "PENDING" as const } : {}) },
         select: appMessageSelect,
       });
       await tx.conversation.update({

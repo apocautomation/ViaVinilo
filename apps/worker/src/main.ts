@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { loadConfig } from "./config";
+import { openAiLlm } from "./bot/llm";
+import { processBotReplies } from "./bot/reply";
 import { createSmtpNotifier } from "./mail/invite";
 import { hostingerSender, sendOutbox, smtpSender, type MailSender } from "./mail/outbox";
 import { pollAllMailboxes } from "./mail/poll";
@@ -68,12 +70,38 @@ async function main() {
     console.log("[worker] mails a clientes: sin casilla de envío (MAIL_SENDER_ADDRESS o SMTP_URL); quedan en cola");
   }
 
+  // Bot de la app (D-056): mira cada 5 s si hay mensajes que esperan respuesta. Arranca apagado:
+  // solo responde si está prendido en el ERP (general y en el chat) y hay clave de IA.
+  const botQueue = new Queue(QUEUES.bot, { connection });
+  const llm = config.bot ? openAiLlm(config.bot) : null;
+  const botWorker = new Worker(
+    QUEUES.bot,
+    async () => {
+      if (!llm) return;
+      const r = await processBotReplies(prisma, llm);
+      if (r.answered || r.handoffs || r.failed) {
+        console.log(`[bot] ${r.answered} respuestas, ${r.handoffs} derivadas a un asesor, ${r.failed} con error`);
+      }
+    },
+    { connection, concurrency: 1 },
+  );
+  botWorker.on("failed", (_job, err) => console.error("[bot] falló", err.message));
+  if (llm) {
+    await botQueue.upsertJobScheduler("bot-replies", { every: 5_000 }, { name: "reply" });
+    console.log(`[worker] bot: listo con ${config.bot!.model} (responde solo donde esté prendido en el ERP)`);
+  } else {
+    await botQueue.removeJobScheduler("bot-replies");
+    console.log("[worker] bot: sin OPENAI_API_KEY, no responde");
+  }
+
   const shutdown = async () => {
     console.log("[worker] cerrando…");
     await mailWorker.close();
     await mailQueue.close();
     await outboxWorker.close();
     await outboxQueue.close();
+    await botWorker.close();
+    await botQueue.close();
     await prisma.$disconnect();
     await connection.quit();
     process.exit(0);

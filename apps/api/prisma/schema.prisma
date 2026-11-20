@@ -156,6 +156,24 @@ model CustomerPhone {
   @@index([customerId])
 }
 
+/// Estado del bot para un mensaje del cliente (D-056).
+enum BotStatus {
+  PENDING // el bot tiene que responder
+  ANSWERING // lo tomó el worker
+  ANSWERED
+  HANDOFF // derivó a un asesor
+  SKIPPED // el bot se apagó o respondió una persona antes
+  ERROR
+}
+
+/// Ajustes generales del sistema que se cambian desde el ERP, con quién y cuándo (D-056).
+model AppSetting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
 enum MessageChannel {
   APP
   MAIL
@@ -186,6 +204,11 @@ model Conversation {
   staffUnread        Int       @default(0)
   /// Respuestas por la app que el cliente todavía no vio.
   customerUnread     Int       @default(0)
+  /// El bot responde en este chat (D-056). Arranca apagado en todos; además tiene que estar prendido el global.
+  botEnabled         Boolean   @default(false)
+  /// El bot derivó a un asesor (o el cliente lo pidió): lo resuelve una persona (D-056).
+  needsHuman         Boolean   @default(false)
+  needsHumanReason   String?
   messages           Message[]
   createdAt          DateTime  @default(now())
 
@@ -218,9 +241,14 @@ model Message {
   author          User?            @relation(fields: [authorId], references: [id])
   /// Mail en cola para los mensajes OUT por mail (D-049).
   outboundEmailId String?
+  /// Mensaje OUT escrito por el bot (D-056).
+  fromBot         Boolean          @default(false)
+  /// Mensajes IN de la app: si el bot tiene que responderlo y cómo terminó (D-056).
+  botStatus       BotStatus?
   createdAt       DateTime         @default(now())
 
   @@index([conversationId, createdAt])
+  @@index([botStatus])
 }
 
 /// Link para que el cliente cree su contraseña de la app (D-049). Se guarda solo el hash.
