@@ -130,7 +130,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-20 | VPS para la IA local (D-035) | El VPS del cliente tiene 4 vCPU y 15 GB de RAM. Trip calcula 8 vCPU para correr `qwen3:8b` en local (D-029). | E2 | Abierto. Alcanza para la E1. Al arrancar la E2, medir la latencia del modelo en este VPS. Si no alcanza, el cliente amplía el plan (contrato) o se usa más OpenAI de respaldo. |
 | I-21 | Casillas `cortes@` y `tpu@` (D-043) — **Resuelto en D-046**: `cortes@` es el Corte de Gran Formato y `tpu@` es TPU | En Hostinger existen las casillas `cortes@viavinilo.com` y `tpu@viavinilo.com`, pero el sistema tiene 6 sectores y ninguno es Cortes ni TPU. | E1 | Abierto. Preguntar a Ricardo y a Verónica si son sectores que reciben trabajos (y hay que sumarlos con su secuencia de estados) o casillas de otro uso. |
 | I-22 | `dtf@` bloqueada para enviar (D-043) | Hostinger bloqueó el envío de `dtf@viavinilo.com` por "sending_spam". El sistema responde desde la casilla del sector (Reply-To, actualización §2.2), así que las respuestas de DTF no salen. | E1 | Abierto. El cliente tiene que pedirle a Hostinger que la desbloquee y revisar SPF, DKIM y DMARC de `viavinilo.com` (actualización §2.2). Mientras tanto, DTF puede responder desde otra casilla. |
-| I-23 | Migración de clientes sin DNI ni email (D-048) | El alta exige DNI, email y teléfono (actualización §2.1, D-025), y el ingreso a la app necesita email (D-039). En el CSV de Runamatic solo 9 de 1790 tienen DNI y 380 tienen email. | E1 | Abierto. Propuesta: importar como **activos** a los "Cliente Registrado", y también a los que tengan email; marcar "datos a completar" a los que no tienen DNI y pedírselo en el primer ingreso o en el próximo pedido. Los contactos que no tienen email ni son "Cliente Registrado" no se importan como clientes: quedan para Conversaciones cuando escriban. Confirmar con Ezequiel. |
+| I-23 | Migración de clientes sin DNI ni email (D-048) — **Resuelto en D-049** | El alta exige DNI, email y teléfono (actualización §2.1, D-025), y el ingreso a la app necesita email (D-039). En el CSV de Runamatic solo 9 de 1790 tienen DNI y 380 tienen email. | E1 | Abierto. Propuesta: importar como **activos** a los "Cliente Registrado", y también a los que tengan email; marcar "datos a completar" a los que no tienen DNI y pedírselo en el primer ingreso o en el próximo pedido. Los contactos que no tienen email ni son "Cliente Registrado" no se importan como clientes: quedan para Conversaciones cuando escriban. Confirmar con Ezequiel. |
 
 ## 4. Bitácora de decisiones
 
@@ -765,6 +765,41 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - se leyeron los 6 agentes de IA (`docs/referencias/runamatic-agentes.md`);
   - **no se exportaron las conversaciones**: Tienda Runa no muestra una exportación de chats; abrir cada chat lo marca como leído para el equipo; y leer la base directo con la sesión de Ezequiel quedó bloqueado por seguridad (es usar su credencial).
   - Alternativas: pedirle a Tienda Runa una exportación de los chats, o que Ezequiel autorice explícitamente la lectura directa.
+
+### D-049 · 20/11/2026 · Ezequiel · activación de cuentas por link, invitaciones desde el ERP, ingreso con teléfono e importación de todos los contactos (resuelve I-23, cambia D-039)
+- **Definición**:
+  - **Activación por link**: Via Vinilo difunde un solo link (`viavinilo.tech/activar`). El cliente pone su email, le llega un mail con un link, y con ese link **crea su propia contraseña**. El asesor ya no tiene que mandar una clave a cada uno.
+  - **Botón en el ERP** (Ventas → Clientes) para **invitar a la app** a un cliente o a muchos de una vez, como tarea automatizable. A cada uno le llega el mail con su link para crear la contraseña.
+  - **Ingreso con email o teléfono**: el cliente entra con cualquiera de sus emails **o con su celular**, más su contraseña.
+  - **Importación de los 1790 contactos** del CSV de Runamatic, todos como clientes activos. A los que no tienen email se los marca **"falta email"**: cuando el asesor se lo carga, entran en la automatización de invitaciones. Los que no tienen DNI quedan con "datos a completar".
+- **Por qué**: "agilizarles el trabajo de no tener que mandar la clave a cada uno" (Ezequiel). El teléfono es el dato que tienen casi todos (1772 de 1790); el email solo 380.
+- **Cambia**:
+  - D-039, que solo tenía la contraseña cargada por el asesor. Se mantiene como alternativa desde la ficha.
+  - D-025, que pedía DNI y email obligatorios para estar activo. Para los importados no se exigen: se completan después.
+  - **Resuelve I-23.**
+- **Impacto técnico**:
+  - **Envío de mails en cola** (`OutboundEmail`):
+    - la API anota el mail y el worker lo manda **despacio**, para no quedar bloqueados por spam como `dtf@` (I-22);
+    - después de enviarlo se borra el link del texto guardado.
+    - El envío usa la API de mail de Hostinger desde una casilla que pueda enviar (`MAIL_SENDER_ADDRESS`). **Pendiente**: que Ezequiel elija la casilla y ampliar el token a esa casilla.
+  - **Links de activación** (`AppActivation`):
+    - duran 48 h y se usan una sola vez;
+    - se guarda solo el hash;
+    - pedir uno nuevo anula el anterior;
+    - el pedido público siempre responde lo mismo, exista o no el email.
+  - **Rutas**:
+    - `POST /app/auth/activation/request`, `POST /app/auth/activation/complete`;
+    - `POST /customers/invite` (uno, varios o todos los que tienen email y no tienen contraseña);
+    - `POST /app/auth/login` acepta email o teléfono.
+  - **Importación**: script `apps/api/prisma/import-runamatic.ts`, con prueba en seco. El CSV nunca va al repo. Se normalizan:
+    - nombre (se separa en nombre y apellido);
+    - teléfono;
+    - email;
+    - CUIT (con dígito verificador);
+    - condición frente al IVA (los textos escritos a mano);
+    - domicilio.
+
+    El origen y las etiquetas van a las notas internas. Los emails y teléfonos repetidos se informan y no se duplican.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

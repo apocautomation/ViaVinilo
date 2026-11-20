@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Eye, EyeOff, LogIn } from "lucide-react";
@@ -17,12 +18,12 @@ function WhatsApp({ children }: { children: string }) {
 }
 
 /**
- * Ingreso con email y contraseña (D-039). La contraseña la carga un asesor: no hay autoalta (D-038)
- * ni "olvidé mi contraseña"; para las dos cosas se escribe por WhatsApp.
+ * Ingreso con email o celular y contraseña (D-039, D-049). La primera vez (o si se la olvidó) el
+ * cliente crea su contraseña en /activar con un link que le llega al mail. No hay autoalta (D-038).
  */
 export default function IngresarPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [user, setUser] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -40,7 +41,7 @@ export default function IngresarPage() {
     try {
       const { accessToken } = await api<{ accessToken: string }>("/app/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ user, password }),
       });
       saveToken(accessToken);
       router.replace("/");
@@ -58,14 +59,15 @@ export default function IngresarPage() {
       <p className="lead">Estado, precio y cuándo podés retirar cada pedido.</p>
       <form onSubmit={submit}>
         <label className="field">
-          Email
+          Email o celular
           <input
-            type="email"
+            type="text"
             inputMode="email"
             autoComplete="username"
-            placeholder="tu@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoCapitalize="none"
+            placeholder="tu@email.com o 387 412-3456"
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
             required
           />
         </label>
@@ -94,8 +96,11 @@ export default function IngresarPage() {
           <LogIn size={18} /> {busy ? "Entrando…" : "Entrar"}
         </button>
       </form>
+      <Link href="/activar" className="btn btn-ghost btn-block">
+        ¿Primera vez o te olvidaste la contraseña? Creala acá
+      </Link>
       <p className="auth-foot">
-        ¿Te olvidaste la contraseña o todavía no sos cliente? <WhatsApp>Escribinos por WhatsApp</WhatsApp> y un asesor
+        ¿Todavía no sos cliente o no tenés email cargado? <WhatsApp>Escribinos por WhatsApp</WhatsApp> y un asesor
         te ayuda.
       </p>
     </main>

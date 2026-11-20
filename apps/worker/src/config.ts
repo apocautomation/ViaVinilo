@@ -14,6 +14,8 @@ export interface WorkerConfig {
   imap: Partial<Record<SectorCode, ImapCredentials>>;
   /** API de mail de Hostinger (D-043). Solo con MAIL_SOURCE=hostinger-api. */
   hostinger: HostingerMailConfig | null;
+  /** Casilla desde la que salen los mails a clientes con la API de Hostinger (D-049). */
+  mailSenderAddress: string | null;
   smtp: { url: string; from: string; contactUrl: string };
 }
 
@@ -53,6 +55,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
     hostinger: hostingerToken
       ? { token: hostingerToken, baseUrl: env.HOSTINGER_MAIL_API_URL?.trim() || HOSTINGER_MAIL_API }
       : null,
+    mailSenderAddress: env.MAIL_SENDER_ADDRESS?.trim().toLowerCase() || null,
     smtp: {
       url: env.SMTP_URL ?? "smtp://localhost:1025",
       from: env.SMTP_FROM ?? "Via Vinilo <no-responder@viavinilo.local>",

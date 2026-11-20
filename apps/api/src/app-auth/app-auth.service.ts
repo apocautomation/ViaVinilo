@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { DEFAULT_NOTIFICATION_PREFS, notificationPrefsSchema } from "@viavinilo/contracts";
+import { DEFAULT_NOTIFICATION_PREFS, normalizePhone, notificationPrefsSchema } from "@viavinilo/contracts";
 import { CUSTOMER_TOKEN_KIND } from "../auth/decorators";
 import { verifyPassword } from "../auth/password";
 import { PrismaService } from "../prisma/prisma.service";
@@ -12,7 +12,7 @@ export const CUSTOMER_SESSION_DAYS = 30;
 const DUMMY_HASH =
   "scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 
-const INVALID = "Email o contraseña incorrectos";
+const INVALID = "Los datos no son correctos. Revisá tu email o celular y la contraseña";
 
 @Injectable()
 export class AppAuthService {
@@ -22,28 +22,34 @@ export class AppAuthService {
   ) {}
 
   /**
-   * Ingreso con email y contraseña (D-039). Sirve cualquier email de la ficha. Email inexistente,
-   * contraseña mal, cliente no activo o sin contraseña cargada responden lo mismo.
+   * Ingreso con email **o celular** y contraseña (D-039, D-049). Sirve cualquier email o teléfono de
+   * la ficha. Dato inexistente, contraseña mal, cliente no activo o sin contraseña responden lo mismo.
    */
-  async login(email: string, password: string) {
-    const contact = await this.prisma.customerEmail.findUnique({
-      where: { email },
-      select: {
-        customer: {
-          select: { id: true, status: true, deletedAt: true, appPasswordHash: true },
-        },
-      },
-    });
+  async login(user: string, password: string) {
+    const select = { customer: { select: { id: true, status: true, deletedAt: true, appPasswordHash: true } } };
+    const value = user.trim();
+    let contact: { customer: { id: string; status: string; deletedAt: Date | null; appPasswordHash: string | null } } | null = null;
+    if (value.includes("@")) {
+      contact = await this.prisma.customerEmail.findUnique({ where: { email: value.toLowerCase() }, select });
+    } else {
+      const phone = normalizePhone(value);
+      if (phone) contact = await this.prisma.customerPhone.findUnique({ where: { phone }, select });
+    }
     const customer = contact?.customer;
     const ok = await verifyPassword(password, customer?.appPasswordHash ?? DUMMY_HASH);
     if (!customer || !customer.appPasswordHash || !ok || customer.status !== "ACTIVE" || customer.deletedAt) {
       throw new UnauthorizedException(INVALID);
     }
+    return this.sessionFor(customer.id);
+  }
+
+  /** Token de sesión del cliente (30 días) y sus datos. */
+  async sessionFor(customerId: string) {
     const accessToken = await this.jwt.signAsync(
-      { sub: customer.id, kind: CUSTOMER_TOKEN_KIND },
+      { sub: customerId, kind: CUSTOMER_TOKEN_KIND },
       { expiresIn: `${CUSTOMER_SESSION_DAYS}d` },
     );
-    return { accessToken, customer: await this.me(customer.id) };
+    return { accessToken, customer: await this.me(customerId) };
   }
 
   /** Lo que el cliente ve de su propia ficha. Nunca las notas internas ni los datos de control. */

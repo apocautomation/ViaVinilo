@@ -13,7 +13,8 @@ let staffToken = "";
 
 const PASSWORD = "clave-app-123";
 const http = () => request(app.getHttpServer());
-const login = (email: string, password: string) => http().post("/app/auth/login").send({ email, password });
+const login = (user: string, password: string) => http().post("/app/auth/login").send({ user, password });
+const INVALID = "Los datos no son correctos. Revisá tu email o celular y la contraseña";
 const staff = () => ({
   get: (url: string) => http().get(url).set("Authorization", `Bearer ${staffToken}`),
   post: (url: string, body?: object) => http().post(url).set("Authorization", `Bearer ${staffToken}`).send(body),
@@ -99,7 +100,7 @@ describe("ingreso de clientes a la app con email y contraseña (D-039)", () => {
     ];
     for (const res of await Promise.all(cases)) {
       expect(res.status).toBe(401);
-      expect(res.body.message).toBe("Email o contraseña incorrectos");
+      expect(res.body.message).toBe(INVALID);
     }
   });
 
@@ -173,6 +174,86 @@ describe("contraseña de la app cargada por el asesor (D-039)", () => {
     const contact = await prisma.customerEmail.findUniqueOrThrow({ where: { email: "ana1@cliente.test" } });
     await prisma.customer.update({ where: { id: contact.customerId }, data: { status: "BLOCKED" } });
     expect((await http().get("/app/me").set("Authorization", `Bearer ${res.body.accessToken}`)).status).toBe(401);
+  });
+});
+
+describe("ingreso con celular, activación por link e invitaciones (D-049)", () => {
+  /** Saca el token del último mail en cola para ese email (el worker lo mandaría). */
+  async function linkFromOutbox(email: string) {
+    const mail = await prisma.outboundEmail.findFirstOrThrow({ where: { to: email }, orderBy: { createdAt: "desc" } });
+    return /\/activar\/([A-Za-z0-9_-]+)/.exec(mail.text)?.[1] ?? "";
+  }
+
+  it("D-049: el cliente entra con su celular escrito de cualquier forma", async () => {
+    await prisma.customer.create({
+      data: {
+        firstName: "Celu",
+        lastName: "Solo",
+        status: "ACTIVE",
+        appPasswordHash: await hashPassword(PASSWORD),
+        phones: { create: [{ phone: "+5493874661234", isPrimary: true }] },
+      },
+    });
+    const res = await login("387 466-1234", PASSWORD);
+    expect(res.status).toBe(200);
+    expect(res.body.customer.lastName).toBe("Solo");
+    expect((await login("0387 15 466-1234", PASSWORD)).status).toBe(200);
+    expect((await login("0387 15 466-1234", "otra-clave-999")).status).toBe(401);
+  });
+
+  it("D-049: pide el link en /activar, crea su contraseña y queda logueado; el link sirve una sola vez", async () => {
+    const asked = await http().post("/app/auth/activation/request").send({ email: "Ana3@Cliente.test" });
+    expect(asked.status).toBe(200);
+    expect(asked.body).toEqual({ sent: true });
+    const token = await linkFromOutbox("ana3@cliente.test");
+    expect(token.length).toBeGreaterThan(20);
+    // El link no queda guardado en claro: solo su hash.
+    expect(await prisma.appActivation.count({ where: { tokenHash: token } })).toBe(0);
+
+    const done = await http().post("/app/auth/activation/complete").send({ token, password: "mi-clave-propia" });
+    expect(done.status).toBe(200);
+    expect(done.body.accessToken).toBeTruthy();
+    expect((await login("ana3@cliente.test", "mi-clave-propia")).status).toBe(200);
+    expect((await http().post("/app/auth/activation/complete").send({ token, password: "otra-clave-123" })).status).toBe(401);
+  });
+
+  it("D-049: /activar responde lo mismo con un email que no es de un cliente y no manda nada", async () => {
+    const res = await http().post("/app/auth/activation/request").send({ email: "nadie@cliente.test" });
+    expect(res.body).toEqual({ sent: true });
+    expect(await prisma.outboundEmail.count({ where: { to: "nadie@cliente.test" } })).toBe(0);
+  });
+
+  it("D-049: un link vencido no sirve", async () => {
+    await http().post("/app/auth/activation/request").send({ email: "ventas4@cliente.test" });
+    const token = await linkFromOutbox("ventas4@cliente.test");
+    await prisma.appActivation.updateMany({ where: { email: "ventas4@cliente.test" }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    expect((await http().post("/app/auth/activation/complete").send({ token, password: "clave-vencida-1" })).status).toBe(401);
+  });
+
+  it("D-049: el ERP invita a todos los pendientes; los que no tienen email quedan marcados para completar", async () => {
+    const sinEmail = await prisma.customer.create({
+      data: { firstName: "Sin", lastName: "Email", status: "ACTIVE", importSource: "runamatic", phones: { create: [{ phone: "+5493874660099", isPrimary: true }] } },
+    });
+    await prisma.customer.create({
+      data: {
+        firstName: "Con",
+        lastName: "Email",
+        status: "ACTIVE",
+        importSource: "runamatic",
+        emails: { create: [{ email: "conemail@cliente.test", isPrimary: true }] },
+      },
+    });
+    const res = await staff().post("/customers/invite", { allPending: true });
+    expect(res.status).toBe(200);
+    expect(res.body.withoutEmail).toBeGreaterThanOrEqual(1);
+    expect(res.body.invited).toBeGreaterThanOrEqual(1);
+    const queued = await prisma.outboundEmail.findMany({ where: { kind: "activation-invite" } });
+    expect(queued.length).toBe(res.body.invited);
+    expect(queued.every((m) => m.status === "PENDING")).toBe(true);
+
+    const gaps = await staff().get("/customers?gap=NO_EMAIL");
+    expect(gaps.body.items.map((c: { id: string }) => c.id)).toContain(sinEmail.id);
+    expect((await staff().post("/customers/invite", {})).status).toBe(400);
   });
 });
 

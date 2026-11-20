@@ -1548,3 +1548,8 @@ table.data tfoot td {
   align-items: center;
   gap: 6px;
 }
+.filters-sub {
+  padding-top: 0;
+  gap: 6px;
+  font-size: 13px;
+}

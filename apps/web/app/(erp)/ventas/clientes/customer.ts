@@ -26,6 +26,9 @@ export interface Customer {
   phones: { id: string; phone: string; isPrimary: boolean }[];
   /** Cuándo se cargó la contraseña de la app. Null = no puede entrar (D-039). */
   appPasswordSetAt: string | null;
+  /** Última invitación a la app (D-049). */
+  appInvitedAt: string | null;
+  importSource: string | null;
   createdAt: string;
 }
 
@@ -53,4 +56,11 @@ export function formatCuit(cuit: string): string {
 /** 30111222 → 30.111.222 */
 export function formatDni(dni: string): string {
   return dni.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+/** Estado del acceso a la app para la lista y la ficha (D-049). */
+export function appAccess(c: Pick<Customer, "appPasswordSetAt" | "appInvitedAt" | "emails">): string {
+  if (c.appPasswordSetAt) return "Activa";
+  if (c.appInvitedAt) return "Invitado";
+  return c.emails.length ? "Sin invitar" : "—";
 }

@@ -23,12 +23,31 @@ export const customerPasswordSchema = z
   .min(8, "La contraseña de la app tiene que tener al menos 8 caracteres")
   .max(200);
 
-/** Ingreso del cliente a la app con email y contraseña (D-039). */
+/** Ingreso del cliente a la app con email **o teléfono** y contraseña (D-039, D-049). */
 export const customerLoginSchema = z.object({
-  email: z.string().trim().toLowerCase().email("El email no es válido"),
+  user: z.string().trim().min(1, "Ingresá tu email o tu celular").max(200),
   password: z.string().min(1, "Ingresá la contraseña"),
 });
 export type CustomerLoginInput = z.input<typeof customerLoginSchema>;
+
+/** El cliente pide el link para crear su contraseña (D-049). */
+export const requestActivationSchema = z.object({
+  email: z.string().trim().toLowerCase().email("El email no es válido"),
+});
+
+/** El cliente crea su contraseña con el link que le llegó por mail (D-049). */
+export const completeActivationSchema = z.object({
+  token: z.string().min(20).max(200),
+  password: customerPasswordSchema,
+});
+
+/** El asesor invita a la app a uno, varios o todos los que tienen email y todavía no tienen contraseña (D-049). */
+export const inviteCustomersSchema = z
+  .object({
+    customerIds: z.array(z.string().min(1)).max(500).optional(),
+    allPending: z.boolean().optional(),
+  })
+  .refine((v) => (v.customerIds?.length ?? 0) > 0 || v.allPending === true, "Elegí a quién invitar");
 
 /** El asesor pone o cambia la contraseña de la app de un cliente (D-039). */
 export const setAppPasswordSchema = z.object({ password: customerPasswordSchema });

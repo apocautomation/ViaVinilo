@@ -4,6 +4,7 @@ import {
   addPhoneSchema,
   blockCustomerSchema,
   createCustomerSchema,
+  inviteCustomersSchema,
   listCustomersSchema,
   setAppPasswordSchema,
   updateCustomerSchema,
@@ -23,6 +24,17 @@ export class CustomersController {
   @Get()
   list(@ZodQuery(listCustomersSchema) query: Parameters<CustomersService["list"]>[0]) {
     return this.customers.list(query);
+  }
+
+  /** Invitar a la app a uno, varios o todos los pendientes (D-049). */
+  @Post("invite")
+  @HttpCode(200)
+  @Roles("ATTENTION")
+  invite(
+    @ZodBody(inviteCustomersSchema) body: { customerIds?: string[]; allPending?: boolean },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.customers.invite(body, user.id);
   }
 
   @Get(":id")
