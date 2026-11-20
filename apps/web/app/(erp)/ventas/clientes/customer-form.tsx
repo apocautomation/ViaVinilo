@@ -2,9 +2,9 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
-import { TAX_CONDITION_LABELS, TAX_CONDITIONS, type TaxCondition } from "@viavinilo/contracts";
+import { maskCuit, maskDni, TAX_CONDITION_LABELS, TAX_CONDITIONS, type TaxCondition } from "@viavinilo/contracts";
 import { Help } from "../../help";
-import { formatCuit, formatPhone, type Customer } from "./customer";
+import { formatPhone, type Customer } from "./customer";
 
 /** Lo que carga el formulario. Los contactos solo se editan acá en el alta; en la ficha van aparte. */
 export interface CustomerFormValues {
@@ -46,11 +46,11 @@ export function initialValues(c?: Customer): CustomerFormValues {
   return {
     firstName: c?.firstName ?? "",
     lastName: c?.lastName ?? "",
-    dni: c?.dni ?? "",
+    dni: c?.dni ? maskDni(c.dni) : "",
     emails: c ? c.emails.map((e) => e.email) : [""],
     phones: c ? c.phones.map((p) => formatPhone(p.phone)) : [""],
     businessName: c?.businessName ?? "",
-    cuit: c?.cuit ? formatCuit(c.cuit) : "",
+    cuit: c?.cuit ? maskCuit(c.cuit) : "",
     legalName: c?.legalName ?? "",
     taxCondition: c?.taxCondition ?? "",
     fiscalAddress: c?.fiscalAddress ?? "",
@@ -205,7 +205,7 @@ export function CustomerForm({
         <Field label="DNI">
           <input
             value={v.dni}
-            onChange={(e) => set("dni", e.target.value)}
+            onChange={(e) => set("dni", maskDni(e.target.value))}
             required
             inputMode="numeric"
             placeholder="30.111.222"
@@ -259,7 +259,7 @@ export function CustomerForm({
         <Field label="CUIT">
           <input
             value={v.cuit}
-            onChange={(e) => set("cuit", e.target.value)}
+            onChange={(e) => set("cuit", maskCuit(e.target.value))}
             inputMode="numeric"
             placeholder="30-12345678-9"
           />

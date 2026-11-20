@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
+import { maskAmount } from "@viavinilo/contracts";
 import { Eye, type LucideIcon } from "lucide-react";
 import { Help } from "./help";
 
@@ -62,6 +63,24 @@ export type Tone = "ok" | "warn" | "bad" | "info" | "neutral";
 
 export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
   return <span className={`badge${tone === "neutral" ? "" : ` badge-${tone}`}`}>{children}</span>;
+}
+
+/**
+ * Campo de monto en pesos (D-055): se escribe con puntos de miles y coma decimal ("18.500,50").
+ * Sirve igual en formularios no controlados: corrige el valor mientras se tipea.
+ */
+export function MoneyInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "inputMode">) {
+  return (
+    <input
+      {...props}
+      inputMode="decimal"
+      autoComplete="off"
+      onInput={(e) => {
+        e.currentTarget.value = maskAmount(e.currentTarget.value);
+        props.onInput?.(e);
+      }}
+    />
+  );
 }
 
 /** Montos en pesos argentinos, siempre con 2 decimales. */

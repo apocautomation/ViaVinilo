@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { Clock, Download, FileText, Lock, Paperclip } from "lucide-react";
 import { api, getUser, watchBoard, type SessionUser } from "../../../lib/api";
 import { Help } from "../../help";
+import { ars, MoneyInput } from "../../ui";
 
 type Status =
   | "PENDING_SIGNUP" | "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED"
@@ -98,7 +99,7 @@ function initials(name: string | null): string {
     .join("");
 }
 
-const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 });
+const money = ars;
 /** Siempre hora de Salta y en 24 h, sin importar cómo esté configurada la PC del taller. */
 const TZ = "America/Argentina/Salta";
 const readyAt = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -423,7 +424,7 @@ export default function BoardPage() {
                 <h3 id="dlg-title">Cotizar {dialog.card.label}</h3>
                 <label className="field">
                   Precio (pesos)
-                  <input name="amount" inputMode="decimal" placeholder="Ej.: 18500,50" required autoFocus />
+                  <MoneyInput name="amount" placeholder="Ej.: 18.500,50" required autoFocus />
                 </label>
                 <label className="field">
                   Listo para retirar (opcional)
