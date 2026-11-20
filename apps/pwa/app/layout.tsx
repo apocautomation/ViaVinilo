@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import { cssVariables, semantic } from "@viavinilo/ui";
 import "./globals.css";
+import { InstallBanner } from "./install";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
@@ -25,7 +26,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <style>{cssVariables()}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <InstallBanner />
+      </body>
     </html>
   );
 }

@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Bell, ChevronRight, LogOut, Mail, Phone, Smartphone } from "lucide-react";
+import { Bell, ChevronRight, Download, LogOut, Mail, Phone, Share, Smartphone } from "lucide-react";
 import { AppBar } from "../../components";
+import { useInstall } from "../../install";
 import { formatPhone, useSession } from "../../session";
 
 /** Cuenta: datos, avisos y puntos (E4). Los datos personales los cambia un asesor (actualización §2.1). */
 export default function CuentaPage() {
   const { me, logout } = useSession();
+  const { state: installState, install } = useInstall();
   // TODO(spec): guardar los avisos desde la app (hoy los cambia un asesor en el ERP).
   const [push, setPush] = useState(me.notificationPrefs.push);
   const [mail, setMail] = useState(me.notificationPrefs.email);
@@ -83,6 +85,17 @@ export default function CuentaPage() {
             <button className="switch" role="switch" aria-checked={mail} aria-label="Avisos por mail" onClick={() => setMail(!mail)} />
           </div>
         </section>
+
+        {installState === "ready" && (
+          <button className="btn btn-primary btn-block" onClick={() => void install()}>
+            <Download size={18} /> Instalar la app en este dispositivo
+          </button>
+        )}
+        {installState === "ios" && (
+          <p className="install-hint">
+            Para instalar la app: tocá <Share size={15} aria-label="Compartir" /> en Safari y después <b>Agregar a inicio</b>.
+          </p>
+        )}
 
         <button className="btn btn-ghost btn-block" onClick={logout}>
           <LogOut size={18} /> Cerrar sesión

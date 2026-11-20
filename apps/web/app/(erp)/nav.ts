@@ -42,21 +42,21 @@ export interface NavSection {
 export const NAV: NavSection[] = [
   {
     title: "General",
-    items: [{ href: "/inicio", label: "Inicio", icon: LayoutDashboard, preview: true }],
+    items: [{ href: "/inicio", label: "Inicio", icon: LayoutDashboard }],
   },
   {
     title: "Ventas",
     items: [
-      { href: "/ventas/conversaciones", label: "Conversaciones", icon: MessagesSquare, stage: 2, preview: true, badge: "3" },
+      { href: "/ventas/conversaciones", label: "Conversaciones", icon: MessagesSquare, stage: 1 },
       { href: "/ventas/pedidos", label: "Pedidos", icon: ClipboardList, stage: 1, preview: true },
-      { href: "/ventas/clientes", label: "Clientes", icon: Users, stage: 1, preview: true },
+      { href: "/ventas/clientes", label: "Clientes", icon: Users, stage: 1 },
     ],
   },
   {
     title: "Producción",
     items: [
       { href: "/produccion", label: "Tableros", icon: Factory, stage: 1 },
-      { href: "/produccion-tiempos", label: "Panel de tiempos", icon: Timer, stage: 1, preview: true },
+      { href: "/produccion-tiempos", label: "Panel de tiempos", icon: Timer, stage: 1 },
     ],
   },
   {
