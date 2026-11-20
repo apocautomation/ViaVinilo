@@ -5,7 +5,7 @@ import { ConversationsModule } from "./conversations/conversations.module";
 import { CustomersModule } from "./customers/customers.module";
 import { HealthController } from "./health/health.controller";
 import { JobsModule } from "./jobs/jobs.module";
-import { StorageModule } from "./storage/storage.module";
+import { StorageModule } from "./files/storage.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({

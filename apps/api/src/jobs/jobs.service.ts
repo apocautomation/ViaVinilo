@@ -19,7 +19,7 @@ import {
 import { AuditService } from "../audit/audit.service";
 import type { AuthUser } from "../auth/decorators";
 import { PrismaService } from "../prisma/prisma.service";
-import { StorageService } from "../storage/storage.service";
+import { StorageService } from "../files/storage.service";
 import { SectorAccess } from "./sector-access";
 
 const BUSINESS_TZ = "America/Argentina/Salta";
