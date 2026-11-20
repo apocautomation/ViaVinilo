@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { openAiLlm, parseAnswer, type ChatTurn, type Llm } from "../src/bot/llm";
-import { processBotReplies } from "../src/bot/reply";
+import { decideAnswer, processBotReplies } from "../src/bot/reply";
 import { startTestDb } from "./test-db";
 
 let prisma: PrismaClient;
@@ -97,7 +97,7 @@ describe("bot del chat de la app (D-056)", () => {
 
   it("D-056: si deriva a un asesor, marca el chat 'Pide asesor' y el bot se apaga en ese chat", async () => {
     await botOn();
-    const msg = await customerWrites("Les paso una foto de cómo quedó el estampado");
+    const msg = await customerWrites("el estampado quedó con un color raro, ¿es normal?");
     const { llm } = fakeLlm({ reply: "Te paso con un asesor.", handoff: true, reason: "Quiere cancelar" });
     expect((await processBotReplies(prisma, llm)).handoffs).toBe(1);
     const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
@@ -187,6 +187,14 @@ describe("bot del chat de la app (D-056)", () => {
     expect(r.failed).toBe(1);
     expect((await prisma.message.findUniqueOrThrow({ where: { id: msg.id } })).botStatus).toBe("ERROR");
     expect(await prisma.message.count({ where: { fromBot: true } })).toBe(0);
+  });
+});
+
+describe("controles sobre la IA (D-061)", () => {
+  it("D-061: si el cliente no dijo el material, la IA no elige casilla", async () => {
+    const llm: Llm = async () => ({ reply: "Mandalo a dtf@viavinilo.com", handoff: false, reason: null });
+    const a = await decideAnswer({ text: "Graciela, tel 0387 4322063", firstName: null, alreadyTalking: true, noticesOn: false, jobs: [], turns: [], llm, now: new Date() });
+    expect(a.reply).toMatch(/de qué material/);
   });
 });
 

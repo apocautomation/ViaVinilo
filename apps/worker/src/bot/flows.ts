@@ -16,23 +16,38 @@ export interface FlowContext {
 
 const GREETING = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis|qu[eé] tal)[\s!.,¿?]*$/i;
 const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo retiro|retiro)|estado de mi|mi pedido|c[oó]mo va|lo puedo retirar)\b/i;
-const NEW_JOB = /\b(imprimir|impresi[oó]n|quiero (hacer|mandar|imprimir)|te paso|necesito)\b|\d+([.,]\d+)?\s*(m|cm|mts?)?\s*[x×]\s*\d/i;
+/** Un trabajo nuevo: pide imprimir, manda medidas o un archivo, o avisa que adjunta (D-060, D-061). */
+const NEW_JOB =
+  /\b(imprimir|impresi[oó]n|quiero (hacer|mandar|imprimir)|te paso|necesito|adjunto|adjunta|ah[ií] va|te mando|les? (env[ií]o|mando|paso)|env[ií]o (el|un|los|unos|este)? ?archivos?|archivos? para)\b|\d+([.,]\d+)?\s*(m|cm|mts?)?\s*[x×]\s*\d|\.(png|jpe?g|pdf|tiff?|eps|ai|cdr|psd)\b/i;
 
+/** Horarios y formatos se responden solo si el cliente pregunta (D-061): "lo retiro en la sucursal" es un dato, no una pregunta. */
+const ASKS = /\?|^\s*(d[oó]nde|qu[eé]|cu[aá]l|cu[aá]ndo|a qu[eé] hora|hasta qu[eé] hora|c[oó]mo|puedo|se puede|tienen|hay)\b/i;
 const HOURS = /\b(horarios?|d[oó]nde (queda|est[aá]n|es)|direcci[oó]n|sucursal(es)?|abren|cierran|atienden)\b/i;
 const FORMAT = /\b(formatos?|dpi|resoluci[oó]n|requisitos?|qu[eé] archivo|pdf|png|jpe?g|tiff?|espejo|c[oó]mo (lo )?(mando|preparo|env[ií]o))\b/i;
 const TIMES = /\b(cu[aá]nto (tarda|demora|tiempo)|demora|plazo|en cu[aá]nto (est[aá]|lo tienen))\b/i;
 
-/** Material o servicio → casilla. El primero que coincide gana. */
+/**
+ * Material o servicio → casilla. El primero que coincide gana: primero el nombre del servicio que
+ * dice el cliente ("vinilo DTF textil" es DTF, no lona), después el material.
+ */
 const SERVICE_BY_WORDS: { re: RegExp; id: string }[] = [
+  { re: /\b(dtf ?uv|uv ?dtf)\b/i, id: "dtf-uv" },
+  { re: /\bdtf\b/i, id: "dtf-textil" },
   { re: /\bl[aá]tex\b/i, id: "latex" },
-  { re: /\b(cortes?|troquel\w*|ploteo de corte)\b/i, id: "corte" },
+  { re: /\b(calandra\w*)\b/i, id: "calandra" },
+  { re: /\b(sublima\w*)\b/i, id: "sublimacion" },
+  { re: /\b(eco ?solvente|solvente)\b/i, id: "ecosolvente" },
+  { re: /\b(uv rollo|rollo a rollo)\b/i, id: "uv-rollo" },
   { re: /\b(r[ií]gidos?|pvc|acr[ií]licos?|mdf|chapas?|alto impacto|foam)\b/i, id: "uv-rigidos" },
-  { re: /\b(lonas?|banners?|vinilos?|front|blackout|solvente|ecosolvente)\b/i, id: "ecosolvente" },
-  { re: /\b(dtf uv|uv dtf|tazas?|lapiceras?|vasos?|termos?|botellas?)\b/i, id: "dtf-uv" },
-  { re: /\b(dtf|remeras?|buzos?|prendas?|transfer|textil)\b/i, id: "dtf-textil" },
-  { re: /\b(calandra\w*|telas?|tropical|microfibra|jersey|tafeta)\b/i, id: "calandra" },
-  { re: /\b(sublima\w*|papel de sublimaci[oó]n)\b/i, id: "sublimacion" },
+  { re: /\b(lonas?|banners?|vinilos?|front|blackout)\b/i, id: "ecosolvente" },
+  { re: /\b(cortes?|troquel\w*|ploteo de corte)\b/i, id: "corte" },
+  { re: /\b(tazas?|lapiceras?|vasos?|termos?|botellas?)\b/i, id: "dtf-uv" },
+  { re: /\b(remeras?|buzos?|prendas?|transfer|textil)\b/i, id: "dtf-textil" },
+  { re: /\b(telas?|tropical|microfibra|jersey|tafeta|banderas?|dry ?fit)\b/i, id: "calandra" },
 ];
+
+/** Pregunta fija cuando no se sabe el servicio. */
+export const ASK_MATERIAL = "¡Dale! Para decirte a qué casilla mandarlo: ¿de qué material es el trabajo (lona, vinilo, tela, remeras, rígido…)?";
 
 export function serviceFor(text: string) {
   const hit = SERVICE_BY_WORDS.find((s) => s.re.test(text));
@@ -59,25 +74,25 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
 
   // Preguntas frecuentes con datos del sistema (D-060): no pasan por la IA.
   const service = serviceFor(text);
-  if (HOURS.test(text)) {
+  if (HOURS.test(text) && ASKS.test(text)) {
     const centro = service && (service.id === "dtf-textil" || service.id === "dtf-uv");
     const branches = service ? [help.BRANCHES[centro ? 1 : 0]!] : help.BRANCHES;
     const lines = branches.map((b) => `${b.name}, ${b.address} (${b.services}): ${b.hours.map((h) => `${h.days} ${h.time}`).join("; ")}. Mapa: ${b.mapUrl}`);
     return lines.join("\n");
   }
-  if (FORMAT.test(text) && !NEW_JOB.test(text)) {
+  if (FORMAT.test(text) && ASKS.test(text)) {
     if (!service) return "¿Para qué servicio es? (DTF, DTF UV, calandra, sublimación, lona o vinilo, rígidos, látex o corte). Así te paso el formato exacto.";
     const warn = service.warnings?.length ? ` ${service.warnings.join(" ")}` : "";
     return `${service.name}: ${service.formats}. ${service.requirements.join(" ")}${warn} Se manda por mail a ${service.email}.`;
   }
-  if (TIMES.test(text)) {
+  if (TIMES.test(text) && ASKS.test(text)) {
     const after = c.noticesOn ? " Cuando está listo te llega un aviso por acá y por mail." : "";
     return `Entre 24 y 48 horas hábiles desde que recibimos el archivo y, si corresponde, la seña. Va por orden de llegada; lo que entra el sábado a la tarde arranca el lunes.${after}`;
   }
 
   if (NEW_JOB.test(text)) {
     if (!service) {
-      return "¡Dale! Para decirte a qué casilla mandarlo: ¿de qué material es el trabajo (lona, vinilo, tela, remeras, rígido…)?";
+      return ASK_MATERIAL;
     }
     return `¡Dale! Mandá el archivo por mail a ${service.email} (${service.name}) con tus datos: nombre, medidas y cantidad, y en qué sucursal lo retirás. Formato: ${service.formats}. Cuando lo recibimos lo revisamos y te pasamos el precio.`;
   }

@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { formatJobNumber, JOB_STATUS_LABELS } from "@viavinilo/contracts";
-import { fixedFlow } from "./flows";
+import { ASK_MATERIAL, fixedFlow, serviceFor } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildSystemPrompt, type BotJob } from "./prompt";
@@ -42,6 +42,8 @@ export async function decideAnswer(input: {
   const answer = await input.llm(input.turns);
   let reply = fixMailboxes(toVoseo(answer.reply));
   if (!input.noticesOn) reply = dropNoticePromises(reply);
+  // D-061: si el cliente no dijo el material, la IA no elige casilla (tendía a mandar todo a dtf@).
+  if (/@viavinilo\.com/i.test(reply) && !serviceFor(input.text)) return { reply: ASK_MATERIAL, handoff: false, reason: null, source: "flow" };
   return { ...answer, reply, source: "ai" };
 }
 

@@ -51,3 +51,21 @@ describe("preguntas frecuentes con datos del sistema (D-060)", () => {
     expect(fixedFlow("¿cuánto tarda?", { ...ctx, noticesOn: true })).toMatch(/te llega un aviso/);
   });
 });
+
+describe("casos de la prueba con mensajes reales (D-061)", () => {
+  it("D-061: gana el servicio que nombra el cliente sobre el material", () => {
+    expect(fixedFlow("adjunto png para impresión en vinilo dtf textil, 1 unidad de 0,58 x 0,50", ctx)).toContain("dtf@viavinilo.com");
+    expect(fixedFlow("solvente base blanca con corte 100x60", ctx)).toContain("granformato@viavinilo.com");
+  });
+
+  it("D-061: 'lo retiro en la sucursal' en un pedido no es una pregunta de horarios", () => {
+    const r = fixedFlow('Adjunto archivos calandra, tela tropical 6 paños de 4,00 x 1,40. Lo retiro en sucursal "San Juan"', ctx)!;
+    expect(r).toContain("calandra@viavinilo.com");
+    expect(fixedFlow("Tamaño = 58 x 50 1 U para retirar en la sucursal de la calle San Juan", ctx)).toMatch(/de qué material/);
+  });
+
+  it("D-061: si avisa que manda un archivo, le pide el material para darle la casilla", () => {
+    expect(fixedFlow("Buenas ahi va en png", ctx)).toMatch(/de qué material/);
+    expect(fixedFlow("Diseño sin título.png", ctx)).toMatch(/de qué material/);
+  });
+});
