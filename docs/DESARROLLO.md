@@ -966,6 +966,19 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Íconos de la pestaña**: la app de clientes usa el dibujito (la mascota con los rollos). El ERP usa la "V" del logo de Via Vinilo sobre un fondo claro, para que se vea en cualquier barra de pestañas.
 - **Por qué**: Ezequiel: "que se pueda tocar el cliente y se abra acá la ficha para editar", "3 barritas… acciones masivas", y los logos.
 
+### D-059 · 20/11/2026 · Ezequiel · lista de Conversaciones con la distribución de Runamatic
+- **Definición**: la lista de Conversaciones toma la distribución de la bandeja que Via Vinilo usa hoy en Runamatic, con los colores de Via Vinilo.
+  - Arriba: título con el total, los íconos de acción (filtro por canal y ayuda) y un buscador a lo ancho.
+  - Tres pestañas iguales: Todas, Sin leer y Pide asesor. El canal (solo chat de la app o solo mails) va en el botón de filtros.
+  - Filas más aireadas:
+    - avatar grande con el canal del último mensaje en la esquina;
+    - nombre y hora relativa ("hace 5 min") arriba;
+    - vista previa abajo, con íconos de "bot prendido" y "pide asesor" y el contador de sin leer;
+    - etiquetas (alta pendiente, no es cliente) solo cuando corresponden.
+  - Se sacó el cartel "Bot apagado en todos los chats". Si el bot está prendido en algún chat, arriba aparece un ícono con la cantidad.
+  - Al no tener un chat abierto, el aviso queda centrado.
+- **Por qué**: Ezequiel: "me gusta mucho más como se ve en el soft que ya tienen, sin los colores; creo que está mejor distribuido el espacio", y "sacá este cartel".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
