@@ -69,22 +69,34 @@ export async function ingestMail(
 async function decide(
   deps: IngestDeps,
   sector: Sector,
-  mail: ParsedMail,
+  received: ParsedMail,
   meta: { uid?: number },
 ): Promise<IngestOutcome> {
   const { prisma } = deps;
-  const base = { messageId: mail.messageId };
+  const base = { messageId: received.messageId };
+  // D-057: un reenvío desde una casilla nuestra es del cliente que escribió el mail original.
+  const own = await isOwnMailbox(prisma, received.fromEmail);
+  const original = own ? forwardedSender(received.text, await ownDomains(prisma)) : null;
+  const mail: ParsedMail = original ? { ...received, fromEmail: original.email, fromName: original.name } : received;
   /** D-045: todo mail de una persona queda en su hilo de Conversaciones, cree o no una orden. */
   const toInbox = (customerId: string | null, jobId?: string) =>
-    recordInboundMail(prisma, { sector, mail, customerId, jobId, uid: meta.uid });
+    recordInboundMail(prisma, { sector, mail, customerId, jobId, uid: meta.uid, senderEmail: received.fromEmail });
   const knownCustomerId = async () => {
     if (!mail.fromEmail) return null;
     const c = await prisma.customerEmail.findUnique({ where: { email: mail.fromEmail }, select: { customer: { select: { id: true, deletedAt: true } } } });
     return c && !c.customer.deletedAt ? c.customer.id : null;
   };
 
+  if (own && !original) {
+    // Un mail del equipo sin el remitente original: queda en Conversaciones, sin crear cliente ni pedido.
+    await toInbox(null);
+    const error = "Mail de una casilla de Via Vinilo sin el remitente original: cargá el pedido a mano";
+    await log(deps, sector, received, "ERROR", { error });
+    return { ...base, result: "ERROR", error };
+  }
+
   if (mail.isAutoReply) {
-    await log(deps, sector, mail, "SKIPPED_AUTO_REPLY");
+    await log(deps, sector, received, "SKIPPED_AUTO_REPLY");
     return { ...base, result: "SKIPPED_AUTO_REPLY" };
   }
 
@@ -93,20 +105,20 @@ async function decide(
     select: { id: true },
   });
   if (existing) {
-    await log(deps, sector, mail, "DUPLICATE", { jobId: existing.id });
+    await log(deps, sector, received, "DUPLICATE", { jobId: existing.id });
     return { ...base, result: "DUPLICATE", jobId: existing.id };
   }
 
   if (mail.files.length === 0 && mail.links.length === 0) {
     // Sin archivo no se crea orden (I-15), pero el mail no se pierde: va a Conversaciones (D-045).
     await toInbox(await knownCustomerId());
-    await log(deps, sector, mail, "SKIPPED_NO_FILES");
+    await log(deps, sector, received, "SKIPPED_NO_FILES");
     return { ...base, result: "SKIPPED_NO_FILES" };
   }
 
   if (!mail.fromEmail) {
     const error = "El mail no tiene remitente";
-    await log(deps, sector, mail, "ERROR", { error });
+    await log(deps, sector, received, "ERROR", { error });
     return { ...base, result: "ERROR", error };
   }
 
@@ -119,7 +131,7 @@ async function decide(
 
   if (customer?.status === "BLOCKED") {
     await toInbox(customer.id);
-    await log(deps, sector, mail, "REJECTED_BLOCKED");
+    await log(deps, sector, received, "REJECTED_BLOCKED");
     return { ...base, result: "REJECTED_BLOCKED" };
   }
 
@@ -202,13 +214,13 @@ async function decide(
       where: { sectorId_sourceMessageId: { sectorId: sector.id, sourceMessageId: mail.messageId } },
       select: { id: true },
     });
-    await log(deps, sector, mail, "DUPLICATE", { jobId: dup.id });
+    await log(deps, sector, received, "DUPLICATE", { jobId: dup.id });
     return { ...base, result: "DUPLICATE", jobId: dup.id };
   }
 
   const result: MailIngestResult = pendingSignup ? "PENDING_SIGNUP" : "CREATED";
   await toInbox(customer.id, jobId);
-  await log(deps, sector, mail, result, { jobId, fileCount: files.length });
+  await log(deps, sector, received, result, { jobId, fileCount: files.length });
 
   if (result === "PENDING_SIGNUP") await maybeInvite(deps, sector, customer.id, mail);
 
@@ -236,6 +248,32 @@ export async function fillPendingContact(prisma: PrismaClient, customerId: strin
       ...(phoneFree ? { phones: { create: { phone: found.phone!, isPrimary: true } } } : {}),
     },
   });
+}
+
+/** Dominios de las casillas de los sectores (ej. "viavinilo.com"). */
+async function ownDomains(prisma: PrismaClient): Promise<Set<string>> {
+  const sectors = await prisma.sector.findMany({ select: { inboxEmail: true } });
+  return new Set(sectors.map((x) => x.inboxEmail?.split("@")[1]?.toLowerCase()).filter((d): d is string => Boolean(d)));
+}
+
+async function isOwnMailbox(prisma: PrismaClient, email: string | null): Promise<boolean> {
+  const domain = email?.split("@")[1]?.toLowerCase();
+  return Boolean(domain && (await ownDomains(prisma)).has(domain));
+}
+
+/**
+ * D-057: en un reenvío ("RV:", "Fwd:") el remitente original está en el encabezado citado
+ * ("De: Lucía Pérez <lucia@gmail.com>"). Se toma el primero que no sea una casilla nuestra.
+ */
+export function forwardedSender(text: string, own: Set<string>): { email: string; name: string | null } | null {
+  for (const m of text.matchAll(/^[\s>*]*(?:De|From)\s*:\s*(.+)$/gim)) {
+    const value = m[1]!.trim();
+    const email = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/.exec(value)?.[0]?.toLowerCase();
+    if (!email || own.has(email.split("@")[1]!)) continue;
+    const name = value.replace(/<[^>]*>/, "").replace(email, "").replace(/["'[\]()]/g, "").trim();
+    return { email, name: name || null };
+  }
+  return null;
 }
 
 function signupNotes(fromName: string | null, c: ReturnType<typeof extractContact>): string | null {

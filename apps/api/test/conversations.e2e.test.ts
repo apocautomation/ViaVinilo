@@ -15,7 +15,6 @@ const http = () => request(app.getHttpServer());
 const as = (who: keyof typeof tokens) => ({
   get: (url: string) => http().get(url).set("Authorization", `Bearer ${tokens[who]}`),
   post: (url: string, body?: object) => http().post(url).set("Authorization", `Bearer ${tokens[who]}`).send(body),
-  put: (url: string, body?: object) => http().put(url).set("Authorization", `Bearer ${tokens[who]}`).send(body),
 });
 
 beforeAll(async () => {
@@ -142,39 +141,37 @@ describe("Conversaciones: chat de la app y mails en un solo hilo (D-045)", () =>
   });
 });
 
-describe("bot del chat de la app (D-056)", () => {
+describe("bot del chat de la app (D-056, D-057)", () => {
   const convId = async () => (await prisma.conversation.findUniqueOrThrow({ where: { customerId } })).id;
   const lastIn = () => prisma.message.findFirstOrThrow({ where: { direction: "IN", channel: "APP" }, orderBy: { createdAt: "desc" } });
 
-  it("D-056: arranca apagado en general y en todos los chats: los mensajes no quedan para el bot", async () => {
+  it("D-056: arranca apagado en todos los chats: los mensajes no quedan para el bot", async () => {
     const status = await as("attention").get("/conversations/bot");
-    expect(status.body).toMatchObject({ enabled: false, chatsWithBot: 0 });
+    expect(status.body).toMatchObject({ chatsWithBot: 0 });
     await as("customer").post("/app/chat", { text: "Hola" });
     expect((await lastIn()).botStatus).toBeNull();
   });
 
-  it("D-056: solo el dueño prende el bot general, y queda en auditoría", async () => {
-    expect((await as("attention").put("/conversations/bot", { enabled: true })).status).toBe(403);
-    const res = await as("owner").put("/conversations/bot", { enabled: true });
-    expect(res.status).toBe(200);
-    expect(res.body.enabled).toBe(true);
-    const audit = await prisma.auditLog.findFirst({ where: { entity: "AppSetting", entityId: "bot" } });
-    expect(audit?.after).toEqual({ enabled: true });
-  });
-
-  it("D-056: con el general prendido, solo responde en los chats donde se prendió", async () => {
-    await as("customer").post("/app/chat", { text: "¿Abren el sábado?" });
-    expect((await lastIn()).botStatus).toBeNull();
-
+  it("D-057: es individual: prendido en el chat, los mensajes de ese cliente quedan para el bot", async () => {
     const id = await convId();
     expect((await as("attention").post(`/conversations/${id}/bot`, { enabled: true })).body.botEnabled).toBe(true);
+    expect((await as("attention").get("/conversations/bot")).body.chatsWithBot).toBe(1);
     await as("customer").post("/app/chat", { text: "¿Y el domingo?" });
     expect((await lastIn()).botStatus).toBe("PENDING");
   });
 
+  it("D-057: 'Apagar en todos' lo apaga de una vez y queda en auditoría", async () => {
+    const res = await as("attention").post("/conversations/bot/off");
+    expect(res.status).toBe(200);
+    expect(res.body.chatsWithBot).toBe(0);
+    expect((await prisma.auditLog.findFirst({ where: { action: "bot_off_everywhere" } }))?.after).toEqual({ chats: 1 });
+    await as("customer").post("/app/chat", { text: "¿Hay alguien?" });
+    expect((await lastIn()).botStatus).toBeNull();
+  });
+
   it("D-056: un chat 'Pide asesor' no le pasa mensajes al bot; cuando responde una persona deja de estar marcado", async () => {
     const id = await convId();
-    await prisma.conversation.update({ where: { id }, data: { needsHuman: true, needsHumanReason: "Reclamo" } });
+    await prisma.conversation.update({ where: { id }, data: { botEnabled: true, needsHuman: true, needsHumanReason: "Reclamo" } });
     expect((await as("attention").get("/conversations?filter=HUMAN")).body.total).toBe(1);
     await as("customer").post("/app/chat", { text: "¿Hay alguien?" });
     expect((await lastIn()).botStatus).toBeNull();
@@ -187,5 +184,16 @@ describe("bot del chat de la app (D-056)", () => {
   it("D-056: el bot no se puede prender en el hilo de alguien que no es cliente", async () => {
     const stranger = await prisma.conversation.findFirstOrThrow({ where: { customerId: null } });
     expect((await as("attention").post(`/conversations/${stranger.id}/bot`, { enabled: true })).status).toBe(422);
+  });
+
+  it("D-057: un mail reenviado desde una casilla nuestra se marca del lado del equipo", async () => {
+    const id = await convId();
+    await prisma.message.create({
+      data: { conversationId: id, direction: "IN", channel: "MAIL", sectorId: dtfId, fromEmail: "dtf@viavinilo.test", body: "RV: pedido" },
+    });
+    const thread = await as("attention").get(`/conversations/${id}`);
+    const fwd = thread.body.messages.find((m: { body: string }) => m.body === "RV: pedido");
+    expect(fwd.fromStaff).toBe(true);
+    expect(thread.body.messages.filter((m: { fromStaff: boolean }) => m.fromStaff)).toHaveLength(1);
   });
 });

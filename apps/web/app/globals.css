@@ -1169,6 +1169,49 @@ table.data tfoot td {
   font-weight: 700;
   margin-bottom: 3px;
 }
+/* D-057: mail que reenvió el equipo desde una casilla nuestra: del lado del equipo, sin pintar. */
+.bubble.staff {
+  align-self: flex-end;
+  background: var(--color-neutral-50);
+  border: 1px dashed var(--color-border);
+  border-top-right-radius: 3px;
+}
+.bubble.staff .by {
+  color: var(--color-text-muted);
+}
+.mail-links {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+.mail-links .file-att {
+  margin-top: 0;
+  color: var(--color-link);
+  text-decoration: none;
+}
+.mail-links .file-att span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mail-quoted {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+.mail-quoted summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.mail-quoted .bubble-body {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-border);
+}
+.bubble.out .mail-quoted,
+.bubble.out .mail-links .file-att {
+  color: inherit;
+}
 .bubble.ai .by {
   color: #5b21b6;
 }

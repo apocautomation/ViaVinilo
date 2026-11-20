@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { openAiLlm, parseAnswer, type ChatTurn, type Llm } from "../src/bot/llm";
-import { BOT_SETTING_KEY, processBotReplies } from "../src/bot/reply";
+import { processBotReplies } from "../src/bot/reply";
 import { startTestDb } from "./test-db";
 
 let prisma: PrismaClient;
@@ -28,8 +28,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await prisma.message.deleteMany();
   await prisma.conversation.deleteMany();
-  await prisma.appSetting.deleteMany();
-  const conv = await prisma.conversation.create({ data: { customerId, botEnabled: true } });
+  // Todos los chats arrancan con el bot apagado (D-056).
+  const conv = await prisma.conversation.create({ data: { customerId } });
   conversationId = conv.id;
 });
 
@@ -38,7 +38,8 @@ afterAll(async () => {
   await stopDb?.();
 });
 
-const botOn = () => prisma.appSetting.create({ data: { key: BOT_SETTING_KEY, value: { enabled: true } } });
+/** D-057: el bot es individual: se prende en el chat. */
+const botOn = () => prisma.conversation.update({ where: { id: conversationId }, data: { botEnabled: true } });
 const customerWrites = (body: string, at = new Date()) =>
   prisma.message.create({ data: { conversationId, direction: "IN", channel: "APP", body, botStatus: "PENDING", createdAt: at } });
 
@@ -52,7 +53,7 @@ function fakeLlm(answer: { reply: string; handoff?: boolean; reason?: string }) 
 }
 
 describe("bot del chat de la app (D-056)", () => {
-  it("D-056: arranca apagado: sin el interruptor general no responde ni llama a la IA", async () => {
+  it("D-056: arranca apagado: si no se prendió en el chat no responde ni llama a la IA", async () => {
     const msg = await customerWrites("Hola");
     const { llm, calls } = fakeLlm({ reply: "Hola!" });
     const r = await processBotReplies(prisma, llm);
@@ -62,13 +63,16 @@ describe("bot del chat de la app (D-056)", () => {
     expect(await prisma.message.count({ where: { fromBot: true } })).toBe(0);
   });
 
-  it("D-056: apagado en ese chat no responde aunque el general esté prendido", async () => {
+  it("D-057: es individual: prendido en un chat no responde en otro", async () => {
     await botOn();
-    await prisma.conversation.update({ where: { id: conversationId }, data: { botEnabled: false } });
+    const other = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Otro" } });
+    const otherConv = await prisma.conversation.create({ data: { customerId: other.id } });
+    await prisma.message.create({ data: { conversationId: otherConv.id, direction: "IN", channel: "APP", body: "Hola", botStatus: "PENDING" } });
     await customerWrites("Hola");
     const { llm, calls } = fakeLlm({ reply: "Hola!" });
-    expect((await processBotReplies(prisma, llm)).skipped).toBe(1);
-    expect(calls).toHaveLength(0);
+    expect(await processBotReplies(prisma, llm)).toMatchObject({ answered: 1, skipped: 1 });
+    expect(calls).toHaveLength(1);
+    expect(await prisma.message.count({ where: { conversationId: otherConv.id, fromBot: true } })).toBe(0);
   });
 
   it("D-056: prendido responde en el chat con los pedidos reales del cliente y una sola vez", async () => {
@@ -93,12 +97,24 @@ describe("bot del chat de la app (D-056)", () => {
 
   it("D-056: si deriva a un asesor, marca el chat 'Pide asesor' y el bot se apaga en ese chat", async () => {
     await botOn();
-    const msg = await customerWrites("Quiero cancelar el pedido");
+    const msg = await customerWrites("Les paso una foto de cómo quedó el estampado");
     const { llm } = fakeLlm({ reply: "Te paso con un asesor.", handoff: true, reason: "Quiere cancelar" });
     expect((await processBotReplies(prisma, llm)).handoffs).toBe(1);
     const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
     expect(conv).toMatchObject({ needsHuman: true, needsHumanReason: "Quiere cancelar", botEnabled: false });
     expect((await prisma.message.findUniqueOrThrow({ where: { id: msg.id } })).botStatus).toBe("HANDOFF");
+  });
+
+  it("D-057: cancelar, reclamos, precios, comprobantes o pedir una persona van a un asesor sin pasar por la IA", async () => {
+    await botOn();
+    await customerWrites("Hola, ¿cuánto sale el metro de DTF?");
+    const { llm, calls } = fakeLlm({ reply: "Sale $ 1000", handoff: false });
+    // Viernes 20/11 a las 15:00 de Salta: horario de atención.
+    expect((await processBotReplies(prisma, llm, { now: () => new Date("2026-11-20T18:00:00Z") })).handoffs).toBe(1);
+    expect(calls).toHaveLength(0);
+    const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
+    expect(conv).toMatchObject({ needsHuman: true, needsHumanReason: "Pide precio o presupuesto", botEnabled: false });
+    expect((await prisma.message.findFirstOrThrow({ where: { fromBot: true } })).body).toMatch(/te responde por este mismo chat en un rato/);
   });
 
   it("D-056: no pisa a una persona: si el equipo respondió después, o el cliente mandó otro mensaje, responde solo el último", async () => {

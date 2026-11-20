@@ -218,12 +218,12 @@ describe("remitentes sin alta (D-014)", () => {
 describe("altas desde el mail (D-054)", () => {
   it("D-054: completa el alta pendiente con la ficha que escribe el cliente en el mail", async () => {
     const raw = await buildMail({
-      from: "ramirogarnica@nuevo.test",
+      from: "juanpereyra@nuevo.test",
       to: "dtf@viavinilo.test",
       subject: "DARK2",
       messageId: nextId(),
       text: [
-        "Nombre o Número de Cliente: RAMIRO GARNICA",
+        "Nombre o Número de Cliente: JUAN PEREYRA",
         "Nombre del Archivo: DARK2",
         "Material: DTF TEXTIL",
         "Tamaño:   0,58 CM x 0,35 CM",
@@ -235,11 +235,11 @@ describe("altas desde el mail (D-054)", () => {
     const r = await ingestMail(deps(), dtf, raw);
     expect(r.result).toBe("PENDING_SIGNUP");
     const c = await prisma.customer.findFirstOrThrow({
-      where: { emails: { some: { email: "ramirogarnica@nuevo.test" } } },
+      where: { emails: { some: { email: "juanpereyra@nuevo.test" } } },
       include: { phones: true, jobs: true },
     });
     expect(c.status).toBe("PENDING");
-    expect([c.firstName, c.lastName, c.searchText]).toEqual(["Ramiro", "Garnica", "ramiro garnica"]);
+    expect([c.firstName, c.lastName, c.searchText]).toEqual(["Juan", "Pereyra", "juan pereyra"]);
     expect(c.phones.map((p) => p.phone)).toEqual(["+5493874669944"]);
     expect(c.internalNotes).toBe("Retira en: Calle San Juan");
     expect(c.jobs[0]!.status).toBe("RECEIVED");
@@ -256,6 +256,53 @@ describe("altas desde el mail (D-054)", () => {
     await ingestMail(deps(), dtf, await mail("Nombre: Lucía de la Fuente"));
     c = await prisma.customer.findUniqueOrThrow({ where: { id: c.id } });
     expect([c.firstName, c.lastName]).toEqual(["Lucía", "de la Fuente"]);
+  });
+});
+
+describe("reenvíos desde una casilla nuestra (D-057)", () => {
+  it("D-057: un reenvío del equipo es del cliente del mail original, no de la casilla de Via Vinilo", async () => {
+    const raw = await buildMail({
+      from: "dtf@viavinilo.test",
+      to: "dtf@viavinilo.test",
+      subject: "RV: Pérez Lucía",
+      messageId: nextId(),
+      text: [
+        "________________________________",
+        "De: Lucía Pérez <lucia.perez@cliente.test>",
+        "Enviado: viernes, 20 de noviembre de 2026 11:28",
+        "Para: dtf@viavinilo.test <dtf@viavinilo.test>",
+        "Asunto: Pérez Lucía",
+        "",
+        "Impresión en DTF textil el archivo de EMA",
+      ].join("\n"),
+      attachments: [fakePdf("EMA.pdf")],
+    });
+    const r = await ingestMail(deps(), dtf, raw);
+    expect(r.result).toBe("PENDING_SIGNUP");
+    expect(await prisma.customerEmail.count({ where: { email: "dtf@viavinilo.test" } })).toBe(0);
+    const c = await prisma.customer.findFirstOrThrow({
+      where: { emails: { some: { email: "lucia.perez@cliente.test" } } },
+      include: { jobs: true, conversation: { include: { messages: true } } },
+    });
+    expect([c.firstName, c.lastName]).toEqual(["Lucía", "Pérez"]);
+    expect(c.jobs).toHaveLength(1);
+    // En el hilo queda que lo mandó la casilla del equipo.
+    expect(c.conversation?.messages[0]?.fromEmail).toBe("dtf@viavinilo.test");
+  });
+
+  it("D-057: un mail del equipo sin remitente original no crea cliente ni pedido, pero queda en Conversaciones", async () => {
+    const raw = await buildMail({
+      from: "dtf@viavinilo.test",
+      to: "dtf@viavinilo.test",
+      subject: "prueba",
+      messageId: nextId(),
+      text: "archivo de prueba",
+      attachments: [fakePdf("x.pdf")],
+    });
+    const r = await ingestMail(deps(), dtf, raw);
+    expect(r.result).toBe("ERROR");
+    expect(await prisma.customerEmail.count({ where: { email: "dtf@viavinilo.test" } })).toBe(0);
+    expect(await prisma.conversation.count({ where: { contactEmail: "dtf@viavinilo.test" } })).toBe(1);
   });
 });
 

@@ -2,7 +2,7 @@ import { normalizePhone } from "@viavinilo/contracts";
 
 /**
  * Datos del remitente que vienen escritos en el cuerpo del mail (D-054). Los clientes suelen mandar
- * una ficha del estilo "Nombre o Número de Cliente: RAMIRO GARNICA / Teléfono: … / Lugar a retirar: …".
+ * una ficha del estilo "Nombre o Número de Cliente: JUAN PEREYRA / Teléfono: … / Lugar a retirar: …".
  * Con eso se completa el alta pendiente para que el asesor solo tenga que verificar.
  * Cuando esté el bot (E2), él completa lo que esta lectura no entienda.
  */
@@ -24,7 +24,7 @@ const NAME = LINE(
 const PHONE = LINE("tel[eé]fono|tel|celular|cel|whats\\s*app|wsp|wpp|contacto");
 const PICKUP = LINE("lugar\\s+(?:a|de)\\s+retir(?:ar|o)|sucursal(?:\\s+de\\s+retiro)?|retir[oa]\\s+en|retiro");
 
-/** "RAMIRO GARNICA" → "Ramiro Garnica". Respeta "de", "del", "la" en minúscula. */
+/** "JUAN PEREYRA" → "un cliente nuevo". Respeta "de", "del", "la" en minúscula. */
 function titleCase(s: string): string {
   return s
     .toLowerCase()

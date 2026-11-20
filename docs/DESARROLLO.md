@@ -127,7 +127,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-17 | Cómo obligar a mover las tarjetas (D-032) | Ezequiel pidió que los operadores **tengan que** mover la tarjeta para poder hacer su trabajo. Hoy nada impide imprimir sin tocar el tablero: el archivo llega por mail y el operador lo abre desde la casilla. | E1 | Abierto. Propuesta (ya dibujada en el tablero): el archivo para imprimir **solo se descarga desde la tarjeta**, y se libera cuando la orden está lista para imprimir (cotizada y, si corresponde, con seña). Para que funcione, los operadores no deberían tener acceso a las casillas de mail. Ampliada en D-042 para que el estado que ve el cliente sea el real. Confirmar con Verónica y Ricardo. |
 | I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. **Canales**: la app y también el **mail** (D-041). |
 | I-19 | Envío de trabajos desde la app (D-034) | La actualización §2.9 dice que la recepción de trabajos va por la app, y la §2.5 pide límites de acciones por cliente y evitar duplicados (el caso de los 17 pedidos repetidos por Telegram). No está definido cuántos envíos por día se permiten ni cómo se detecta un archivo repetido. | E1 | Abierto. Propuesta: la orden solo se crea con archivo, sector y medida; si el mismo archivo (mismo hash) ya está en un pedido abierto del cliente, se avisa en lugar de crear otro; tope configurable de envíos por hora. Confirmar con Verónica. |
-| I-20 | VPS para la IA local (D-035) | El VPS del cliente tiene 4 vCPU y 15 GB de RAM. Trip calcula 8 vCPU para correr `qwen3:8b` en local (D-029). | E2 | Abierto. Alcanza para la E1. Al arrancar la E2, medir la latencia del modelo en este VPS. Si no alcanza, el cliente amplía el plan (contrato) o se usa más OpenAI de respaldo. |
+| I-20 | VPS para la IA local (D-035) | El VPS del cliente tiene 4 vCPU y 15 GB de RAM. Trip calcula 8 vCPU para correr `qwen3:8b` en local (D-029). | E2 | **Resuelto en D-057**: con 4 vCPU alcanza para `qwen2.5:3b` (3 a 4 s por respuesta); no para `qwen3:8b`. Alcanza para la E1. Al arrancar la E2, medir la latencia del modelo en este VPS. Si no alcanza, el cliente amplía el plan (contrato) o se usa más OpenAI de respaldo. |
 | I-21 | Casillas `cortes@` y `tpu@` (D-043) — **Resuelto en D-046**: `cortes@` es el Corte de Gran Formato y `tpu@` es TPU | En Hostinger existen las casillas `cortes@viavinilo.com` y `tpu@viavinilo.com`, pero el sistema tiene 6 sectores y ninguno es Cortes ni TPU. | E1 | Abierto. Preguntar a Ricardo y a Verónica si son sectores que reciben trabajos (y hay que sumarlos con su secuencia de estados) o casillas de otro uso. |
 | I-22 | `dtf@` bloqueada para enviar (D-043) | Hostinger bloqueó el envío de `dtf@viavinilo.com` por "sending_spam". El sistema responde desde la casilla del sector (Reply-To, actualización §2.2), así que las respuestas de DTF no salen. | E1 | Abierto. El cliente tiene que pedirle a Hostinger que la desbloquee y revisar SPF, DKIM y DMARC de `viavinilo.com` (actualización §2.2). Mientras tanto, DTF puede responder desde otra casilla. |
 | I-23 | Migración de clientes sin DNI ni email (D-048) — **Resuelto en D-049** | El alta exige DNI, email y teléfono (actualización §2.1, D-025), y el ingreso a la app necesita email (D-039). En el CSV de Runamatic solo 9 de 1790 tienen DNI y 380 tienen email. | E1 | Abierto. Propuesta: importar como **activos** a los "Cliente Registrado", y también a los que tengan email; marcar "datos a completar" a los que no tienen DNI y pedírselo en el primer ingreso o en el próximo pedido. Los contactos que no tienen email ni son "Cliente Registrado" no se importan como clientes: quedan para Conversaciones cuando escriban. Confirmar con Ezequiel. |
@@ -897,7 +897,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - muestra los **clientes parecidos** (mismo teléfono, mismo nombre o el N.º que dijo tener), para no duplicar a los importados de Runamatic que escriben desde un email nuevo;
     - botones **Aprobar alta** (exige nombre, apellido, DNI, email y teléfono, como antes) y **Rechazar** (pide motivo, queda bloqueado y en auditoría; los pedidos ya mandados siguen en el tablero).
   - **Por ahora la lectura es por reglas, no con IA.** Cuando esté el bot, él completa lo que esta lectura no entienda.
-- **Por qué**: Ezequiel: "un cliente pendiente de alta puede hacer todo el proceso, solo es una formalidad para que tengan que verificar los datos". Entró el primer pedido real de alguien sin alta (Ramiro Garnica, DTF) y quedó como "Cliente N.º 1792" sin datos.
+- **Por qué**: Ezequiel: "un cliente pendiente de alta puede hacer todo el proceso, solo es una formalidad para que tengan que verificar los datos". Entró el primer pedido real de alguien sin alta (un cliente nuevo, DTF) y quedó como "Cliente N.º 1792" sin datos.
 
 ### D-055 · 20/11/2026 · Ezequiel · CUIT con guiones y montos con puntos, al escribir y al mostrar
 - **Definición**: los campos se formatean mientras se escribe, y se ven igual en pantalla:
@@ -932,6 +932,28 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - con `BOT_API_URL` se puede usar otro proveedor compatible con OpenAI, por ejemplo un modelo local con Ollama cuando el VPS alcance (contrato: IA local con OpenAI de respaldo; ver I-20).
 - **Por qué**: Ezequiel: "el bot obviamente apagado… dejalo apagado en todos los chats y sacá el prompt de Runamatic", y que pueda responder "según la info del sistema".
 - **Pendiente**: que el bot complete datos del alta pendiente (D-054) y que responda mails; las dos cosas, solo si Ezequiel lo prioriza.
+
+### D-057 · 20/11/2026 · Ezequiel · mails legibles, reenvíos del equipo y bot individual con IA local
+- **Mails legibles en Conversaciones**: el texto se muestra tal cual, pero ordenado.
+  - Los links (Drive, WeTransfer) van aparte, como botones con el nombre del archivo que escribió el cliente ("Carpinteria_A.jpg").
+  - Lo citado de un mail anterior queda plegado, por ejemplo la respuesta automática de la casilla ("Ver la respuesta automática de Via Vinilo").
+  - Se sacan los renglones vacíos de más. En la base el mail queda igual que llegó.
+- **Reenvíos desde una casilla nuestra**:
+  - Un "RV:" que el equipo reenvía desde `dtfuv@`, `calandra@`, etc. es del cliente del mail original ("De: Lucía Pérez <…>"): el pedido y el hilo van a ese cliente.
+  - En el hilo se ve del lado del equipo como "Reenvío del equipo".
+  - Si no se encuentra el remitente original, el mail queda en Conversaciones sin crear cliente ni pedido.
+  - Antes se creaba un alta con el email de Via Vinilo (N.º 1806 con `dtfuv@`). El script `node dist/fix-forwards.js` lo corrige una vez.
+- **El bot es individual**:
+  - Se prende chat por chat con el botón del encabezado; no hay interruptor general.
+  - Arriba se ve en cuántos chats está prendido, con un botón "Apagar en todos" (queda en auditoría).
+  - Cambia D-056.
+- **IA local con Ollama** (cambia D-056: OpenAI queda solo de respaldo):
+  - corre en el mismo VPS, en un contenedor `ollama` sin puertos públicos, con 3 de los 4 núcleos y 8 GB como máximo;
+  - modelo `qwen2.5:3b`, elegido midiendo en el VPS con el prompt real contra `gemma3:4b` y `llama3.2:3b`: respondió en 3 a 4 s y fue el único que derivó bien "quiero cancelar";
+  - el worker precarga el modelo al arrancar.
+- **Derivación fija, sin IA**: cancelar o cambiar un pedido, reclamos, precios, comprobantes y pedir una persona van siempre a un asesor (reglas de Runamatic). El modelo chico a veces no derivaba.
+- **Paperclip**: no se usa en el camino del chat. En el proyecto de Trip se vio que no sostiene la latencia de un chat; ahí quedó para gobierno y auditoría de agentes. Si se quiere sumar para eso, es un paso aparte.
+- **Por qué**: Ezequiel: "que los mensajes queden legibles… cargalo tal cual viene pero ordenado", "que sea individual", "el bot va en local… con Ollama".
 
 ## 5. Pendientes del cliente para arrancar la E1
 
