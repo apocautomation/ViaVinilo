@@ -30,7 +30,12 @@ async function main() {
     console.log("[worker] lectura de mails apagada (MAIL_SOURCE=off)");
   } else {
     await mailQueue.upsertJobScheduler("poll-mailboxes", { every: config.pollEveryMs }, { name: "poll" });
-    const sectors = config.mailSource === "imap" ? Object.keys(config.imap).join(", ") || "ninguno" : "todos";
+    const sectors =
+      config.mailSource === "imap"
+        ? Object.keys(config.imap).join(", ") || "ninguno"
+        : config.mailSource === "hostinger-api"
+          ? "las casillas de sector que ve el token"
+          : "todos";
     console.log(
       `[worker] leyendo mails desde ${config.mailSource} cada ${config.pollEveryMs / 1000} s (sectores: ${sectors})`,
     );
