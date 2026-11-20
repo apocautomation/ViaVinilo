@@ -292,6 +292,37 @@ describe("clientes", () => {
       const res = await api("production").post(`/customers/${pendingId}/approve`);
       expect(res.status).toBe(403);
     });
+
+    it("D-054: muestra los clientes parecidos (mismo nombre, teléfono o el N.º que dijo tener)", async () => {
+      const claimed = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Otro", lastName: "Cliente" } });
+      const dup = await prisma.customer.create({
+        data: {
+          status: "PENDING",
+          firstName: "Ana",
+          lastName: "Gómez",
+          searchText: "ana gomez",
+          internalNotes: `Dice ser el cliente N.º ${claimed.customerNumber}`,
+          emails: { create: { email: "ana.otra@gremio.test", isPrimary: true } },
+        },
+      });
+      const res = await api("attention").get(`/customers/${dup.id}/matches`);
+      expect(res.status).toBe(200);
+      expect(res.body.map((m: { id: string }) => m.id).sort()).toEqual([pendingId, claimed.id].sort());
+    });
+
+    it("D-054: rechazar un alta exige motivo, la bloquea y queda en auditoría", async () => {
+      const spam = await prisma.customer.create({
+        data: { status: "PENDING", emails: { create: { email: "spam@gremio.test", isPrimary: true } } },
+      });
+      expect((await api("attention").post(`/customers/${spam.id}/reject`, {})).status).toBe(400);
+      const res = await api("attention").post(`/customers/${spam.id}/reject`, { reason: "Duplicado del N.º 10" });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("BLOCKED");
+      const audit = await prisma.auditLog.findFirst({ where: { entityId: spam.id, action: "reject" } });
+      expect(audit?.after).toMatchObject({ status: "BLOCKED", reason: "Duplicado del N.º 10" });
+      // Un cliente activo no se "rechaza".
+      expect((await api("attention").post(`/customers/${pendingId}/reject`, { reason: "x" })).status).toBe(422);
+    });
   });
 
   describe("baja", () => {

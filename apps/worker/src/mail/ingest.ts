@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { Prisma, type MailIngestResult, type PrismaClient, type Sector } from "@prisma/client";
 import type { FileStorage } from "../storage";
+import { customerSearchText } from "@viavinilo/contracts";
+import { extractContact } from "./contact";
 import { recordInboundMail } from "./conversation";
 import { parseMail, type ParsedMail } from "./parse";
 
@@ -122,12 +124,19 @@ async function decide(
   }
 
   if (!customer) {
+    // D-054: el alta queda pendiente, con los datos que el cliente escribió en el mail.
+    const found = extractContact(mail.text, mail.fromName);
+    const phoneFree = found.phone && !(await prisma.customerPhone.findUnique({ where: { phone: found.phone } }));
     try {
       customer = await prisma.customer.create({
         data: {
           status: "PENDING",
-          internalNotes: mail.fromName ? `Nombre en el mail: ${mail.fromName}` : null,
+          firstName: found.firstName,
+          lastName: found.lastName,
+          searchText: customerSearchText(found),
+          internalNotes: signupNotes(mail.fromName, found),
           emails: { create: { email: mail.fromEmail, isPrimary: true } },
+          ...(phoneFree ? { phones: { create: { phone: found.phone!, isPrimary: true } } } : {}),
         },
       });
     } catch (err) {
@@ -140,7 +149,11 @@ async function decide(
     }
   }
 
-  const status = customer.status === "ACTIVE" ? "RECEIVED" : "PENDING_SIGNUP";
+  if (customer.status === "PENDING" && !customer.firstName) customer = await fillPendingContact(prisma, customer.id, mail);
+
+  // D-054: el alta pendiente es solo una formalidad: el pedido entra igual al tablero.
+  const pendingSignup = customer.status === "PENDING";
+  const status = "RECEIVED" as const;
 
   // Los archivos se guardan antes de crear la orden, con una clave estable por mail: si la orden
   // ya existe (reintento), solo se sobrescriben con el mismo contenido.
@@ -176,7 +189,7 @@ async function decide(
         events: {
           create: {
             toStatus: status,
-            note: status === "RECEIVED" ? "Ingreso por mail" : "Ingreso por mail: el remitente no tiene el alta aprobada",
+            note: pendingSignup ? "Ingreso por mail (cliente con alta pendiente de aprobación)" : "Ingreso por mail",
           },
         },
       },
@@ -193,13 +206,45 @@ async function decide(
     return { ...base, result: "DUPLICATE", jobId: dup.id };
   }
 
-  const result: MailIngestResult = status === "RECEIVED" ? "CREATED" : "PENDING_SIGNUP";
+  const result: MailIngestResult = pendingSignup ? "PENDING_SIGNUP" : "CREATED";
   await toInbox(customer.id, jobId);
   await log(deps, sector, mail, result, { jobId, fileCount: files.length });
 
   if (result === "PENDING_SIGNUP") await maybeInvite(deps, sector, customer.id, mail);
 
   return { ...base, result, jobId };
+}
+
+/**
+ * D-054: un alta pendiente que todavía no tiene nombre lo toma del próximo mail que lo traiga.
+ * Nunca pisa lo que ya cargó un asesor. También se usa para completar las altas viejas.
+ */
+export async function fillPendingContact(prisma: PrismaClient, customerId: string, mail: Pick<ParsedMail, "text" | "fromName">) {
+  const found = extractContact(mail.text, mail.fromName);
+  const current = await prisma.customer.findUniqueOrThrow({ where: { id: customerId }, include: { phones: true } });
+  if (current.status !== "PENDING" || current.firstName || !found.firstName) return current;
+  const phoneFree =
+    found.phone && current.phones.length === 0 && !(await prisma.customerPhone.findUnique({ where: { phone: found.phone } }));
+  const extra = signupNotes(null, found);
+  return prisma.customer.update({
+    where: { id: customerId },
+    data: {
+      firstName: found.firstName,
+      lastName: current.lastName ?? found.lastName,
+      searchText: customerSearchText({ firstName: found.firstName, lastName: current.lastName ?? found.lastName }),
+      ...(extra ? { internalNotes: [current.internalNotes, extra].filter(Boolean).join("\n") } : {}),
+      ...(phoneFree ? { phones: { create: { phone: found.phone!, isPrimary: true } } } : {}),
+    },
+  });
+}
+
+function signupNotes(fromName: string | null, c: ReturnType<typeof extractContact>): string | null {
+  const lines = [
+    fromName ? `Nombre en el mail: ${fromName}` : null,
+    c.claimedCustomerNumber ? `Dice ser el cliente N.º ${c.claimedCustomerNumber}` : null,
+    c.pickup ? `Retira en: ${c.pickup}` : null,
+  ].filter(Boolean);
+  return lines.length ? lines.join("\n") : null;
 }
 
 async function maybeInvite(deps: IngestDeps, sector: Sector, customerId: string, mail: ParsedMail) {
