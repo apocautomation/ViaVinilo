@@ -6,6 +6,7 @@ import { openAiLlm } from "./bot/llm";
 import { buildSystemPrompt } from "./bot/prompt";
 import { processBotReplies } from "./bot/reply";
 import { createSmtpNotifier } from "./mail/invite";
+import { processNotices } from "./notices";
 import { hostingerSender, sendOutbox, smtpSender, type MailSender } from "./mail/outbox";
 import { pollAllMailboxes } from "./mail/poll";
 import { QUEUES } from "./queues";
@@ -101,6 +102,19 @@ async function main() {
     console.log("[worker] bot: sin IA configurada (BOT_API_URL u OPENAI_API_KEY), no responde");
   }
 
+  // Avisos de estado al cliente (D-060): cada 30 s. Solo hacen algo si se prendieron en el ERP.
+  const noticesQueue = new Queue(QUEUES.notices, { connection });
+  const noticesWorker = new Worker(
+    QUEUES.notices,
+    async () => {
+      const r = await processNotices(prisma);
+      if (r.sent) console.log(`[avisos] ${r.sent} avisos de estado a clientes`);
+    },
+    { connection, concurrency: 1 },
+  );
+  noticesWorker.on("failed", (_job, err) => console.error("[avisos] falló", err.message));
+  await noticesQueue.upsertJobScheduler("status-notices", { every: 30_000 }, { name: "notices" });
+
   const shutdown = async () => {
     console.log("[worker] cerrando…");
     await mailWorker.close();
@@ -108,6 +122,8 @@ async function main() {
     await outboxWorker.close();
     await outboxQueue.close();
     await botWorker.close();
+    await noticesWorker.close();
+    await noticesQueue.close();
     await botQueue.close();
     await prisma.$disconnect();
     await connection.quit();

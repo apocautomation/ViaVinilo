@@ -67,8 +67,8 @@ describe("bot del chat de la app (D-056)", () => {
     await botOn();
     const other = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Otro" } });
     const otherConv = await prisma.conversation.create({ data: { customerId: other.id } });
-    await prisma.message.create({ data: { conversationId: otherConv.id, direction: "IN", channel: "APP", body: "Hola", botStatus: "PENDING" } });
-    await customerWrites("Hola");
+    await prisma.message.create({ data: { conversationId: otherConv.id, direction: "IN", channel: "APP", body: "¿Qué diferencia hay entre DTF y sublimación?", botStatus: "PENDING" } });
+    await customerWrites("¿Qué diferencia hay entre DTF y sublimación?");
     const { llm, calls } = fakeLlm({ reply: "Hola!" });
     expect(await processBotReplies(prisma, llm)).toMatchObject({ answered: 1, skipped: 1 });
     expect(calls).toHaveLength(1);
@@ -77,7 +77,7 @@ describe("bot del chat de la app (D-056)", () => {
 
   it("D-056: prendido responde en el chat con los pedidos reales del cliente y una sola vez", async () => {
     await botOn();
-    const msg = await customerWrites("¿Está listo mi pedido?");
+    const msg = await customerWrites("¿Qué diferencia hay entre DTF y sublimación?");
     const { llm, calls } = fakeLlm({ reply: "Sí, tu pedido de DTF está listo para retirar." });
     expect((await processBotReplies(prisma, llm)).answered).toBe(1);
     expect((await processBotReplies(prisma, llm)).answered).toBe(0);
@@ -86,7 +86,7 @@ describe("bot del chat de la app (D-056)", () => {
     expect(system).toContain("Ana Gómez");
     expect(system).toMatch(/VV-\d+ · DTF · estado: Terminado, listo para retirar/);
     expect(system).toContain("dtf@viavinilo.com");
-    expect(calls[0]!.at(-1)).toEqual({ role: "user", content: "¿Está listo mi pedido?" });
+    expect(calls[0]!.at(-1)).toEqual({ role: "user", content: "¿Qué diferencia hay entre DTF y sublimación?" });
 
     const reply = await prisma.message.findFirstOrThrow({ where: { fromBot: true } });
     expect(reply).toMatchObject({ direction: "OUT", channel: "APP", body: "Sí, tu pedido de DTF está listo para retirar.", authorId: null });
@@ -103,6 +103,34 @@ describe("bot del chat de la app (D-056)", () => {
     const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
     expect(conv).toMatchObject({ needsHuman: true, needsHumanReason: "Quiere cancelar", botEnabled: false });
     expect((await prisma.message.findUniqueOrThrow({ where: { id: msg.id } })).botStatus).toBe("HANDOFF");
+  });
+
+  it("D-060: memoria por conversación: si ya respondió, no vuelve a saludar; y siempre de vos", async () => {
+    await botOn();
+    const t = Date.now();
+    await prisma.message.create({ data: { conversationId, direction: "IN", channel: "APP", body: "hola", createdAt: new Date(t - 5000) } });
+    await prisma.message.create({ data: { conversationId, direction: "OUT", channel: "APP", body: "¡Hola Ana!", fromBot: true, createdAt: new Date(t - 4000) } });
+    await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t - 1000));
+    const { llm, calls } = fakeLlm({ reply: "¿Tienes el archivo? Envíalo a látex@viavinilo.com" });
+    await processBotReplies(prisma, llm);
+    expect(calls[0]![0]!.content).toContain("NO saludes de nuevo");
+    expect(calls[0]![0]!.content).toContain("Repetí las medidas EXACTAMENTE");
+    const reply = await prisma.message.findFirstOrThrow({ where: { fromBot: true, body: { not: "¡Hola Ana!" } } });
+    expect(reply.body).toBe("¿Tenés el archivo? Mandalo a latex@viavinilo.com");
+  });
+
+  it("D-060: saludo, trabajo nuevo y '¿está listo?' van por flujos fijos, sin IA", async () => {
+    await botOn();
+    const { llm, calls } = fakeLlm({ reply: "no debería usarse" });
+    for (const text of ["hola", "te paso imprimir dos lonas front 5.10 × 1.10 solvente", "¿ya está listo mi pedido?"]) {
+      await customerWrites(text);
+      await processBotReplies(prisma, llm);
+    }
+    expect(calls).toHaveLength(0);
+    const replies = (await prisma.message.findMany({ where: { fromBot: true }, orderBy: { createdAt: "asc" } })).map((m) => m.body);
+    expect(replies[0]).toBe("¡Hola Ana! Soy el asistente de Via Vinilo. ¿En qué te ayudo?");
+    expect(replies[1]).toContain("granformato@viavinilo.com");
+    expect(replies[2]).toMatch(/VV-\d+ \(DTF, Remeras logo\): Terminado, listo para retirar/);
   });
 
   it("D-057: cancelar, reclamos, precios, comprobantes o pedir una persona van a un asesor sin pasar por la IA", async () => {
@@ -137,7 +165,7 @@ describe("bot del chat de la app (D-056)", () => {
 
   it("D-056: si la IA falla no responde nada y el mensaje queda para el equipo", async () => {
     await botOn();
-    const msg = await customerWrites("Hola");
+    const msg = await customerWrites("¿Qué diferencia hay entre DTF y sublimación?");
     const r = await processBotReplies(prisma, async () => {
       throw new Error("timeout");
     });
