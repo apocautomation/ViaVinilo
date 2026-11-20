@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Bot, FileText, Hand, Mail, MessagesSquare, Search, Send, Smartphone } from "lucide-react";
-import { JOB_STATUS_LABELS, type JobStatus } from "@viavinilo/contracts";
-import { api, ApiError, getUser } from "../../../lib/api";
+import { Bot, ExternalLink, FileText, Hand, Link2, Mail, MessagesSquare, Search, Send, Smartphone } from "lucide-react";
+import { JOB_STATUS_LABELS, parseMailBody, type JobStatus } from "@viavinilo/contracts";
+import { api, ApiError } from "../../../lib/api";
 import { Help } from "../../help";
 import { Badge, ars } from "../../ui";
 
@@ -57,6 +57,8 @@ interface Message {
   sector: { name: string } | null;
   author: { name: string } | null;
   fromBot: boolean;
+  /** Mail que vino de una casilla nuestra (un reenvío del equipo): va del lado del equipo (D-057). */
+  fromStaff?: boolean;
 }
 interface Thread {
   id: string;
@@ -162,46 +164,77 @@ function Composer({ thread, onSent }: { thread: Thread; onSent: () => void }) {
 
 
 interface BotStatus {
-  enabled: boolean;
   configured: boolean;
+  model: string | null;
   chatsWithBot: number;
   needsHuman: number;
 }
 
-/** Interruptor general del bot (D-056). Arranca apagado; lo prende o apaga solo el dueño. */
+/**
+ * Estado del bot (D-057): es individual, se prende en cada chat con el botón del encabezado.
+ * Acá se ve en cuántos chats responde y se puede apagar en todos de una vez.
+ */
 function BotBar({ status, onChange }: { status: BotStatus | null; onChange: (s: BotStatus) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   if (!status) return null;
-  const isOwner = getUser()?.roles.includes("OWNER") ?? false;
+  const on = status.chatsWithBot > 0;
   return (
-    <div className={`bot-bar${status.enabled ? " on" : ""}`}>
+    <div className={`bot-bar${on ? " on" : ""}`}>
       <Bot size={16} aria-hidden />
       <span>
-        <b>Bot {status.enabled ? "prendido" : "apagado"}</b>
-        {status.enabled
-          ? ` · responde en ${status.chatsWithBot} ${status.chatsWithBot === 1 ? "chat" : "chats"}`
-          : " · no responde en ningún chat"}
-        {!status.configured && <small className="error"> Falta cargar la clave de IA en el servidor.</small>}
-        {error && <small className="error"> {error}</small>}
+        <b>{on ? `Bot prendido en ${status.chatsWithBot} ${status.chatsWithBot === 1 ? "chat" : "chats"}` : "Bot apagado en todos los chats"}</b>
+        {!status.configured && <small className="error">El servidor todavía no tiene la IA local configurada.</small>}
+        {status.configured && !on && <small>Prendelo en cada chat con el botón de arriba del hilo.</small>}
+        {error && <small className="error">{error}</small>}
       </span>
-      {isOwner && (
+      {on && (
         <button
           className="btn btn-ghost btn-sm"
           disabled={busy}
           onClick={() => {
             setBusy(true);
             setError("");
-            api<BotStatus>("/conversations/bot", { method: "PUT", body: JSON.stringify({ enabled: !status.enabled }) })
+            api<BotStatus>("/conversations/bot/off", { method: "POST" })
               .then(onChange)
               .catch((e: unknown) => setError(errorText(e)))
               .finally(() => setBusy(false));
           }}
         >
-          {status.enabled ? "Apagar" : "Prender"}
+          Apagar en todos
         </button>
       )}
     </div>
+  );
+}
+
+/** Cuerpo de un mensaje (D-057): el mail tal cual, pero con los links aparte y lo citado plegado. */
+function MessageBody({ m }: { m: Message }) {
+  if (m.channel !== "MAIL") return <div className="bubble-body">{m.body}</div>;
+  const p = parseMailBody(m.body);
+  return (
+    <>
+      {p.text && <div className="bubble-body">{p.text}</div>}
+      {p.links.length > 0 && (
+        <div className="mail-links">
+          {p.links.map((l) => (
+            <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="file-att" title={l.url}>
+              <Link2 size={15} aria-hidden />
+              <span>{l.label}</span>
+              <ExternalLink size={13} aria-hidden className="muted" />
+            </a>
+          ))}
+        </div>
+      )}
+      {p.quoted && (
+        <details className="mail-quoted">
+          <summary>
+            {p.quotedFrom?.endsWith("@viavinilo.com") ? "Ver la respuesta automática de Via Vinilo" : "Ver el mensaje anterior"}
+          </summary>
+          <div className="bubble-body">{p.quoted}</div>
+        </details>
+      )}
+    </>
   );
 }
 
@@ -360,9 +393,7 @@ export default function ConversacionesPage() {
                   className={`btn btn-sm ${thread.botEnabled ? "btn-soft" : "btn-ghost"}`}
                   disabled={botBusy}
                   title={
-                    bot?.enabled
-                      ? "El bot responde los mensajes del chat de la app. Los mails los responde siempre una persona."
-                      : "El bot está apagado en general: aunque lo prendas acá, no responde hasta que el dueño lo prenda."
+                    "El bot responde solo los mensajes del chat de la app de este cliente. Los mails los responde siempre una persona."
                   }
                   onClick={() => void toggleChatBot(!thread.botEnabled)}
                 >
@@ -381,15 +412,23 @@ export default function ConversacionesPage() {
             )}
             <div className="messages">
               {thread.messages.map((m) => (
-                <div key={m.id} className={`bubble ${m.direction === "IN" ? "in" : "out"}`}>
+                <div key={m.id} className={`bubble ${m.fromBot ? "ai" : m.fromStaff ? "staff" : m.direction === "IN" ? "in" : "out"}`}>
                   <span className="by">
                     {m.channel === "MAIL" ? <Mail size={12} /> : <Smartphone size={12} />}
                     {m.fromBot && <Bot size={12} aria-hidden />}
-                    {m.direction === "OUT" ? (m.fromBot ? "Bot" : (m.author?.name ?? "Via Vinilo")) : m.channel === "MAIL" ? (m.fromEmail ?? "Mail") : "App"}
+                    {m.direction === "OUT"
+                      ? m.fromBot
+                        ? "Bot"
+                        : (m.author?.name ?? "Via Vinilo")
+                      : m.fromStaff
+                        ? `Reenvío del equipo · ${m.fromEmail}`
+                        : m.channel === "MAIL"
+                          ? (m.fromEmail ?? "Mail")
+                          : "App"}
                     {m.channel === "MAIL" && m.sector && ` · ${m.sector.name}`}
                   </span>
                   {m.subject && <strong className="bubble-subject">{m.subject}</strong>}
-                  <div className="bubble-body">{m.body}</div>
+                  <MessageBody m={m} />
                   {m.attachments?.map((f) => (
                     <div key={f} className="file-att">
                       <FileText size={15} aria-hidden /> {f}

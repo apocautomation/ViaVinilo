@@ -4,10 +4,10 @@ import { extractContact, splitName } from "./contact";
 describe("datos del remitente en el cuerpo del mail (D-054)", () => {
   it("D-054: lee la ficha típica: nombre, teléfono y lugar de retiro", () => {
     const c = extractContact(
-      "Nombre o Número de Cliente: RAMIRO GARNICA\nNombre del Archivo: DARK2\nCel: 0387 15 466-9944\nLugar a retirar: San Juan",
+      "Nombre o Número de Cliente: JUAN PEREYRA\nNombre del Archivo: DARK2\nCel: 0387 15 466-9944\nLugar a retirar: San Juan",
       null,
     );
-    expect(c).toEqual({ firstName: "Ramiro", lastName: "Garnica", phone: "+5493874669944", claimedCustomerNumber: null, pickup: "San Juan" });
+    expect(c).toEqual({ firstName: "Juan", lastName: "Pereyra", phone: "+5493874669944", claimedCustomerNumber: null, pickup: "San Juan" });
   });
 
   it("D-054: un número en lugar del nombre es el N.º de cliente que dice tener", () => {

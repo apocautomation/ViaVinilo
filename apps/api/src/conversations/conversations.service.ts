@@ -4,9 +4,6 @@ import { CONVERSATION_FILTERS, formatJobNumber, normalizeSearch, type MessageCha
 import { AuditService } from "../audit/audit.service";
 import { PrismaService } from "../prisma/prisma.service";
 
-/** Interruptor general del bot (D-056). Sin fila = apagado. Lo lee también el worker. */
-const BOT_SETTING_KEY = "bot";
-
 const PREVIEW_CHARS = 140;
 const preview = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, PREVIEW_CHARS);
 
@@ -40,34 +37,23 @@ export class ConversationsService {
 
   // ───────────── Bot (D-056) ─────────────
 
-  private async botOn(): Promise<boolean> {
-    const row = await this.prisma.appSetting.findUnique({ where: { key: BOT_SETTING_KEY } });
-    return (row?.value as { enabled?: unknown } | null)?.enabled === true;
-  }
-
-  /** Estado del bot para el ERP: si está prendido y si hay clave de IA cargada en el servidor. */
+  /**
+   * Estado del bot para el ERP (D-057): en cuántos chats está prendido y si el servidor tiene IA
+   * configurada (el modelo local con Ollama o una clave de OpenAI).
+   */
   async botStatus() {
-    const [enabled, chatsWithBot, needsHuman] = await Promise.all([
-      this.botOn(),
+    const [chatsWithBot, needsHuman] = await Promise.all([
       this.prisma.conversation.count({ where: { botEnabled: true } }),
       this.prisma.conversation.count({ where: { needsHuman: true } }),
     ]);
-    return { enabled, configured: Boolean(process.env.OPENAI_API_KEY?.trim()), chatsWithBot, needsHuman };
+    const configured = Boolean(process.env.BOT_API_URL?.trim() || process.env.OPENAI_API_KEY?.trim());
+    return { configured, model: configured ? process.env.BOT_MODEL?.trim() || null : null, chatsWithBot, needsHuman };
   }
 
-  async setBotGlobal(enabled: boolean, userId: string) {
-    const before = await this.botOn();
-    await this.prisma.$transaction(async (tx) => {
-      await tx.appSetting.upsert({
-        where: { key: BOT_SETTING_KEY },
-        create: { key: BOT_SETTING_KEY, value: { enabled }, updatedById: userId },
-        update: { value: { enabled }, updatedById: userId },
-      });
-      await this.audit.log(
-        { entity: "AppSetting", entityId: BOT_SETTING_KEY, action: "update", userId, before: { enabled: before }, after: { enabled } },
-        tx,
-      );
-    });
+  /** "Apagar en todos" (D-057): por si el bot responde mal, se apaga en todos los chats de una vez. */
+  async turnBotOffEverywhere(userId: string) {
+    const { count } = await this.prisma.conversation.updateMany({ where: { botEnabled: true }, data: { botEnabled: false } });
+    await this.audit.log({ entity: "Conversation", entityId: "*", action: "bot_off_everywhere", userId, after: { chats: count } });
     return this.botStatus();
   }
 
@@ -155,8 +141,18 @@ export class ConversationsService {
           select: { id: true, number: true, status: true, description: true, quotedAmount: true, createdAt: true, sector: { select: { name: true } } },
         })
       : [];
+    // D-057: un mail que viene de una casilla nuestra (un reenvío del equipo) va del lado del equipo.
+    const ownDomains = new Set(
+      (await this.prisma.sector.findMany({ select: { inboxEmail: true } }))
+        .map((x) => x.inboxEmail?.split("@")[1]?.toLowerCase())
+        .filter(Boolean),
+    );
     return {
       ...conv,
+      messages: conv.messages.map((m) => ({
+        ...m,
+        fromStaff: m.direction === "IN" && !!m.fromEmail && ownDomains.has(m.fromEmail.split("@")[1]?.toLowerCase()),
+      })),
       jobs: jobs.map((j) => ({ ...j, label: formatJobNumber(j.number), quotedAmount: j.quotedAmount?.toString() ?? null })),
     };
   }
@@ -274,8 +270,8 @@ export class ConversationsService {
       }
     }
     const conversationId = conv.id;
-    // D-056: si el bot está prendido (en general y en este chat) el worker responde este mensaje.
-    const forBot = conv.botEnabled && !conv.needsHuman && (await this.botOn());
+        // D-057: el bot es individual por chat: responde donde está prendido.
+    const forBot = conv.botEnabled && !conv.needsHuman;
     return this.prisma.$transaction(async (tx) => {
       const msg = await tx.message.create({
         data: { conversationId, direction: "IN", channel: "APP", body: text, ...(forBot ? { botStatus: "PENDING" as const } : {}) },

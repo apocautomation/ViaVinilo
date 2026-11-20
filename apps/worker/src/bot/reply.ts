@@ -1,15 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { formatJobNumber, JOB_STATUS_LABELS } from "@viavinilo/contracts";
-import type { ChatTurn, Llm } from "./llm";
+import { fixedHandoff, handoffReply } from "./handoff";
+import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildSystemPrompt } from "./prompt";
-
-/** Clave del interruptor general del bot en AppSetting (D-056). Sin fila = apagado. */
-export const BOT_SETTING_KEY = "bot";
-
-export async function isBotOn(prisma: PrismaClient): Promise<boolean> {
-  const row = await prisma.appSetting.findUnique({ where: { key: BOT_SETTING_KEY } });
-  return (row?.value as { enabled?: unknown } | null)?.enabled === true;
-}
 
 const HISTORY = 12;
 const PREVIEW_CHARS = 140;
@@ -25,7 +18,7 @@ export interface BotRunResult {
 /**
  * Responde los mensajes del chat de la app que esperan al bot (D-056). Cada mensaje se toma con un
  * update condicional, así dos workers no responden dos veces. Antes de responder se vuelve a mirar:
- * - que el bot siga prendido (general y en ese chat) y que el chat no esté derivado a un asesor;
+ * - que el bot siga prendido en ese chat (es individual, D-057) y que el chat no esté derivado a un asesor;
  * - que nadie del equipo haya respondido después;
  * - que no haya un mensaje más nuevo del cliente: se responde solo el último, con todo el hilo.
  */
@@ -56,13 +49,16 @@ export async function processBotReplies(
     const newer = await prisma.message.count({
       where: { conversationId: conv.id, createdAt: { gt: msg.createdAt }, OR: [{ direction: "OUT" }, { direction: "IN", channel: "APP" }] },
     });
-    if (!conv.customer || !conv.botEnabled || conv.needsHuman || newer > 0 || !(await isBotOn(prisma))) {
+    if (!conv.customer || !conv.botEnabled || conv.needsHuman || newer > 0) {
       await finish("SKIPPED");
       result.skipped++;
       continue;
     }
 
     const customer = conv.customer;
+    // D-057: los casos que siempre van a un asesor no pasan por la IA.
+    const incoming = await prisma.message.findUniqueOrThrow({ where: { id: msg.id }, select: { body: true } });
+    const fixed = fixedHandoff(incoming.body);
     const jobs = await prisma.jobOrder.findMany({
       where: { customerId: customer.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
@@ -100,9 +96,9 @@ export async function processBotReplies(
       })),
     ];
 
-    let answer;
+    let answer: BotAnswer;
     try {
-      answer = await llm(turns);
+      answer = fixed ? { reply: handoffReply(now()), handoff: true, reason: fixed } : await llm(turns);
     } catch (err) {
       // Sin respuesta del bot el mensaje queda para el equipo, como si el bot estuviera apagado.
       console.error(`[bot] no pudo responder en la conversación ${conv.id}:`, err instanceof Error ? err.message : err);

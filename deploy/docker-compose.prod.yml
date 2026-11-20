@@ -17,6 +17,9 @@ x-app: &app
     TZ: America/Argentina/Salta
     # Modo producción de Node y Next (sin mensajes de desarrollo en el log).
     NODE_ENV: production
+    # Bot del chat de la app con IA local (D-057). Se pisan acá para que no dependan del .env.
+    BOT_API_URL: http://ollama:11434/v1
+    BOT_MODEL: ${BOT_MODEL:-qwen2.5:3b}
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_started }
@@ -62,6 +65,8 @@ services:
       TZ: America/Argentina/Salta
       NODE_ENV: production
       API_PORT: "3001"
+      BOT_API_URL: http://ollama:11434/v1
+      BOT_MODEL: ${BOT_MODEL:-qwen2.5:3b}
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
@@ -73,6 +78,7 @@ services:
     command: ["node", "dist/main.js"]
     depends_on:
       api: { condition: service_started }
+      ollama: { condition: service_started }
     volumes:
       - storage:/app/storage
 
@@ -93,7 +99,24 @@ services:
     ports:
       - "127.0.0.1:3002:3002"
 
+  # IA local del bot (D-057). Sin puertos: solo la ve el worker por la red interna de Docker.
+  # Usa 3 de los 4 núcleos para que la API y el resto sigan respondiendo mientras el bot piensa.
+  ollama:
+    image: ollama/ollama:0.40.15
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: "24h"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      # El prompt del bot ocupa ~3.400 tokens: con 4.096 se cortaría el hilo.
+      OLLAMA_CONTEXT_LENGTH: "8192"
+    cpus: 3
+    mem_limit: 8g
+    volumes:
+      - ollama:/root/.ollama
+
 volumes:
+  ollama:
   pgdata:
   redisdata:
   storage:

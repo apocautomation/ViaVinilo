@@ -51,7 +51,15 @@ export const preview = (text: string) => text.replace(/\s+/g, " ").trim().slice(
  */
 export async function recordInboundMail(
   prisma: PrismaClient,
-  input: { sector: Sector; mail: ParsedMail; customerId: string | null; jobId?: string; uid?: number },
+  input: {
+    sector: Sector;
+    mail: ParsedMail;
+    customerId: string | null;
+    jobId?: string;
+    uid?: number;
+    /** Quién mandó el mail de verdad, si no es el cliente (un reenvío desde una casilla nuestra, D-057). */
+    senderEmail?: string | null;
+  },
 ): Promise<void> {
   const { sector, mail } = input;
   if (!mail.fromEmail) return;
@@ -68,7 +76,7 @@ export async function recordInboundMail(
         direction: "IN",
         channel: "MAIL",
         sectorId: sector.id,
-        fromEmail: mail.fromEmail,
+        fromEmail: input.senderEmail ?? mail.fromEmail,
         subject: mail.subject,
         body,
         attachments: mail.files.length ? mail.files.map((f) => f.filename) : undefined,

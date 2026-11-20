@@ -3,6 +3,7 @@ import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { loadConfig } from "./config";
 import { openAiLlm } from "./bot/llm";
+import { buildSystemPrompt } from "./bot/prompt";
 import { processBotReplies } from "./bot/reply";
 import { createSmtpNotifier } from "./mail/invite";
 import { hostingerSender, sendOutbox, smtpSender, type MailSender } from "./mail/outbox";
@@ -88,10 +89,16 @@ async function main() {
   botWorker.on("failed", (_job, err) => console.error("[bot] falló", err.message));
   if (llm) {
     await botQueue.upsertJobScheduler("bot-replies", { every: 5_000 }, { name: "reply" });
-    console.log(`[worker] bot: listo con ${config.bot!.model} (responde solo donde esté prendido en el ERP)`);
+    console.log(`[worker] bot: listo con ${config.bot!.model} en ${new URL(config.bot!.baseUrl).host} (responde solo en los chats donde esté prendido)`);
+    // D-057: precarga el modelo local con la parte fija del prompt, así el primer cliente no espera ~30 s.
+    const warm = buildSystemPrompt({ customerName: "Cliente", customerNumber: 0, pendingSignup: false, jobs: [], now: new Date() });
+    const t0 = Date.now();
+    llm([{ role: "system", content: warm }, { role: "user", content: "hola" }])
+      .then(() => console.log(`[bot] modelo listo en ${Math.round((Date.now() - t0) / 1000)} s`))
+      .catch((err: unknown) => console.error("[bot] no se pudo precargar el modelo:", err instanceof Error ? err.message : err));
   } else {
     await botQueue.removeJobScheduler("bot-replies");
-    console.log("[worker] bot: sin OPENAI_API_KEY, no responde");
+    console.log("[worker] bot: sin IA configurada (BOT_API_URL u OPENAI_API_KEY), no responde");
   }
 
   const shutdown = async () => {

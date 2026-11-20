@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Param, Post, Put, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
 import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import { appChatMessageSchema, botToggleSchema, listConversationsSchema, sendMessageSchema, type MessageChannel } from "@viavinilo/contracts";
 import { CurrentCustomer, CurrentUser, CustomerAuth, Roles, type AuthCustomer, type AuthUser } from "../auth/decorators";
@@ -16,17 +16,17 @@ export class ConversationsController {
     return this.conversations.list(query);
   }
 
-  /** Bot (D-056): si está prendido en general y si hay clave de IA en el servidor. */
+  /** Bot (D-057): en cuántos chats está prendido y si el servidor tiene IA configurada. */
   @Get("bot")
   botStatus() {
     return this.conversations.botStatus();
   }
 
-  /** Prender o apagar el bot en general: solo el dueño. */
-  @Put("bot")
-  @Roles("OWNER")
-  setBot(@ZodBody(botToggleSchema) body: { enabled: boolean }, @CurrentUser() user: AuthUser) {
-    return this.conversations.setBotGlobal(body.enabled, user.id);
+  /** Apaga el bot en todos los chats de una vez (queda en auditoría). */
+  @Post("bot/off")
+  @HttpCode(200)
+  turnBotOff(@CurrentUser() user: AuthUser) {
+    return this.conversations.turnBotOffEverywhere(user.id);
   }
 
   @Get(":id")

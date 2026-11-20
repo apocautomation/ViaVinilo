@@ -18,7 +18,7 @@ export interface WorkerConfig {
   /** Casilla desde la que salen los mails a clientes con la API de Hostinger (D-049). */
   mailSenderAddress: string | null;
   smtp: { url: string; from: string; contactUrl: string };
-  /** IA del bot de la app (D-056). Sin clave el bot no responde aunque esté prendido. */
+  /** IA del bot de la app (D-056, D-057). Sin IA configurada el bot no responde aunque esté prendido. */
   bot: LlmConfig | null;
 }
 
@@ -64,12 +64,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
       from: env.SMTP_FROM ?? "Via Vinilo <no-responder@viavinilo.local>",
       contactUrl: env.SUPPORT_WHATSAPP_URL ?? "",
     },
-    bot: env.OPENAI_API_KEY?.trim()
-      ? {
-          apiKey: env.OPENAI_API_KEY.trim(),
-          baseUrl: env.BOT_API_URL?.trim() || "https://api.openai.com/v1",
-          model: env.BOT_MODEL?.trim() || "gpt-4.1-mini",
-        }
-      : null,
+    bot: botConfig(env),
   };
+}
+
+/**
+ * D-057: el bot corre en local con Ollama (BOT_API_URL=http://ollama:11434/v1, sin clave).
+ * OpenAI queda como respaldo si se carga OPENAI_API_KEY y no hay BOT_API_URL.
+ */
+export function botConfig(env: NodeJS.ProcessEnv): LlmConfig | null {
+  const baseUrl = env.BOT_API_URL?.trim();
+  const apiKey = env.OPENAI_API_KEY?.trim();
+  if (baseUrl) return { baseUrl, apiKey: apiKey || "ollama", model: env.BOT_MODEL?.trim() || "qwen2.5:3b" };
+  if (apiKey) return { baseUrl: "https://api.openai.com/v1", apiKey, model: env.BOT_MODEL?.trim() || "gpt-4.1-mini" };
+  return null;
 }
