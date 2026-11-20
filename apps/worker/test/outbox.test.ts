@@ -63,6 +63,27 @@ describe("cola de mails a clientes (D-049)", () => {
     expect(first.lastError).toBe("caído");
   });
 
+  it("D-062: los adjuntos del asesor se leen del almacenamiento y salen con el mail", async () => {
+    await prisma.outboundEmail.create({
+      data: { to: "ana@cliente.test", subject: "Re: prueba", text: "Te mando la prueba", kind: "conversation-reply", attachments: [{ name: "prueba.pdf", key: "conversations/c1/u1/prueba.pdf", size: 4, mime: "application/pdf" }] },
+    });
+    const sent: OutgoingMail[] = [];
+    const files: Record<string, Buffer> = { "conversations/c1/u1/prueba.pdf": Buffer.from("%PDF") };
+    await sendOutbox(prisma, async (m) => void sent.push(m), { sleep: noSleep, readFile: async (k) => files[k]! });
+    expect(sent[0]!.attachments).toEqual([{ filename: "prueba.pdf", content: Buffer.from("%PDF"), contentType: "application/pdf" }]);
+
+    // Con la API de Hostinger, el adjunto va en base64.
+    const calls: { body?: { attachments?: unknown } }[] = [];
+    const fakeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (url.endsWith("/me")) return new Response(JSON.stringify({ data: { mailboxes: [{ resourceId: "AC1", address: "soporte@viavinilo.test" }] } }));
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    await hostingerSender({ token: "t", baseUrl: "https://api.test/api/v1" }, "soporte@viavinilo.test", fakeFetch)(sent[0]!);
+    expect(calls.at(-1)?.body?.attachments).toEqual([{ filename: "prueba.pdf", content: Buffer.from("%PDF").toString("base64"), contentType: "application/pdf" }]);
+  });
+
   it("D-049: con la API de Hostinger manda desde la casilla configurada", async () => {
     const calls: { url: string; body?: unknown }[] = [];
     const fakeFetch = (async (input: string | URL | Request, init?: RequestInit) => {

@@ -2,10 +2,14 @@ import type { INestApplication } from "@nestjs/common";
 import type { PrismaClient } from "@prisma/client";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { startTestDb } from "./test-db";
 
 let app: INestApplication;
 let prisma: PrismaClient;
+const storageDir = mkdtempSync(join(tmpdir(), "vv-api-files-"));
 let stopDb: () => Promise<void>;
 const tokens = { attention: "", production: "", customer: "", owner: "" };
 let customerId = "";
@@ -22,6 +26,7 @@ beforeAll(async () => {
   stopDb = testDb.stop;
   process.env.DATABASE_URL = testDb.url;
   process.env.JWT_SECRET = "secreto-de-prueba-de-al-menos-32-caracteres";
+  process.env.STORAGE_DIR = storageDir;
   const { NestFactory } = await import("@nestjs/core");
   const { AppModule } = await import("../src/app.module");
   const { PrismaService } = await import("../src/prisma/prisma.service");
@@ -56,6 +61,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close();
   await stopDb?.();
+  rmSync(storageDir, { recursive: true, force: true });
 });
 
 describe("Conversaciones: chat de la app y mails en un solo hilo (D-045)", () => {
@@ -230,5 +236,69 @@ describe("bot del chat de la app (D-056, D-057)", () => {
     const fwd = thread.body.messages.find((m: { body: string }) => m.body === "RV: pedido");
     expect(fwd.fromStaff).toBe(true);
     expect(thread.body.messages.filter((m: { fromStaff: boolean }) => m.fromStaff)).toHaveLength(1);
+  });
+});
+
+describe("archivos en Conversaciones (D-062)", () => {
+  const pdf = Buffer.from("%PDF-1.4 archivo de prueba");
+
+  it("D-062: el cliente manda su archivo por el chat y se crea el pedido en el tablero del servicio", async () => {
+    const res = await http()
+      .post("/app/chat/files")
+      .set("Authorization", `Bearer ${tokens.customer}`)
+      .field("sector", "DTF")
+      .field("note", "58 x 100 cm, 2 copias, retiro en San Juan")
+      .attach("file", pdf, "Diseño remera.pdf");
+    expect(res.status).toBe(201);
+    expect(res.body.job.label).toMatch(/^VV-\d+$/);
+    const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: res.body.job.id }, include: { files: true, sector: true } });
+    expect(job).toMatchObject({ status: "RECEIVED", source: "API", customerId, description: "58 x 100 cm, 2 copias, retiro en San Juan" });
+    expect(job.sector.code).toBe("DTF");
+    expect(job.files[0]).toMatchObject({ filename: "Diseño remera.pdf", mime: "application/pdf" });
+    // El cliente lo ve en su chat y lo puede descargar.
+    const thread = await as("customer").get("/app/chat");
+    const msg = thread.body.messages.at(-1);
+    expect(msg).toMatchObject({ direction: "IN", jobId: job.id });
+    const dl = await http().get(`/app/chat/files/${msg.id}/0`).set("Authorization", `Bearer ${tokens.customer}`).buffer(true);
+    expect(dl.status).toBe(200);
+    expect(Buffer.from(dl.body).toString()).toBe(pdf.toString());
+  });
+
+  it("D-062: no acepta archivos que no son de impresión", async () => {
+    const res = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").attach("file", Buffer.from("x"), "virus.exe");
+    expect(res.status).toBe(422);
+  });
+
+  it("D-062: el asesor responde con un archivo por mail y queda en la cola con el adjunto", async () => {
+    const conv = await prisma.conversation.findUniqueOrThrow({ where: { customerId } });
+    const res = await http()
+      .post(`/conversations/${conv.id}/files`)
+      .set("Authorization", `Bearer ${tokens.attention}`)
+      .field("channel", "MAIL")
+      .field("text", "Te mando la prueba de color")
+      .attach("files", pdf, "prueba.pdf");
+    expect(res.status).toBe(201);
+    const out = await prisma.outboundEmail.findFirstOrThrow({ where: { text: "Te mando la prueba de color" } });
+    expect(out.attachments).toEqual([expect.objectContaining({ name: "prueba.pdf", mime: "application/pdf" })]);
+    // Y el asesor lo puede descargar desde el hilo.
+    const thread = await as("attention").get(`/conversations/${conv.id}`);
+    const sent = thread.body.messages.find((m: { body: string }) => m.body === "Te mando la prueba de color");
+    expect((await http().get(`/conversations/${conv.id}/files/${sent.id}/0`).set("Authorization", `Bearer ${tokens.attention}`)).status).toBe(200);
+  });
+
+  it("D-062: producción no descarga el archivo hasta que el pedido está cotizado", async () => {
+    const job = await prisma.jobOrder.findFirstOrThrow({ where: { source: "API" }, include: { files: true } });
+    const dl = () => http().get(`/jobs/${job.id}/files/${job.files[0]!.id}`).set("Authorization", `Bearer ${tokens.attention}`);
+    const locked = await dl();
+    expect(locked.status).toBe(403);
+    expect(locked.body.message).toMatch(/cotizada/);
+    await prisma.sectorStage.createMany({
+      data: ["RECEIVED", "QUOTED", "PRINTED", "READY", "DELIVERED"].map((status, position) => ({ sectorId: dtfId, status: status as never, position })),
+      skipDuplicates: true,
+    });
+    await prisma.jobOrder.update({ where: { id: job.id }, data: { status: "QUOTED", quotedAmount: "1000", depositRequired: false } });
+    const ok = await dl().buffer(true);
+    expect(ok.status).toBe(200);
+    expect(ok.headers["content-disposition"]).toContain("attachment");
   });
 });

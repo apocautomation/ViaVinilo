@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
+  StreamableFile,
 } from "@nestjs/common";
 import { Prisma, type JobStatus, type SectorCode } from "@prisma/client";
 import {
@@ -18,6 +19,7 @@ import {
 import { AuditService } from "../audit/audit.service";
 import type { AuthUser } from "../auth/decorators";
 import { PrismaService } from "../prisma/prisma.service";
+import { StorageService } from "../storage/storage.service";
 import { SectorAccess } from "./sector-access";
 
 const BUSINESS_TZ = "America/Argentina/Salta";
@@ -62,7 +64,38 @@ export class JobsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly access: SectorAccess,
+    private readonly storage: StorageService,
   ) {}
+
+  /**
+   * Descarga del archivo para imprimir (D-062). Se libera cuando el pedido puede pasar a "Impreso"
+   * (cotizado y, si corresponde, con la seña: R-JOB-3), o si ya se imprimió. Es la misma regla que
+   * muestra el tablero.
+   */
+  async downloadFile(user: AuthUser, jobId: string, fileId: string) {
+    const job = await this.prisma.jobOrder.findFirst({
+      where: { id: jobId, deletedAt: null },
+      include: { sector: { include: { stages: { orderBy: { position: "asc" } } } }, files: { where: { id: fileId, deletedAt: null } } },
+    });
+    if (!job) throw new NotFoundException("No encontramos esa orden");
+    await this.access.assert(user, job.sectorId);
+    const file = job.files[0];
+    if (!file || file.purgedAt) throw new NotFoundException("Ese archivo ya no está disponible");
+    const sequence = job.sector.stages.map((s) => s.status);
+    const printed = ["PRINTED", "CALENDERING", "READY", "DELIVERED"].includes(job.status);
+    const canPrint = checkTransition({ sequence, status: job.status, depositRequired: job.depositRequired }, "PRINTED").ok;
+    if (!printed && !canPrint) {
+      throw new ForbiddenException(
+        job.status === "QUOTED" && job.depositRequired ? "El archivo se libera cuando se registra la seña" : "El archivo se libera cuando la orden está cotizada",
+      );
+    }
+    const { stream, size } = await this.storage.open(file.storageKey);
+    return new StreamableFile(stream, {
+      type: file.mime || "application/octet-stream",
+      length: size,
+      disposition: `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+    });
+  }
 
   private async sectorWithStages(code: SectorCode) {
     const sector = await this.prisma.sector.findUnique({

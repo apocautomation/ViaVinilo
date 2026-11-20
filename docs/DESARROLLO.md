@@ -1032,6 +1032,30 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Segunda pasada: 27 de 27 con respuesta correcta**: 22 por flujos fijos, 2 derivadas a un asesor y el resto preguntando el material.
 - **Por qué**: Ezequiel: "que los avisos se puedan prender y apagar del menú de acciones masivas", "/reset para testear más fácil" y "una prueba end to end con los mensajes de ejemplo de los clientes".
 
+### D-062 · 21/11/2026 · Ezequiel · archivos en Conversaciones (cliente y asesor) y descarga para imprimir
+- **Cliente (app → Chat)**:
+  - con el clip 📎 elige el servicio, escribe medidas, cantidad y sucursal, y sube el archivo (hasta 150 MB, con barra de progreso);
+  - se crea el pedido solo en el tablero de ese servicio, en **Archivo recibido**, igual que si lo hubiera mandado por mail (Ezequiel: "crear el pedido solo");
+  - en el chat ve su archivo y lo puede descargar;
+  - la pestaña "Enviar" ahora lleva a este camino. El mail sigue sirviendo.
+- **Asesor (ERP → Conversaciones)**:
+  - adjunta hasta 5 archivos al responder;
+  - por la app, el cliente los descarga desde el chat;
+  - por mail, salen como adjuntos (hasta 20 MB en total), desde la casilla del sector y en el mismo hilo. La API de Hostinger acepta adjuntos en base64;
+  - descarga desde el hilo los archivos subidos por la app y los que mandó él.
+- **Tablero → "Descargar archivo para imprimir"**:
+  - antes era una vista previa que no descargaba nada; ahora baja los archivos del pedido;
+  - la API lo libera con la misma regla que el tablero: cuando el pedido puede pasar a Impreso (cotizado y, si corresponde, con la seña: R-JOB-3) o si ya se imprimió.
+- **Técnica**:
+  - los archivos se guardan en el mismo volumen que los de los mails (`STORAGE_DIR`, `/app/storage`): los de la app en `app/<cliente>/…` y los del asesor en `conversations/<hilo>/…`;
+  - solo formatos de impresión (PDF, PNG, JPG, TIF, AI, EPS, PSD, CDR, SVG, ZIP, RAR);
+  - en los mensajes los adjuntos se guardan como `{ name, key, size, mime }`. Los mails viejos siguen con solo el nombre: su archivo está en el pedido;
+  - la cola de mails (`OutboundEmail.attachments`) lee los archivos recién al enviar.
+- **Pendiente**:
+  - los adjuntos de los mails entrantes todavía no se descargan desde el hilo; se bajan desde el pedido, en el tablero;
+  - I-19: límite de envíos por cliente y detección de archivos repetidos.
+- **Por qué**: Ezequiel: "en ambos se tiene que poder cargar un archivo, tanto del lado del cliente en la app como en el ERP para responder".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

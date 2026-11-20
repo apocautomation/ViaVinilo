@@ -58,7 +58,7 @@ async function main() {
     QUEUES.outbox,
     async () => {
       if (!sender) return;
-      const r = await sendOutbox(prisma, sender);
+      const r = await sendOutbox(prisma, sender, { readFile: (key) => deps.storage.get(key) });
       if (r.sent || r.failed) console.log(`[outbox] ${r.sent} mails enviados, ${r.failed} con error`);
     },
     { connection, concurrency: 1 },

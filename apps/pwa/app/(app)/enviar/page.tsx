@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { BookOpen, Mail } from "lucide-react";
+import { BookOpen, Mail, Paperclip } from "lucide-react";
 import { help } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
 import { useSession } from "../../session";
 
 /**
- * Enviar un trabajo (D-060). La app todavía no recibe archivos: el pedido entra por el mail a la
- * casilla del servicio, y desde ahí el sistema lo crea solo. Antes esta pantalla simulaba un envío
+ * Enviar un trabajo (D-060, D-062). El archivo se manda por el Chat (clip) o por mail a la casilla
+ * del servicio; en los dos casos el sistema crea el pedido solo. Antes esta pantalla simulaba un envío
  * ("¡Recibimos tu trabajo!") sin mandar nada: un cliente podía creer que ya había enviado su archivo.
  * TODO(spec): I-19 — subir archivos desde la app (límite de envíos y archivos repetidos).
  */
@@ -37,9 +37,12 @@ export default function EnviarPage() {
       <main className="screen help">
         <section className="card card-pad help-text">
           <p>
-            Por ahora el archivo se manda <b>por mail a la casilla del servicio</b>. Apenas llega, el pedido aparece solo en
-            <b> Pedidos</b> y en el <b>Chat</b>.
+            Lo más rápido: mandalo desde el <b>Chat</b> con el clip 📎. Elegís el servicio, escribís medidas y cantidad, y el
+            pedido se crea solo. También podés mandarlo <b>por mail a la casilla del servicio</b>.
           </p>
+          <Link href="/chat" className="btn btn-primary btn-block">
+            <Paperclip size={18} /> Mandarlo por el chat
+          </Link>
         </section>
 
         <h2 className="section-title">1 · Elegí el servicio</h2>
@@ -69,7 +72,7 @@ export default function EnviarPage() {
               {w}
             </p>
           ))}
-          <a className="btn btn-primary btn-block" href={mailto}>
+          <a className="btn btn-ghost btn-block" href={mailto}>
             <Mail size={18} /> Escribir el mail con mis datos
           </a>
           <p className="muted">Se abre tu correo con la casilla y tus datos ya cargados: completá medidas y cantidad, y adjuntá el archivo.</p>

@@ -290,6 +290,8 @@ model OutboundEmail {
   fromAddress  String?
   /// Responder en el mismo hilo: UID del mail original en esa casilla (API de Hostinger).
   inReplyToUid Int?
+  /// Adjuntos (D-062): [{ name, key, size, mime }]. El worker los lee del almacenamiento al enviar.
+  attachments  Json?
   status       OutboundEmailStatus @default(PENDING)
   attempts     Int                 @default(0)
   lastError    String?

@@ -1,6 +1,19 @@
-import { Controller, Get, HttpCode, Param, Post, Put, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, Param, ParseIntPipe, Post, Put, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor, FilesInterceptor } from "@nestjs/platform-express";
 import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
-import { appChatMessageSchema, botToggleSchema, listConversationsSchema, sendMessageSchema, type MessageChannel } from "@viavinilo/contracts";
+import {
+  appChatMessageSchema,
+  appUploadSchema,
+  botToggleSchema,
+  listConversationsSchema,
+  MAX_FILES_PER_MESSAGE,
+  MAX_UPLOAD_BYTES,
+  sendMessageSchema,
+  staffUploadSchema,
+  type MessageChannel,
+  type SectorCode,
+} from "@viavinilo/contracts";
+import { ConversationFilesService, type UploadedFileLike } from "./conversation-files.service";
 import { CurrentCustomer, CurrentUser, CustomerAuth, Roles, type AuthCustomer, type AuthUser } from "../auth/decorators";
 import { ZodBody, ZodQuery } from "../common/zod";
 import { ConversationsService } from "./conversations.service";
@@ -9,7 +22,28 @@ import { ConversationsService } from "./conversations.service";
 @Controller("conversations")
 @Roles("ATTENTION")
 export class ConversationsController {
-  constructor(private readonly conversations: ConversationsService) {}
+  constructor(
+    private readonly conversations: ConversationsService,
+    private readonly files: ConversationFilesService,
+  ) {}
+
+  /** El asesor responde con archivos (D-062): por la app o por mail (hasta 20 MB por mail). */
+  @Post(":id/files")
+  @UseInterceptors(FilesInterceptor("files", MAX_FILES_PER_MESSAGE, { limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  sendFiles(
+    @Param("id") id: string,
+    @UploadedFiles() files: UploadedFileLike[] | undefined,
+    @ZodBody(staffUploadSchema) body: { text?: string; channel: MessageChannel },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.files.staffUpload(id, files ?? [], body, user.id);
+  }
+
+  /** Descarga un adjunto del hilo. */
+  @Get(":id/files/:messageId/:index")
+  file(@Param("id") id: string, @Param("messageId") messageId: string, @Param("index", ParseIntPipe) index: number) {
+    return this.files.staffFile(id, messageId, index);
+  }
 
   @Get()
   list(@ZodQuery(listConversationsSchema) query: Parameters<ConversationsService["list"]>[0]) {
@@ -81,7 +115,29 @@ export class ConversationsController {
 @Controller("app/chat")
 @CustomerAuth()
 export class AppChatController {
-  constructor(private readonly conversations: ConversationsService) {}
+  constructor(
+    private readonly conversations: ConversationsService,
+    private readonly files: ConversationFilesService,
+  ) {}
+
+  /** El cliente manda su archivo por el chat (D-062): se crea el pedido en el tablero del servicio. */
+  @Post("files")
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
+  upload(
+    @UploadedFile() file: UploadedFileLike | undefined,
+    @ZodBody(appUploadSchema) body: { sector: SectorCode; note?: string },
+    @CurrentCustomer() customer: AuthCustomer,
+  ) {
+    return this.files.customerUpload(customer.id, file, body);
+  }
+
+  /** El cliente descarga un archivo del chat (los suyos o los que le mandó el equipo). */
+  @Get("files/:messageId/:index")
+  file(@Param("messageId") messageId: string, @Param("index", ParseIntPipe) index: number, @CurrentCustomer() customer: AuthCustomer) {
+    return this.files.customerFile(customer.id, messageId, index);
+  }
 
   @Get()
   thread(@CurrentCustomer() customer: AuthCustomer) {

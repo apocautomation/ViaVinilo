@@ -903,6 +903,114 @@ details.faq .help-body p.help-warn {
   flex: none;
 }
 
+/* ── Archivos en el chat (D-062) ── */
+.attach {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-link);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.file-chip small {
+  color: var(--color-text-muted);
+}
+.bubble.me .file-chip {
+  background: rgb(255 255 255 / 0.15);
+  border-color: rgb(255 255 255 / 0.35);
+  color: #fff;
+}
+.bubble.me .file-chip small {
+  color: rgb(255 255 255 / 0.8);
+}
+.form-ok {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--color-success);
+}
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgb(9 15 56 / 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  width: min(560px, 100%);
+  max-height: 92dvh;
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background: var(--color-background);
+}
+@media (min-width: 768px) {
+  .sheet-backdrop {
+    align-items: center;
+  }
+  .sheet {
+    border-radius: 20px;
+  }
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sheet-label {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.sheet-hint {
+  margin: 0;
+  font-size: 12.5px;
+}
+.sheet textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+}
+.progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-neutral-100);
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 200ms ease;
+}
+
 /* ── Ingreso ── */
 .auth {
   min-height: 100dvh;
