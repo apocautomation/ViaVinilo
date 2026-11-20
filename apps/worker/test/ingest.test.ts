@@ -411,6 +411,92 @@ describe("lectura de casillas", () => {
   });
 });
 
+describe("todo mail queda en Conversaciones (D-045)", () => {
+  const thread = (where: { customerId?: string; contactEmail?: string }) =>
+    prisma.conversation.findFirstOrThrow({ where, include: { messages: { orderBy: { createdAt: "asc" } } } });
+
+  it("D-045: un pedido con archivo crea la orden y queda en el hilo del cliente con la orden y el UID", async () => {
+    const raw = await buildMail({
+      from: "juan@remeras.test",
+      to: "dtf@viavinilo.test",
+      subject: "Conv 1",
+      messageId: "<conv-1@cliente.test>",
+      text: "Va el archivo",
+      attachments: [fakePdf("conv-1.pdf")],
+    });
+    const out = await ingestMail(deps(), dtf, raw, { uid: 501 });
+    const juan = await prisma.customerEmail.findUniqueOrThrow({ where: { email: "juan@remeras.test" } });
+    const conv = await thread({ customerId: juan.customerId });
+    const msg = conv.messages.find((m) => m.externalKey === "DTF:<conv-1@cliente.test>")!;
+    expect(msg).toMatchObject({ direction: "IN", channel: "MAIL", jobId: out.jobId, mailUid: 501, subject: "Conv 1" });
+    expect(msg.attachments).toEqual(["conv-1.pdf"]);
+    expect(conv.staffUnread).toBeGreaterThanOrEqual(1);
+  });
+
+  it("D-045: un mail sin adjunto no crea orden pero no se pierde; leído dos veces no se repite", async () => {
+    const raw = await buildMail({
+      from: "juan@remeras.test",
+      to: "dtf@viavinilo.test",
+      subject: "Consulta sin archivo",
+      messageId: "<conv-2@cliente.test>",
+      text: "¿Cuánto sale el metro?",
+    });
+    expect((await ingestMail(deps(), dtf, raw)).result).toBe("SKIPPED_NO_FILES");
+    await ingestMail(deps(), dtf, raw);
+    expect(await prisma.message.count({ where: { externalKey: "DTF:<conv-2@cliente.test>" } })).toBe(1);
+    const msg = await prisma.message.findFirstOrThrow({ where: { externalKey: "DTF:<conv-2@cliente.test>" } });
+    expect(msg.jobId).toBeNull();
+    expect(msg.body).toContain("¿Cuánto sale el metro?");
+  });
+
+  it("D-045: alguien que no es cliente y escribe sin archivo queda en un hilo por su email; si después se da de alta, el hilo pasa a ser suyo", async () => {
+    const raw = await buildMail({
+      from: "Nueva Gráfica <nueva@grafica.test>",
+      to: "granformato@viavinilo.test",
+      subject: "Hola",
+      messageId: "<conv-3@grafica.test>",
+      text: "Quiero ser cliente",
+    });
+    await ingestMail(deps(), granFormato, raw);
+    expect(await prisma.customerEmail.count({ where: { email: "nueva@grafica.test" } })).toBe(0);
+    const byEmail = await thread({ contactEmail: "nueva@grafica.test" });
+    expect(byEmail.contactName).toBe("Nueva Gráfica");
+
+    // Ahora manda un trabajo: se crea el cliente pendiente (D-014) y el hilo pasa a ser del cliente.
+    await ingestMail(
+      deps(),
+      granFormato,
+      await buildMail({
+        from: "nueva@grafica.test",
+        to: "granformato@viavinilo.test",
+        subject: "Lona",
+        messageId: "<conv-4@grafica.test>",
+        attachments: [fakePdf("lona.pdf")],
+      }),
+    );
+    const merged = await prisma.conversation.findUniqueOrThrow({ where: { id: byEmail.id }, include: { messages: true } });
+    expect(merged.customerId).not.toBeNull();
+    expect(merged.contactEmail).toBeNull();
+    expect(merged.messages).toHaveLength(2);
+  });
+
+  it("D-045: los mails de un cliente bloqueado igual quedan en su hilo para que el asesor los vea", async () => {
+    const out = await ingestMail(
+      deps(),
+      dtf,
+      await buildMail({
+        from: "bloqueado@cliente.test",
+        to: "dtf@viavinilo.test",
+        subject: "Otro pedido",
+        messageId: "<conv-5@cliente.test>",
+        attachments: [fakePdf("x.pdf")],
+      }),
+    );
+    expect(out.result).toBe("REJECTED_BLOCKED");
+    expect(await prisma.message.count({ where: { externalKey: "DTF:<conv-5@cliente.test>" } })).toBe(1);
+  });
+});
+
 describe("criterio de aceptación de la E1 (SPEC §5)", () => {
   it("400 mails con varios adjuntos y 100 reenvíos: 400 órdenes, ninguna duplicada ni perdida", async () => {
     const before = await prisma.jobOrder.count();

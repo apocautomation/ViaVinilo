@@ -11,6 +11,10 @@ export interface OutgoingMail {
   to: string;
   subject: string;
   text: string;
+  /** Casilla desde la que sale (respuesta desde el sector). Sin valor: la casilla de envío general. */
+  from?: string | null;
+  /** UID del mail original en esa casilla, para responder en el mismo hilo (D-045). */
+  inReplyToUid?: number | null;
 }
 
 export type MailSender = (mail: OutgoingMail) => Promise<void>;
@@ -20,24 +24,33 @@ export const OUTBOX = { perRun: 10, gapMs: 3000, maxAttempts: 5 } as const;
 
 const LINK = /https?:\/\/\S+\/activar\/\S+/g;
 
-/** Envío con la API de mail de Hostinger desde una casilla que puede enviar (MAIL_SENDER_ADDRESS). */
+/**
+ * Envío con la API de mail de Hostinger. Sale desde la casilla del mail (respuestas desde el sector,
+ * D-045) o, si no tiene, desde la casilla de envío general (MAIL_SENDER_ADDRESS, D-049).
+ */
 export function hostingerSender(
   config: HostingerMailConfig,
   senderAddress: string,
   fetchFn: typeof fetch = fetch,
 ): MailSender {
-  let mailboxId: string | undefined;
+  let ids: Map<string, string> | undefined;
   return async (mail) => {
+    const from = (mail.from ?? senderAddress).toLowerCase();
+    ids ??= await hostingerMailboxIds(config, fetchFn);
+    const mailboxId = ids.get(from);
     if (!mailboxId) {
-      mailboxId = (await hostingerMailboxIds(config, fetchFn)).get(senderAddress.toLowerCase());
-      if (!mailboxId) {
-        throw new Error(`El token de mail no tiene acceso a ${senderAddress} (D-049): hay que ampliarlo en Hostinger`);
-      }
+      throw new Error(`El token de mail no tiene acceso a ${from} (D-049): hay que ampliarlo en Hostinger`);
     }
     const res = await fetchFn(`${config.baseUrl}/mailboxes/${encodeURIComponent(mailboxId)}/send`, {
       method: "POST",
       headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ to: [mail.to], subject: mail.subject, text: mail.text, displayName: "Via Vinilo" }),
+      body: JSON.stringify({
+        to: [mail.to],
+        subject: mail.subject,
+        text: mail.text,
+        displayName: "Via Vinilo",
+        ...(mail.inReplyToUid ? { inReplyTo: { uid: mail.inReplyToUid, folder: "INBOX" } } : {}),
+      }),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
@@ -49,7 +62,13 @@ export function hostingerSender(
 export function smtpSender(url: string, from: string): MailSender {
   const transport = nodemailer.createTransport(url);
   return async (mail) => {
-    await transport.sendMail({ from, ...mail, headers: { "Auto-Submitted": "auto-generated" } });
+    await transport.sendMail({
+      from: mail.from ? `Via Vinilo <${mail.from}>` : from,
+      to: mail.to,
+      subject: mail.subject,
+      text: mail.text,
+      headers: { "Auto-Submitted": "auto-generated" },
+    });
   };
 }
 
@@ -72,7 +91,7 @@ export async function sendOutbox(
   for (const [i, mail] of pending.entries()) {
     if (i > 0) await sleep(gapMs);
     try {
-      await send({ to: mail.to, subject: mail.subject, text: mail.text });
+      await send({ to: mail.to, subject: mail.subject, text: mail.text, from: mail.fromAddress, inReplyToUid: mail.inReplyToUid });
       await prisma.outboundEmail.update({
         where: { id: mail.id },
         data: { status: "SENT", sentAt: new Date(), text: mail.text.replace(LINK, "[link enviado]"), lastError: null },

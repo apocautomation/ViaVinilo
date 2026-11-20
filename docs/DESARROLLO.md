@@ -829,6 +829,34 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Tableros**: la lista de Ezequiel no incluye **TPU** ni **Embroidery** (D-046), ni dice dónde va **Corte** (sub-servicio de Gran Formato con casilla propia). Ver I-26.
   - **"Impreso" de a varios y archivo desde la tarjeta** (D-042) siguen igual.
 
+### D-051 · 20/11/2026 · Desarrollo · Conversaciones: mails y chat de la app en un hilo por cliente (implementa D-041 y D-045)
+- **Qué se hizo**:
+  - **Un hilo por cliente** (`Conversation`, `Message`). Si el remitente de un mail todavía no es cliente, el hilo queda por su email; cuando se lo da de alta (o manda un trabajo y queda con alta pendiente), ese hilo pasa a ser el del cliente.
+  - **Todo mail a una casilla de sector queda en el hilo**, con o sin adjunto, cree o no una orden, y aunque el cliente esté bloqueado. Se guardan el asunto, el texto, los adjuntos, el pedido que creó y el UID para responder. Un mail leído dos veces no se repite.
+  - **El asesor responde desde Ventas → Conversaciones**:
+    - **por la app**: el cliente lo ve en la pestaña Chat;
+    - **por mail**: sale **desde la casilla del sector** del último mail del cliente, a la dirección desde la que escribió, como "Re: …" y **en el mismo hilo** de su mail. Si nunca escribió por mail, sale desde `soporte@`.
+    - Los mails salen por la cola del worker (D-049).
+  - **Pestaña "Chat" en la app** (reemplaza "Ayuda" en la barra; Ayuda queda en el "?" del chat):
+    - el cliente escribe y ve sus mails y las respuestas en el mismo hilo;
+    - las respuestas aparecen firmadas "Via Vinilo", nunca con el nombre del empleado;
+    - un punto rojo avisa si hay respuestas sin leer;
+    - "Consultar por este pedido" abre el chat con el número de pedido.
+  - **Bandeja del ERP**:
+    - filtros Todas / Sin leer / App / Mail, y búsqueda por nombre, N.º o email;
+    - etiqueta del canal del último mensaje, y avisos "No es cliente" y "Alta pendiente";
+    - panel con la ficha del cliente y sus últimos pedidos;
+    - se refresca cada 10 s.
+  - **Permisos**: la bandeja la ven atención y el dueño; producción no.
+  - **Se borró la pantalla de muestra del asistente** (`/ayuda/asistente`), que tenía datos inventados.
+- **Por qué**: D-041 y D-045 (el equipo no se muda si el mail no está en el ERP, y ningún pedido se pierde por el canal que eligió el cliente) y D-050 (el sistema se adapta a cómo trabaja Via Vinilo).
+- **Pendientes**:
+  - **Prender la lectura de mails en producción** (`MAIL_SOURCE=hostinger-api`). Desde ese momento los mails nuevos de las 6 casillas entran a Conversaciones y crean pedidos. Lo decide Ezequiel.
+  - Avisos push y "Recibimos tu archivo" automático (D-050), paso 6.
+  - Cotizar desde la conversación y que pase solo a "Cotizado" (D-050).
+  - El asistente IA sigue siendo de la E2 (contrato).
+  - Hoy las respuestas de DTF salen desde `dtf@`, que tiene el envío bloqueado (I-22): hasta que Hostinger la desbloquee, esas respuestas van a fallar y quedan en la cola con el error.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

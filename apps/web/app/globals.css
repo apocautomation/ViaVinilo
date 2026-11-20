@@ -1524,10 +1524,6 @@ table.data tfoot td {
   font-weight: 500;
 }
 
-/* Conversaciones vacía (D-045): lista + panel, sin la columna de contexto. */
-.inbox-empty {
-  grid-template-columns: 340px 1fr;
-}
 .inbox-placeholder {
   height: 100%;
   gap: 10px;
@@ -1552,4 +1548,59 @@ table.data tfoot td {
   padding-top: 0;
   gap: 6px;
   font-size: 13px;
+}
+
+/* Conversaciones real (D-045) */
+.tag-app {
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+}
+.tag-mail {
+  background: var(--color-neutral-100);
+  color: var(--color-text-muted);
+}
+.bubble-subject {
+  display: block;
+  margin-bottom: 4px;
+}
+.bubble-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bubble-job {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-success);
+}
+.bubble.out .bubble-job {
+  color: #fff;
+}
+.composer-channels {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.composer-channels .seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.composer-hint {
+  font-size: 12px;
+}
+.composer-row textarea {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  resize: vertical;
+  font: inherit;
+}
+.ctx-notes {
+  font-size: 12.5px;
+  margin: 0;
+  white-space: pre-wrap;
 }

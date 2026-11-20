@@ -40,7 +40,7 @@ export async function pollAllMailboxes(config: WorkerConfig, deps: IngestDeps & 
 /** Lee una casilla. Una casilla con problemas no frena a las demás; el error queda para monitorear. */
 async function pollSector(deps: IngestDeps & { prisma: PrismaClient }, sector: Sector, open: () => Promise<ImapMailbox>) {
   try {
-    const r = await pollImapSector(deps.prisma, sector, open, (raw) => ingestMail(deps, sector, raw));
+    const r = await pollImapSector(deps.prisma, sector, open, (raw, uid) => ingestMail(deps, sector, raw, { uid }));
     if (r.processed) console.log(`[mail] ${sector.name}: ${r.processed} mails nuevos`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

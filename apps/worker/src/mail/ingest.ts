@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, type MailIngestResult, type PrismaClient, type Sector } from "@prisma/client";
 import type { FileStorage } from "../storage";
+import { recordInboundMail } from "./conversation";
 import { parseMail, type ParsedMail } from "./parse";
 
 /** Avisos que dispara la ingesta. En producción manda mails por SMTP (invite.ts). */
@@ -38,7 +39,12 @@ const isUniqueViolation = (err: unknown) =>
  * Los errores del mail en sí quedan en el log como ERROR; solo se lanzan los de infraestructura
  * (base de datos caída), para que la lectura se reintente.
  */
-export async function ingestMail(deps: IngestDeps, sector: Sector, raw: Buffer): Promise<IngestOutcome> {
+export async function ingestMail(
+  deps: IngestDeps,
+  sector: Sector,
+  raw: Buffer,
+  meta: { uid?: number } = {},
+): Promise<IngestOutcome> {
   let mail: ParsedMail;
   try {
     mail = await parseMail(raw);
@@ -49,7 +55,7 @@ export async function ingestMail(deps: IngestDeps, sector: Sector, raw: Buffer):
     return { result: "ERROR", messageId, error };
   }
 
-  const outcome = await decide(deps, sector, mail);
+  const outcome = await decide(deps, sector, mail, meta);
   await deps.prisma.mailboxState.upsert({
     where: { sectorId: sector.id },
     update: { lastMessageAt: (deps.now ?? (() => new Date()))() },
@@ -58,9 +64,22 @@ export async function ingestMail(deps: IngestDeps, sector: Sector, raw: Buffer):
   return outcome;
 }
 
-async function decide(deps: IngestDeps, sector: Sector, mail: ParsedMail): Promise<IngestOutcome> {
+async function decide(
+  deps: IngestDeps,
+  sector: Sector,
+  mail: ParsedMail,
+  meta: { uid?: number },
+): Promise<IngestOutcome> {
   const { prisma } = deps;
   const base = { messageId: mail.messageId };
+  /** D-045: todo mail de una persona queda en su hilo de Conversaciones, cree o no una orden. */
+  const toInbox = (customerId: string | null, jobId?: string) =>
+    recordInboundMail(prisma, { sector, mail, customerId, jobId, uid: meta.uid });
+  const knownCustomerId = async () => {
+    if (!mail.fromEmail) return null;
+    const c = await prisma.customerEmail.findUnique({ where: { email: mail.fromEmail }, select: { customer: { select: { id: true, deletedAt: true } } } });
+    return c && !c.customer.deletedAt ? c.customer.id : null;
+  };
 
   if (mail.isAutoReply) {
     await log(deps, sector, mail, "SKIPPED_AUTO_REPLY");
@@ -77,6 +96,8 @@ async function decide(deps: IngestDeps, sector: Sector, mail: ParsedMail): Promi
   }
 
   if (mail.files.length === 0 && mail.links.length === 0) {
+    // Sin archivo no se crea orden (I-15), pero el mail no se pierde: va a Conversaciones (D-045).
+    await toInbox(await knownCustomerId());
     await log(deps, sector, mail, "SKIPPED_NO_FILES");
     return { ...base, result: "SKIPPED_NO_FILES" };
   }
@@ -95,6 +116,7 @@ async function decide(deps: IngestDeps, sector: Sector, mail: ParsedMail): Promi
   let customer = contact?.customer.deletedAt ? null : (contact?.customer ?? null);
 
   if (customer?.status === "BLOCKED") {
+    await toInbox(customer.id);
     await log(deps, sector, mail, "REJECTED_BLOCKED");
     return { ...base, result: "REJECTED_BLOCKED" };
   }
@@ -172,6 +194,7 @@ async function decide(deps: IngestDeps, sector: Sector, mail: ParsedMail): Promi
   }
 
   const result: MailIngestResult = status === "RECEIVED" ? "CREATED" : "PENDING_SIGNUP";
+  await toInbox(customer.id, jobId);
   await log(deps, sector, mail, result, { jobId, fileCount: files.length });
 
   if (result === "PENDING_SIGNUP") await maybeInvite(deps, sector, customer.id, mail);
