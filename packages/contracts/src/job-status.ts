@@ -83,3 +83,15 @@ export const DEFAULT_SECTOR_SEQUENCES: Record<SectorCode, readonly JobStatus[]> 
   CALANDRADO: CALENDER_SEQUENCE,
   SUBLIMACION: CALENDER_SEQUENCE,
 };
+
+/** Listado de pedidos del ERP (Ventas → Pedidos). */
+export const JOB_LIST_TABS = ["ACTIVE", "READY", "DELIVERED", "ALL"] as const;
+export const listJobsSchema = z.object({
+  tab: z.enum(JOB_LIST_TABS).default("ACTIVE"),
+  sector: z.string().trim().max(40).optional(),
+  source: z.enum(["EMAIL", "COUNTER", "API"]).optional(),
+  search: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(30),
+});
+export type ListJobsQuery = z.input<typeof listJobsSchema>;

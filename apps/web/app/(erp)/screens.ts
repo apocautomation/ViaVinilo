@@ -14,35 +14,6 @@ const m = (mono: string) => ({ mono });
 const $ = (n: number) => ({ ars: n });
 
 export const SCREENS: Record<string, MockScreen> = {
-  pedidos: {
-    eyebrow: "Ventas",
-    title: "Pedidos",
-    sub: "Todo lo que entra por la app, el mail y el mostrador, con su estado de producción y de cobro.",
-    stage: 1,
-    primary: "Pedido de mostrador",
-    tabs: ["En curso", "Listos para retirar", "Entregados", "Todos"],
-    filters: ["Todos los sectores", "Todos los canales", "Este mes"],
-    columns: [
-      { label: "Pedido" },
-      { label: "Cliente" },
-      { label: "Canal" },
-      { label: "Sector" },
-      { label: "Detalle" },
-      { label: "Estado" },
-      { label: "Importe", num: true },
-      { label: "Cobro" },
-      { label: "Listo para" },
-    ],
-    rows: [
-      [m("VV-000421"), "Remeras del Norte", "App", "DTF", "58 cm × 1,2 m · logos", warn("Cotizado"), $(21600), warn("Pendiente"), "Hoy 17:00"],
-      [m("VV-000418"), "Remeras del Norte", "App", "DTF", "58 cm × 3 m · frente escuela", info("Impreso"), $(54000), ok("Cobrado"), "Hoy 13:00"],
-      [m("VV-000415"), "Estampados Güemes", "Mail", "Sublimación", "Tela sublimada 3 m", bad("Archivo con error"), "—", "—", "—"],
-      [m("VV-000411"), "Sublimarte", "App", "Sublimación", "40 tazas", ok("Listo para retirar"), $(120000), warn("Cuenta corriente"), "Hoy"],
-      [m("VV-000409"), "Gráfica Lerma", "Mostrador", "Gran Formato", "Lona 2 × 1 m", info("Archivo recibido"), "—", "—", "—"],
-      [m("VV-000402"), "Gráfica Lerma", "Mail", "Gran Formato", "Vinilo mate 3 m", warn("Cotizado"), $(29400), warn("Seña pendiente"), "Mañana 10:00"],
-      [m("VV-000396"), "Diseños Cafayate", "App", "DTF UV", "Stickers 200 u.", ok("Entregado"), $(46500), ok("Cobrado"), "Ayer"],
-    ],
-  },
   clientes: {
     eyebrow: "Ventas",
     title: "Clientes",

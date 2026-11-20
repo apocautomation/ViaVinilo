@@ -106,6 +106,68 @@ export class JobsService {
   }
 
   /** Tablero kanban de un sector (E1.4): una columna por paso de su secuencia, más "Archivo con error". */
+  /**
+   * Listado de pedidos (Ventas → Pedidos): datos reales, sin ejemplos. Producción ve solo sus
+   * sectores (D-017). "En curso" es todo lo que todavía no está listo, entregado ni cancelado.
+   */
+  async list(
+    user: AuthUser,
+    q: { tab: "ACTIVE" | "READY" | "DELIVERED" | "ALL"; sector?: string; source?: "EMAIL" | "COUNTER" | "API"; search?: string; page: number; pageSize: number },
+  ) {
+    const allowed = await this.access.allowedSectorIds(user);
+    const where: Prisma.JobOrderWhereInput = { deletedAt: null };
+    if (allowed !== "all") where.sectorId = { in: allowed };
+    if (q.sector) where.sector = { code: q.sector as SectorCode };
+    if (q.source) where.source = q.source;
+    if (q.tab === "ACTIVE") where.status = { notIn: ["READY", "DELIVERED", "CANCELLED"] };
+    if (q.tab === "READY") where.status = "READY";
+    if (q.tab === "DELIVERED") where.status = "DELIVERED";
+    if (q.search) {
+      const digits = q.search.replace(/D/g, "");
+      const terms = normalizeSearch(q.search).split(" ").filter(Boolean);
+      where.OR = [
+        { customer: { AND: terms.map((t) => ({ searchText: { contains: t } })) } },
+        { description: { contains: q.search, mode: "insensitive" } },
+        ...(digits && digits.length <= 9 ? [{ number: Number(digits) }, { customer: { customerNumber: Number(digits) } }] : []),
+      ];
+    }
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.jobOrder.count({ where }),
+      this.prisma.jobOrder.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (q.page - 1) * q.pageSize,
+        take: q.pageSize,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          source: true,
+          description: true,
+          measure: true,
+          quotedAmount: true,
+          depositRequired: true,
+          depositPaidAt: true,
+          estimatedReadyAt: true,
+          createdAt: true,
+          sector: { select: { code: true, name: true } },
+          customer: { select: { id: true, customerNumber: true, firstName: true, lastName: true, businessName: true, status: true } },
+        },
+      }),
+    ]);
+    return {
+      total,
+      page: q.page,
+      pageSize: q.pageSize,
+      items: rows.map((r) => ({
+        ...r,
+        label: formatJobNumber(r.number),
+        statusLabel: JOB_STATUS_LABELS[r.status],
+        quotedAmount: r.quotedAmount?.toString() ?? null,
+      })),
+    };
+  }
+
   async board(user: AuthUser, query: BoardQuery) {
     const sector = await this.sectorWithStages(query.sector);
     await this.access.assert(user, sector.id);

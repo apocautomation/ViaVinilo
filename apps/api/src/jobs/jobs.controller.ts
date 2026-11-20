@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, MessageEvent, Param, Patch, Post, Sse } from "@nestjs/common";
-import { sectorCodeSchema, transitionSchema } from "@viavinilo/contracts";
+import { listJobsSchema, sectorCodeSchema, transitionSchema } from "@viavinilo/contracts";
 import { Observable, distinctUntilChanged, from, interval, map, merge, startWith, switchMap } from "rxjs";
 import { z } from "zod";
 import { CurrentUser, type AuthUser } from "../auth/decorators";
@@ -27,6 +27,11 @@ const POLL_MS = Number(process.env.BOARD_POLL_MS ?? 2000);
 @Controller("jobs")
 export class JobsController {
   constructor(private readonly jobs: JobsService) {}
+
+  @Get()
+  list(@ZodQuery(listJobsSchema) query: Parameters<JobsService["list"]>[1], @CurrentUser() user: AuthUser) {
+    return this.jobs.list(user, query);
+  }
 
   @Get("board")
   board(@ZodQuery(boardQuerySchema) query: BoardQuery, @CurrentUser() user: AuthUser) {
