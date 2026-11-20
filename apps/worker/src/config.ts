@@ -1,7 +1,8 @@
 import { SECTOR_CODES, type SectorCode } from "@viavinilo/contracts";
+import { HOSTINGER_MAIL_API, type HostingerMailConfig } from "./mail/sources/hostinger-api";
 import type { ImapCredentials } from "./mail/sources/imap";
 
-export type MailSource = "imap" | "mailhog" | "off";
+export type MailSource = "hostinger-api" | "imap" | "mailhog" | "off";
 
 export interface WorkerConfig {
   redisUrl: string;
@@ -11,14 +12,20 @@ export interface WorkerConfig {
   mailhogUrl: string;
   /** Credenciales IMAP por sector. Los sectores sin credenciales no se leen. */
   imap: Partial<Record<SectorCode, ImapCredentials>>;
+  /** API de mail de Hostinger (D-043). Solo con MAIL_SOURCE=hostinger-api. */
+  hostinger: HostingerMailConfig | null;
   smtp: { url: string; from: string; contactUrl: string };
 }
 
 /** Lee la configuración del entorno. Nunca hay credenciales en el código (CLAUDE.md). */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
   const mailSource = (env.MAIL_SOURCE ?? "off") as MailSource;
-  if (!["imap", "mailhog", "off"].includes(mailSource)) {
-    throw new Error(`MAIL_SOURCE inválido: ${mailSource} (usar imap, mailhog u off)`);
+  if (!["hostinger-api", "imap", "mailhog", "off"].includes(mailSource)) {
+    throw new Error(`MAIL_SOURCE inválido: ${mailSource} (usar hostinger-api, imap, mailhog u off)`);
+  }
+  const hostingerToken = env.HOSTINGER_MAIL_API_TOKEN?.trim();
+  if (mailSource === "hostinger-api" && !hostingerToken) {
+    throw new Error("MAIL_SOURCE=hostinger-api necesita HOSTINGER_MAIL_API_TOKEN");
   }
 
   const imap: WorkerConfig["imap"] = {};
@@ -43,6 +50,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
     pollEveryMs: Number(env.MAIL_POLL_SECONDS ?? 60) * 1000,
     mailhogUrl: env.MAILHOG_URL ?? "http://localhost:8025",
     imap,
+    hostinger: hostingerToken
+      ? { token: hostingerToken, baseUrl: env.HOSTINGER_MAIL_API_URL?.trim() || HOSTINGER_MAIL_API }
+      : null,
     smtp: {
       url: env.SMTP_URL ?? "smtp://localhost:1025",
       from: env.SMTP_FROM ?? "Via Vinilo <no-responder@viavinilo.local>",

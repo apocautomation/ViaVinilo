@@ -661,6 +661,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - Para no repetir, se guarda el último `uid` de cada casilla. La deduplicación por Message-ID sigue igual.
     - Para responder se usa `POST /mailboxes/{id}/send` con `inReplyTo` = el `uid` del mail original, así queda en el mismo hilo.
     - Para recibir al instante hay webhooks `message.received`. Al principio alcanza con revisar cada minuto.
+  - **Fuente `hostinger-api` implementada (20/11)**:
+    - Se presenta como una casilla IMAP y reusa `pollImapSector`: arranca desde "ahora" sin importar el historial, avanza el último UID y deduplica por Message-ID.
+    - La API no expone el UIDVALIDITY; se usa un valor fijo.
+    - Se activa con `MAIL_SOURCE=hostinger-api`. El token es obligatorio.
+  - **Prueba en seco contra las casillas reales (20/11)**, con una imagen aparte y sin tocar la base:
+    - leyó los últimos mails de las 6 casillas y los mails siguieron sin leer;
+    - aparecieron dos cosas para revisar antes de prenderla:
+      - En `dtf@` llegan rebotes "Sin entregar: …": confirma I-22, DTF no puede enviar. La ingesta los descarta como respuesta automática.
+      - **Varios pedidos reales vienen sin adjunto** (por ejemplo "IMPRESION Y CALANDRADO - …", "impresion …"). Si tampoco traen un link de WeTransfer o Drive, con la regla de I-15 no crean orden y quedan en el log como "sin archivo". Hay que confirmar con Verónica si esos pedidos mandan el archivo después, en otro mail, o por otra vía. **Resuelto en D-045**: el mail sin adjunto va a Conversaciones y no se pierde.
 - **Por qué**: Ezequiel señaló que el MCP de Hostinger ya está conectado. Con la API no hace falta pedir contraseñas, que es lo que trababa la ingesta real desde D-027.
 
 ### D-044 · 19/11/2026 · Ezequiel · la E1 se entrega completa para cobrarla
@@ -709,6 +718,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto técnico**:
   - Un service worker mínimo (`apps/pwa/public/sw.js`) que no guarda nada en caché, así los estados siempre son los reales. Lo pide el navegador para ofrecer la instalación. El push se suma ahí en el paso 6.
   - El manifest suma `id`, `scope` e ícono `maskable`.
+  - **No prender la lectura de mails en producción** (`MAIL_SOURCE=hostinger-api`) hasta tener la bandeja de Conversaciones. Hoy la ingesta deja el mail sin adjunto solo en el log (`SKIPPED_NO_FILES`, I-15), así que esos pedidos no se verían en ningún lado del ERP. Al construir Conversaciones, la ingesta tiene que guardar todo mail de un cliente como mensaje de su hilo, cree o no la orden.
   - **Pendiente**:
     - el modelo de conversaciones y mensajes (I-18);
     - la lectura de mails en la bandeja (D-043, PR de la fuente `hostinger-api`);
