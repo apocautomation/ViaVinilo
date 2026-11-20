@@ -1523,3 +1523,28 @@ table.data tfoot td {
   font-size: 13.5px;
   font-weight: 500;
 }
+
+/* Conversaciones vacía (D-045): lista + panel, sin la columna de contexto. */
+.inbox-empty {
+  grid-template-columns: 340px 1fr;
+}
+.inbox-placeholder {
+  height: 100%;
+  gap: 10px;
+  padding: 32px;
+}
+.inbox-placeholder strong {
+  font-size: 15px;
+  color: var(--color-text);
+}
+.inbox-placeholder .channels {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+}
+.inbox-placeholder .channels span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

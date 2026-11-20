@@ -1,46 +1,89 @@
+"use client";
+
 import Link from "next/link";
-import { Bot, ClipboardList, Factory, PackageCheck, Receipt } from "lucide-react";
-import { Badge, Kpi, PageHead, ars } from "../ui";
+import { useEffect, useState } from "react";
+import { AlertTriangle, ClipboardList, Factory, PackageCheck } from "lucide-react";
+import { formatJobNumber, JOB_STATUS_LABELS, type JobStatus } from "@viavinilo/contracts";
+import { api } from "../../lib/api";
+import { Badge, Kpi, PageHead } from "../ui";
 
-// Datos de ejemplo (D-032). Se reemplazan por la API a medida que se construye cada etapa.
-const SECTORS = [
-  { name: "DTF", received: 14, quoted: 6, printing: 9, ready: 11 },
-  { name: "DTF UV", received: 4, quoted: 2, printing: 3, ready: 5 },
-  { name: "Gran Formato", received: 7, quoted: 3, printing: 4, ready: 6 },
-  { name: "Látex", received: 3, quoted: 1, printing: 2, ready: 2 },
-  { name: "Sublimación", received: 5, quoted: 4, printing: 3, ready: 4 },
-  { name: "Calandrado", received: 0, quoted: 0, printing: 4, ready: 3 },
-];
+/** Igual que el tablero (D-030): más de 2 h en el mismo paso es una demora. */
+const LATE_MS = 2 * 60 * 60 * 1000;
 
-const CHATS = [
-  { who: "Remeras del Norte", msg: "¿Ya está impreso el VV-000418?", when: "hace 2 min", by: "IA" },
-  { who: "Estampados Güemes", msg: "Te mando el archivo corregido", when: "hace 9 min", by: "Asesor" },
-  { who: "Gráfica Lerma", msg: "¿Cuánto sale 3 m de vinilo mate?", when: "hace 14 min", by: "IA" },
-  { who: "Sublimarte", msg: "Paso a buscar a las 18", when: "hace 31 min", by: "IA" },
-];
+interface Card {
+  id: string;
+  number: number;
+  status: JobStatus;
+  customer: { name: string | null };
+  createdAt: string;
+  updatedAt: string;
+}
+interface Board {
+  sector: { code: string; name: string };
+  columns: { status: JobStatus; cards: Card[] }[];
+}
 
-const LATE = [
-  { num: "VV-000402", who: "Gráfica Lerma", step: "Cotizado", time: "5 h 20 min", sector: "Gran Formato" },
-  { num: "VV-000409", who: "Remeras del Norte", step: "Archivo recibido", time: "3 h 05 min", sector: "DTF" },
-  { num: "VV-000411", who: "Sublimarte", step: "Seña recibida", time: "2 h 40 min", sector: "Sublimación" },
-];
+/** Agrupa los estados en las 4 franjas del gráfico. */
+const BAND: Partial<Record<JobStatus, "received" | "quoted" | "printing" | "ready">> = {
+  PENDING_SIGNUP: "received",
+  RECEIVED: "received",
+  FILE_ERROR: "received",
+  QUOTED: "quoted",
+  DEPOSIT_RECEIVED: "quoted",
+  PRINTED: "printing",
+  CALENDERING: "printing",
+  READY: "ready",
+};
 
+const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
+
+function elapsed(iso: string): string {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
+}
+
+/** Inicio con los datos reales de los tableros (D-045): sin datos de ejemplo. */
 export default function InicioPage() {
-  const max = Math.max(...SECTORS.map((s) => s.received + s.quoted + s.printing + s.ready));
+  const [boards, setBoards] = useState<Board[] | null>(null);
+
+  useEffect(() => {
+    api<{ code: string }[]>("/sectors")
+      .then((sectors) => Promise.all(sectors.map((s) => api<Board>(`/jobs/board?sector=${s.code}`))))
+      .then(setBoards)
+      .catch(() => setBoards([]));
+  }, []);
+
+  const cards = (boards ?? []).flatMap((b) =>
+    b.columns.flatMap((c) => c.cards.map((card) => ({ ...card, sector: b.sector.name }))),
+  );
+  const active = cards.filter((c) => BAND[c.status]);
+  const late = active
+    .filter((c) => c.status !== "READY" && Date.now() - new Date(c.updatedAt).getTime() > LATE_MS)
+    .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  const perSector = (boards ?? []).map((b) => {
+    const counts = { received: 0, quoted: 0, printing: 0, ready: 0 };
+    for (const col of b.columns) {
+      const band = BAND[col.status];
+      if (band) counts[band] += col.cards.length;
+    }
+    return { name: b.sector.name, ...counts };
+  });
+  const max = Math.max(1, ...perSector.map((s) => s.received + s.quoted + s.printing + s.ready));
+  const loading = boards === null;
+  const n = (v: number) => (loading ? "…" : String(v));
+
   return (
     <div className="page">
       <PageHead
         title="Inicio"
-        help="Resumen del día: pedidos, producción por sector, conversaciones de la app y trabajos que llevan más de 2 h en el mismo paso."
-        preview
+        help="Resumen del día con los datos reales de los tableros: pedidos que entraron hoy, en producción, listos para retirar y trabajos con más de 2 h en el mismo paso."
       />
 
       <div className="kpis">
-        <Kpi label="Pedidos de hoy" value="38" icon={ClipboardList} foot={<><span className="up">+12%</span> vs. jueves pasado</>} />
-        <Kpi label="En producción" value="61" icon={Factory} foot="en 6 sectores" />
-        <Kpi label="Listos para retirar" value="31" icon={PackageCheck} foot="avisados por la app" />
-        <Kpi label="Consultas resueltas por la IA" value="84%" icon={Bot} foot="112 de 133 mensajes hoy" />
-        <Kpi label="Facturado en noviembre" value={ars.format(18452300)} icon={Receipt} foot={<><span className="up">+8%</span> vs. octubre</>} />
+        <Kpi label="Pedidos de hoy" value={n(cards.filter((c) => isToday(c.createdAt)).length)} icon={ClipboardList} />
+        <Kpi label="En producción" value={n(active.filter((c) => c.status !== "READY").length)} icon={Factory} />
+        <Kpi label="Listos para retirar" value={n(active.filter((c) => c.status === "READY").length)} icon={PackageCheck} />
+        <Kpi label="Demorados" value={n(late.length)} icon={AlertTriangle} foot="más de 2 h en el mismo paso" />
       </div>
 
       <div className="grid-2">
@@ -50,17 +93,17 @@ export default function InicioPage() {
             <div className="chips">
               <span className="chip"><i style={dot("var(--color-brand-500)")} /> Recibido</span>
               <span className="chip"><i style={dot("var(--color-accent-500)")} /> Cotizado</span>
-              <span className="chip"><i style={dot("var(--color-navy-500)")} /> Imprimiendo</span>
+              <span className="chip"><i style={dot("var(--color-navy-500)")} /> Impreso</span>
               <span className="chip"><i style={dot("var(--color-success-500)")} /> Listo</span>
             </div>
           </div>
           <div className="panel-body" style={{ display: "grid", gap: 14 }}>
-            {SECTORS.map((s) => {
+            {perSector.map((s) => {
               const total = s.received + s.quoted + s.printing + s.ready;
               return (
                 <div key={s.name} style={{ display: "grid", gridTemplateColumns: "110px 1fr 40px", gap: 12, alignItems: "center" }}>
                   <strong style={{ fontSize: 13 }}>{s.name}</strong>
-                  <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", background: "var(--color-neutral-100)", width: `${(total / max) * 100}%`, minWidth: 8 }}>
+                  <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", background: "var(--color-neutral-100)", width: total ? `${(total / max) * 100}%` : "100%" }}>
                     <span style={{ flex: s.received, background: "var(--color-brand-500)" }} />
                     <span style={{ flex: s.quoted, background: "var(--color-accent-500)" }} />
                     <span style={{ flex: s.printing, background: "var(--color-navy-500)" }} />
@@ -70,30 +113,18 @@ export default function InicioPage() {
                 </div>
               );
             })}
+            {!loading && perSector.length === 0 && <div className="empty">No hay sectores para mostrar.</div>}
           </div>
         </section>
 
         <section className="panel">
           <div className="panel-head">
-            <h2>Conversaciones de la app</h2>
+            <h2>Conversaciones</h2>
             <Link href="/ventas/conversaciones" style={{ fontSize: 12.5, fontWeight: 600 }}>Ver todas</Link>
           </div>
-          <div>
-            {CHATS.map((c) => (
-              <div key={c.who} style={{ display: "flex", gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--color-neutral-100)" }}>
-                <span className="avatar avatar-sm">{c.who.split(" ").filter((p) => p.length > 3).map((p) => p[0]!.toUpperCase()).slice(0, 2).join("")}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                    <strong style={{ fontSize: 13 }}>{c.who}</strong>
-                    <small style={{ color: "var(--color-text-muted)" }}>{c.when}</small>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--color-text-muted)", display: "flex", gap: 6, alignItems: "center" }}>
-                    <span className={`mini-tag ${c.by === "IA" ? "tag-ai" : "tag-human"}`}>{c.by}</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.msg}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="empty" style={{ padding: 32 }}>
+            Todavía no hay conversaciones. Acá van a aparecer los mensajes del chat de la app y los mails de las casillas
+            de cada sector.
           </div>
         </section>
       </div>
@@ -101,7 +132,7 @@ export default function InicioPage() {
       <section className="panel">
         <div className="panel-head">
           <h2>Trabajos demorados</h2>
-          <Badge tone="warn">3 superan las 2 h en el mismo paso</Badge>
+          {late.length > 0 && <Badge tone="warn">{late.length} superan las 2 h en el mismo paso</Badge>}
         </div>
         <div className="table-wrap">
           <table className="data">
@@ -115,15 +146,22 @@ export default function InicioPage() {
               </tr>
             </thead>
             <tbody>
-              {LATE.map((l) => (
-                <tr key={l.num}>
-                  <td className="mono">{l.num}</td>
-                  <td>{l.who}</td>
+              {late.slice(0, 10).map((l) => (
+                <tr key={l.id}>
+                  <td className="mono">{formatJobNumber(l.number)}</td>
+                  <td>{l.customer.name ?? "Sin alta"}</td>
                   <td>{l.sector}</td>
-                  <td><Badge tone="info">{l.step}</Badge></td>
-                  <td className="num"><Badge tone="warn">{l.time}</Badge></td>
+                  <td><Badge tone="info">{JOB_STATUS_LABELS[l.status]}</Badge></td>
+                  <td className="num"><Badge tone="warn">{elapsed(l.updatedAt)}</Badge></td>
                 </tr>
               ))}
+              {!loading && late.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty" style={{ padding: 24 }}>No hay trabajos demorados.</div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

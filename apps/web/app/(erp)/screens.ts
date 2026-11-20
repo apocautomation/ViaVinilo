@@ -1,4 +1,4 @@
-import { AlertTriangle, Banknote, FileCheck2, HandCoins, Landmark, Package, Receipt, Scale, Timer, Users, Wallet } from "lucide-react";
+import { AlertTriangle, Banknote, FileCheck2, HandCoins, Landmark, Package, Receipt, Scale, Users, Wallet } from "lucide-react";
 import type { MockScreen } from "./mock-table";
 
 /**
@@ -72,35 +72,6 @@ export const SCREENS: Record<string, MockScreen> = {
       [m("211"), "Sublimarte", "hola@sublimarte.test", ok("Instalada"), "9", $(120000), "No", ok("Activo")],
       [m("54"), "Gráfica Lerma", "lerma@grafica.test", warn("Sin instalar"), "4", $(0), "Sí", ok("Activo")],
       [m("—"), "nuevo@gremio.test", "nuevo@gremio.test", "—", "1", $(0), "—", warn("Alta pendiente")],
-    ],
-  },
-  tiempos: {
-    eyebrow: "Producción",
-    title: "Panel de tiempos",
-    sub: "Cuánto tarda cada paso por sector y máquina, para ver dónde se traban los trabajos.",
-    stage: 1,
-    kpis: [
-      { label: "Tiempo medio de punta a punta", value: "3 h 40 min", icon: Timer, foot: "de archivo recibido a listo" },
-      { label: "Cotización media", value: "18 min", foot: "objetivo: menos de 30 min" },
-      { label: "Trabajos demorados hoy", value: "3", icon: AlertTriangle, foot: "más de 2 h en un paso" },
-    ],
-    tabs: ["Hoy", "Esta semana", "Este mes"],
-    filters: ["Todos los sectores", "Todas las máquinas"],
-    columns: [
-      { label: "Sector" },
-      { label: "Recibido → Cotizado", num: true },
-      { label: "Cotizado → Impreso", num: true },
-      { label: "Impreso → Listo", num: true },
-      { label: "Total medio", num: true },
-      { label: "Trabajos", num: true },
-      { label: "Estado" },
-    ],
-    rows: [
-      ["DTF", "14 min", "1 h 50 min", "25 min", "2 h 29 min", "40", ok("En tiempo")],
-      ["DTF UV", "22 min", "2 h 10 min", "30 min", "3 h 02 min", "14", ok("En tiempo")],
-      ["Gran Formato", "41 min", "3 h 05 min", "50 min", "4 h 36 min", "20", warn("Lento")],
-      ["Látex", "20 min", "2 h 30 min", "35 min", "3 h 25 min", "8", ok("En tiempo")],
-      ["Sublimación", "25 min", "2 h 15 min", "1 h 20 min", "4 h 00 min", "16", warn("Calandra cargada")],
     ],
   },
   comprobantes: {

@@ -122,7 +122,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-12 | Teléfonos fijos vs. celulares | En Argentina, "387 466-9944" puede ser un fijo o un celular escrito sin el 15. Si se guarda tal cual, el mismo celular cargado con y sin 15 queda como dos números, y no se reconoce al cliente cuando escribe por WhatsApp. | E1 | Abierto. Por defecto todo número argentino se guarda como celular `+549…` (D-025). Confirmar con Verónica que no se cargan fijos; si se cargan, quedan con el 9 de más. |
 | I-13 | Agente conversacional con Paperclip (D-026) | (1) El contrato pone el asistente en la **E2** y solo **dentro de la app**; que el agente **responda mails** no está en el Anexo I. (2) Arrancarlo apenas esté el VPS adelanta la E2 antes de cerrar la E1 ("una etapa por vez"). (3) El contrato dice "IA local + OpenAI de respaldo" (D-006): falta definir si Paperclip es esa IA local o una plataforma aparte, y qué costo tiene. (4) Responder mails solo, sin un humano, choca con "el asistente nunca promete ni modifica nada" (actualización 2.7): hay que acotar qué puede contestar. | E2 | **Resuelto en D-028 y D-029** (Trip como referencia: Ollama `qwen3:8b` con OpenAI de respaldo, Paperclip para gobernar a los agentes). Queda ver si el VPS del cliente tiene margen para el modelo local. |
 | I-14 | Mail de un cliente bloqueado | No está definido qué pasa si escribe a una casilla un cliente con estado "bloqueado". | E1 | Abierto. Por defecto no se crea la orden: el mail queda registrado en el log de ingesta como rechazado, para que atención lo vea. |
-| I-15 | Mails sin archivo y respuestas en el mismo hilo | (a) La actualización 2.3 dice que si falta el adjunto la orden pasa a "Archivo con error", pero la 2.5 dice que una orden nunca nace de un "hola". (b) Si el cliente responde en el mismo hilo (por ejemplo para reenviar un archivo con error), no está definido si se suma a la orden existente o crea otra. | E1 | Abierto. Por defecto: (a) un mail sin adjuntos ni links de WeTransfer o Drive no crea orden y queda en el log como "sin archivo"; (b) cada mail con archivo crea su propia orden. |
+| I-15 | Mails sin archivo y respuestas en el mismo hilo (parte (a) actualizada por D-045: el mail sin archivo va a Conversaciones) | (a) La actualización 2.3 dice que si falta el adjunto la orden pasa a "Archivo con error", pero la 2.5 dice que una orden nunca nace de un "hola". (b) Si el cliente responde en el mismo hilo (por ejemplo para reenviar un archivo con error), no está definido si se suma a la orden existente o crea otra. | E1 | Abierto. Por defecto: (a) un mail sin adjuntos ni links de WeTransfer o Drive no crea orden y queda en el log como "sin archivo"; (b) cada mail con archivo crea su propia orden. |
 | I-16 | Volver un paso atrás | Los pasos son obligatorios y no se pueden saltear, pero un operador puede equivocarse de botón (por ejemplo, marcar "Impreso" una orden que no imprimió). Hoy nadie puede deshacerlo; solo cancelar. | E1 | Abierto. Propuesta: que el dueño pueda volver una orden un paso atrás, con motivo obligatorio y registro en la auditoría. Confirmar con Verónica. |
 | I-17 | Cómo obligar a mover las tarjetas (D-032) | Ezequiel pidió que los operadores **tengan que** mover la tarjeta para poder hacer su trabajo. Hoy nada impide imprimir sin tocar el tablero: el archivo llega por mail y el operador lo abre desde la casilla. | E1 | Abierto. Propuesta (ya dibujada en el tablero): el archivo para imprimir **solo se descarga desde la tarjeta**, y se libera cuando la orden está lista para imprimir (cotizada y, si corresponde, con seña). Para que funcione, los operadores no deberían tener acceso a las casillas de mail. Ampliada en D-042 para que el estado que ve el cliente sea el real. Confirmar con Verónica y Ricardo. |
 | I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. **Canales**: la app y también el **mail** (D-041). |
@@ -690,6 +690,31 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     El chat de la app con el asistente y la derivación a un asesor siguen en la E2 (contrato).
     Esto se encuadra en la E1 como parte de "Ingreso de trabajos por IMAP desde las casillas de Hostinger" (Anexo I); el Anexo I permite ajustar funcionalidades dentro de cada módulo sin cambiar el alcance (cláusula 2.2).
 - **Por qué**: Ezequiel necesita cobrar la E1 completa. Ordenar lo que falta deja claro qué se entrega y qué depende del cliente.
+
+### D-045 · 20/11/2026 · Ezequiel (chat de desarrollo) · todos los canales llegan igual; ERP sin datos de prueba; app instalable
+- **Definición**:
+  - **Tres canales de entrada, un solo camino** (amplía D-041). Todo cae en **Ventas → Conversaciones**, en el hilo del cliente, o directo en **Pedidos**:
+    - **Chat de la app**: una pestaña **"Chat"** directa en la barra de la app, no adentro de Ayuda (Ezequiel: "que sea Chatear o algo así directamente"). Ahí el cliente pregunta o pide un trabajo.
+    - **"+" Enviar de la app**: crea el pedido con archivo, sector y medida, y queda registrado en el hilo.
+    - **Mail a la casilla del sector**: si trae archivo o link, crea el pedido; **si no trae, igual queda en Conversaciones**, y el asesor responde o arma el pedido desde ahí.
+  - **ERP sin datos de prueba**:
+    - **Inicio** muestra los datos reales de los tableros: pedidos de hoy, en producción, listos, demorados y producción por sector.
+    - **Conversaciones** y **Panel de tiempos** quedan vacíos hasta tener datos reales.
+    - Se sacan las marcas "Vista previa" de las pantallas que ya son reales: Inicio, Clientes, Conversaciones y Panel de tiempos.
+  - **Instalar la app**: el cartel aparece solo, y "Ahora no" lo esconde por 7 días. Además hay un botón "Instalar la app" en Mi cuenta. En iPhone se explica cómo hacerlo con Compartir → "Agregar a inicio".
+- **Por qué**:
+  - Lo que manda el cliente no se tiene que perder por el canal que eligió.
+  - Resuelve lo que quedó abierto en D-043: un pedido por mail sin adjunto ya no se descarta, va a Conversaciones. Esto deja sin efecto la parte de I-15 que lo dejaba solo en el log.
+  - Un chat directo es lo que el cliente busca primero; escondido en Ayuda no lo encuentra.
+- **Impacto técnico**:
+  - Un service worker mínimo (`apps/pwa/public/sw.js`) que no guarda nada en caché, así los estados siempre son los reales. Lo pide el navegador para ofrecer la instalación. El push se suma ahí en el paso 6.
+  - El manifest suma `id`, `scope` e ícono `maskable`.
+  - **Pendiente**:
+    - el modelo de conversaciones y mensajes (I-18);
+    - la lectura de mails en la bandeja (D-043, PR de la fuente `hostinger-api`);
+    - el chat de la app.
+
+    El chat de la app adelanta parte de la E2: según el contrato, el asistente IA sigue siendo de la E2. En la E1 el chat lo contesta un asesor.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
