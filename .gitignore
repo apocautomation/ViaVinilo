@@ -18,3 +18,7 @@ storage/
 .DS_Store
 Thumbs.db
 *.log
+
+# Datos de clientes (exportaciones de Runamatic, Tango): nunca al repo
+/*.csv
+/*.xlsx
