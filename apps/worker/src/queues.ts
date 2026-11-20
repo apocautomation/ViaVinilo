@@ -8,6 +8,8 @@ export const QUEUES = {
   mailIngest: "mail-ingest",
   notifications: "notifications",
   fileRetention: "file-retention",
+  /** Cola de mails a clientes: invitaciones y links de activación (D-049). */
+  outbox: "outbox",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

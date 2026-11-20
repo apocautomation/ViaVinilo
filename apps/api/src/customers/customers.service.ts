@@ -11,10 +11,12 @@ import {
   normalizeDni,
   normalizePhone,
   normalizeSearch,
+  type CustomerGap,
   type CustomerStatus,
   type NotificationPrefs,
   type TaxCondition,
 } from "@viavinilo/contracts";
+import { ActivationService } from "../app-auth/activation.service";
 import { AuditService } from "../audit/audit.service";
 import { hashPassword } from "../auth/password";
 import { PrismaService } from "../prisma/prisma.service";
@@ -62,6 +64,7 @@ interface UpdateInput extends ProfileInput {
 interface ListInput {
   search?: string;
   status?: CustomerStatus;
+  gap?: CustomerGap;
   page: number;
   pageSize: number;
 }
@@ -84,10 +87,56 @@ export class CustomersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly activation: ActivationService,
   ) {}
 
-  async list({ search, status, page, pageSize }: ListInput) {
+  /**
+   * Invitar a la app (D-049): a cada cliente activo con email le llega un link para crear su
+   * contraseña. Con `allPending`, a todos los que tienen email y todavía no tienen contraseña.
+   * Los mails salen de a poco desde la cola del worker. Devuelve cuántos se invitaron y por qué no
+   * se pudo con el resto.
+   */
+  async invite(input: { customerIds?: string[]; allPending?: boolean }, userId: string) {
+    const customers = await this.prisma.customer.findMany({
+      where: {
+        deletedAt: null,
+        ...(input.allPending ? { appPasswordSetAt: null, status: "ACTIVE" } : { id: { in: input.customerIds ?? [] } }),
+      },
+      select: {
+        id: true,
+        firstName: true,
+        status: true,
+        emails: { orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], take: 1, select: { email: true } },
+      },
+      take: 5000,
+    });
+    let invited = 0;
+    let withoutEmail = 0;
+    let notActive = 0;
+    for (const c of customers) {
+      const email = c.emails[0]?.email;
+      if (c.status !== "ACTIVE") {
+        notActive++;
+        continue;
+      }
+      if (!email) {
+        withoutEmail++;
+        continue;
+      }
+      await this.activation.createAndQueue(c, email, "invite");
+      await this.prisma.customer.update({ where: { id: c.id }, data: { appInvitedAt: new Date() } });
+      await this.audit.log({ entity: "Customer", entityId: c.id, action: "app_invite", userId, after: { email } });
+      invited++;
+    }
+    return { invited, withoutEmail, notActive };
+  }
+
+  async list({ search, status, gap, page, pageSize }: ListInput) {
     const where: Prisma.CustomerWhereInput = { deletedAt: null, ...(status ? { status } : {}) };
+    // D-049: clientes con datos a completar.
+    if (gap === "NO_EMAIL") where.emails = { none: {} };
+    if (gap === "NO_DNI") where.dni = null;
+    if (gap === "NO_APP_PASSWORD") where.appPasswordSetAt = null;
 
     if (search) {
       // Nombre y apellido: cada palabra tiene que aparecer, sin importar tildes ni el orden.

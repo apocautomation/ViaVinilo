@@ -261,6 +261,23 @@ function CustomerDetail() {
         title={fullName(customer)}
         actions={
           <>
+            {customer.status === "ACTIVE" && customer.emails.length > 0 && (
+              <button
+                className="btn btn-ghost"
+                title="Le llega un mail con un link para crear su contraseña"
+                onClick={() =>
+                  void api<{ invited: number }>("/customers/invite", {
+                    method: "POST",
+                    body: JSON.stringify({ customerIds: [customer.id] }),
+                  })
+                    .then(() => load())
+                    .then(() => setNotice("Invitación en camino: le llega un mail con el link para crear su contraseña."))
+                    .catch((e: unknown) => setError(errorText(e)))
+                }
+              >
+                {customer.appInvitedAt ? "Volver a invitar a la app" : "Invitar a la app"}
+              </button>
+            )}
             <button className="btn btn-ghost" onClick={() => setSettingPassword(true)}>
               {customer.appPasswordSetAt ? "Cambiar contraseña de la app" : "Cargar contraseña de la app"}
             </button>
@@ -310,7 +327,13 @@ function CustomerDetail() {
       />
 
       {!customer.appPasswordSetAt && customer.status === "ACTIVE" && (
-        <p className="warn-note">Este cliente todavía no tiene contraseña: no puede entrar a la app.</p>
+        <p className="warn-note">
+          {customer.emails.length === 0
+            ? "Falta el email: cargáselo para poder invitarlo a la app. Mientras tanto podés cargarle una contraseña a mano."
+            : customer.appInvitedAt
+              ? `Invitado a la app el ${new Date(customer.appInvitedAt).toLocaleDateString("es-AR")}: todavía no creó su contraseña.`
+              : "Todavía no tiene acceso a la app: invitalo o cargale una contraseña."}
+        </p>
       )}
 
       {settingPassword && (

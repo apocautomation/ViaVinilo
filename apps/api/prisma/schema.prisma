@@ -109,6 +109,11 @@ model Customer {
   appPasswordHash    String?
   /// Último cambio de contraseña: los tokens emitidos antes ya no sirven (D-039).
   appPasswordSetAt   DateTime?
+  /// Última invitación a la app enviada desde el ERP (D-049).
+  appInvitedAt       DateTime?
+  /// De dónde vino el cliente si se importó (ej. "runamatic"). Null = alta en el ERP (D-049).
+  importSource       String?
+  activations        AppActivation[]
   approvedAt         DateTime?
   /// Último mail con el link de alta enviado a un remitente nuevo (D-014). Evita mandarlo en cada mail.
   signupInviteSentAt DateTime?
@@ -148,6 +153,48 @@ model CustomerPhone {
   createdAt  DateTime @default(now())
 
   @@index([customerId])
+}
+
+/// Link para que el cliente cree su contraseña de la app (D-049). Se guarda solo el hash.
+model AppActivation {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Email al que se mandó el link, en minúsculas.
+  email      String
+  tokenHash  String    @unique
+  /// "invite" = lo mandó un asesor desde el ERP; "self" = lo pidió el cliente en /activar.
+  kind       String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
+  @@index([customerId])
+}
+
+enum OutboundEmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// Mails a clientes en cola (D-049). La API los anota y el worker los manda despacio.
+model OutboundEmail {
+  id         String              @id @default(cuid())
+  to         String
+  subject    String
+  /// Se reemplaza el link por "[link enviado]" una vez enviado: el link de activación no queda guardado.
+  text       String
+  kind       String
+  customerId String?
+  status     OutboundEmailStatus @default(PENDING)
+  attempts   Int                 @default(0)
+  lastError  String?
+  sentAt     DateTime?
+  createdAt  DateTime            @default(now())
+
+  @@index([status, createdAt])
 }
 
 // ───────────────────────── Personal ─────────────────────────

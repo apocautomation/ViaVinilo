@@ -138,9 +138,15 @@ export type UpdateCustomerInput = z.input<typeof updateCustomerSchema>;
 export const addEmailSchema = z.object({ email: emailSchema, isPrimary: z.boolean().optional() });
 export const addPhoneSchema = z.object({ phone: phoneSchema, isPrimary: z.boolean().optional() });
 
+/** Filtros de "datos a completar" (D-049). */
+export const CUSTOMER_GAPS = ["NO_EMAIL", "NO_DNI", "NO_APP_PASSWORD"] as const;
+export const customerGapSchema = z.enum(CUSTOMER_GAPS);
+export type CustomerGap = z.infer<typeof customerGapSchema>;
+
 export const listCustomersSchema = z.object({
   search: z.string().trim().max(100).optional(),
   status: customerStatusSchema.optional(),
+  gap: customerGapSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });

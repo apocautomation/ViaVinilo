@@ -128,8 +128,9 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-18 | Mensajería de la app de clientes (D-032) | La bandeja de Conversaciones del ERP toma el modelo de Krokanticas (lista, chat, asistente IA o asesor, etiquetas), pero el canal es la **app propia**, no WhatsApp. El contrato pone el asistente en la E2 y la E1 solo tiene seguimiento de pedidos. Falta definir si el chat libre con un asesor entra en la E2 o si en la E1 alcanza con los avisos de estado. | E2 | Abierto. La pantalla es solo visual. Los endpoints (equivalentes a `/api/chats`, `/api/messages`, `/api/send-message` y `/api/toggle-bot` de Krokanticas) se definen al arrancar la E2. **Canales**: la app y también el **mail** (D-041). |
 | I-19 | Envío de trabajos desde la app (D-034) | La actualización §2.9 dice que la recepción de trabajos va por la app, y la §2.5 pide límites de acciones por cliente y evitar duplicados (el caso de los 17 pedidos repetidos por Telegram). No está definido cuántos envíos por día se permiten ni cómo se detecta un archivo repetido. | E1 | Abierto. Propuesta: la orden solo se crea con archivo, sector y medida; si el mismo archivo (mismo hash) ya está en un pedido abierto del cliente, se avisa en lugar de crear otro; tope configurable de envíos por hora. Confirmar con Verónica. |
 | I-20 | VPS para la IA local (D-035) | El VPS del cliente tiene 4 vCPU y 15 GB de RAM. Trip calcula 8 vCPU para correr `qwen3:8b` en local (D-029). | E2 | Abierto. Alcanza para la E1. Al arrancar la E2, medir la latencia del modelo en este VPS. Si no alcanza, el cliente amplía el plan (contrato) o se usa más OpenAI de respaldo. |
-| I-21 | Casillas `cortes@` y `tpu@` (D-043) | En Hostinger existen las casillas `cortes@viavinilo.com` y `tpu@viavinilo.com`, pero el sistema tiene 6 sectores y ninguno es Cortes ni TPU. | E1 | Abierto. Preguntar a Ricardo y a Verónica si son sectores que reciben trabajos (y hay que sumarlos con su secuencia de estados) o casillas de otro uso. |
+| I-21 | Casillas `cortes@` y `tpu@` (D-043) — **Resuelto en D-046**: `cortes@` es el Corte de Gran Formato y `tpu@` es TPU | En Hostinger existen las casillas `cortes@viavinilo.com` y `tpu@viavinilo.com`, pero el sistema tiene 6 sectores y ninguno es Cortes ni TPU. | E1 | Abierto. Preguntar a Ricardo y a Verónica si son sectores que reciben trabajos (y hay que sumarlos con su secuencia de estados) o casillas de otro uso. |
 | I-22 | `dtf@` bloqueada para enviar (D-043) | Hostinger bloqueó el envío de `dtf@viavinilo.com` por "sending_spam". El sistema responde desde la casilla del sector (Reply-To, actualización §2.2), así que las respuestas de DTF no salen. | E1 | Abierto. El cliente tiene que pedirle a Hostinger que la desbloquee y revisar SPF, DKIM y DMARC de `viavinilo.com` (actualización §2.2). Mientras tanto, DTF puede responder desde otra casilla. |
+| I-23 | Migración de clientes sin DNI ni email (D-048) — **Resuelto en D-049** | El alta exige DNI, email y teléfono (actualización §2.1, D-025), y el ingreso a la app necesita email (D-039). En el CSV de Runamatic solo 9 de 1790 tienen DNI y 380 tienen email. | E1 | Abierto. Propuesta: importar como **activos** a los "Cliente Registrado", y también a los que tengan email; marcar "datos a completar" a los que no tienen DNI y pedírselo en el primer ingreso o en el próximo pedido. Los contactos que no tienen email ni son "Cliente Registrado" no se importan como clientes: quedan para Conversaciones cuando escriban. Confirmar con Ezequiel. |
 
 ## 4. Bitácora de decisiones
 
@@ -725,6 +726,80 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - el chat de la app.
 
     El chat de la app adelanta parte de la E2: según el contrato, el asistente IA sigue siendo de la E2. En la E1 el chat lo contesta un asesor.
+
+### D-046 · 20/11/2026 · Ezequiel (mensaje del cliente) + Runamatic · sectores reales y sus sub-servicios (resuelve I-21, actualiza I-10)
+- **Definición** (mensaje del cliente, confirmado por los agentes de Runamatic, `docs/referencias/runamatic-agentes.md`):
+  - **Calandra** y **Sublimación**: son sectores distintos aunque parecidos. Calandra calandra las telas; Sublimación imprime solo el papel para los que estampan.
+  - **Gran Formato**, con sub-servicios: Ecosolvente, Látex, UV (rígidos y rollo a rollo) y **Corte**. Ricardo va a ir sumando.
+  - **DTF**, con varias máquinas: **DTF Textil** y **DTF UV**.
+  - **TPU** y **Embroidery** (bordado). Embroidery vale lo mismo que TPU.
+- **Casillas**: `cortes@` es el Corte de Gran Formato y `tpu@` es TPU. **Resuelve I-21.**
+- **Proceso normal**: el cliente manda un mail con el archivo, y el asesor le explica los requisitos (por ejemplo DTF: PNG con fondo transparente a 300 dpi).
+- **Impacto**:
+  - Hoy el sistema tiene 6 sectores (DTF, DTF UV, Gran Formato, Látex, Calandrado y Sublimación). Hay que agregar los **sub-servicios** de Gran Formato y los sectores **TPU** y **Embroidery** al modelo, y decidir si Látex sigue siendo un sector o pasa a ser un sub-servicio de Gran Formato (en Runamatic es un sub-servicio pero tiene su propia casilla).
+  - Se hace en la parte productiva (D-044, puntos 2 y 3). `TODO(spec): I-10`: nombres reales de las máquinas.
+  - **Hay diferencias en la seña entre los agentes de Runamatic**: 50% siempre, o según los metros (desde 10 m en DTF Textil, Sublimación y Calandra; desde 3 m en DTF UV; siempre en TPU). Confirmar con Verónica antes de tocar D-013.
+  - **WhatsApp de la empresa**: hay uno por sector (Calandra y Sublimación, Gran Formato y Corte, DTF y TPU) más uno de insumos. Resuelve el pendiente de D-038 y D-039: el link de "Escribinos por WhatsApp" puede ir al sector que corresponda.
+
+### D-047 · 20/11/2026 · Ezequiel + desarrollo · control automático de la resolución del archivo (avanza I-09)
+- **Problema** (mensaje del cliente): "a veces lo mandan con 300 dpi pero la imagen está más chica de lo normal y se ve pixelada". El dato de dpi del archivo no alcanza: una imagen chica a la que le cambiaron el dpi sigue teniendo pocos píxeles.
+- **Definición** (Ezequiel: "si lo podemos detectar con código, genial"):
+  - **Resolución efectiva**, sin IA: es la cantidad de píxeles dividida por la medida pedida en pulgadas. Ejemplo: un PNG de 1500 px de ancho para 58 cm (22,8") da 66 dpi efectivos, aunque el archivo diga 300. Si da menos que el mínimo del servicio (250 en DTF, 100 en Sublimación, Calandra y Gran Formato), se sugiere "Archivo con error" con el motivo y el operador confirma (E1.3). Necesita la medida pedida (paso 2, ficha de la orden).
+  - **Imagen agrandada** (heurística): si la imagen se ve borrosa o en bloques (poca nitidez, o bordes repetidos de a 2 o 4 píxeles), se avisa como sospecha. Nunca se rechaza sola.
+  - **Otros chequeos de los requisitos**:
+    - PNG con fondo transparente para DTF (canal alfa con transparencia real);
+    - modo RGB;
+    - escala 1:1 (las proporciones coinciden con la medida pedida);
+    - Corte no acepta PNG;
+    - Sublimación y Calandra no van en espejo. Esto último no se puede saber del archivo: se avisa.
+- **Por qué**: es la queja concreta del cliente y se resuelve con cálculo, sin costo de IA. La IA queda solo para leer las medidas del texto del mail (I-09).
+
+### D-048 · 20/11/2026 · Desarrollo · migración de clientes desde Runamatic (CSV) y lo que se pudo ver
+- **CSV de clientes** (`clientes-2026-11-20.csv`, exportado de Runamatic, **no se sube al repo**; `.gitignore` ignora `/*.csv` y `/*.xlsx`):
+  - 1790 contactos.
+  - **Teléfono en 1772** (formato WhatsApp `549…`), **email en solo 380**, **DNI en solo 9**, CUIT, condición frente al IVA y domicilio en unos 127.
+  - Solo **176 tienen la etiqueta "Cliente Registrado"**. El resto son chats de WhatsApp (1553), carga manual (211) y Telegram (24); muchos son consultas, no clientes.
+  - La condición frente al IVA está escrita a mano ("Consumidor final", "consumidor final", "Monotributista"…) y hay que normalizarla.
+- **Choca con las reglas de alta** (D-025: DNI, email y teléfono obligatorios) y con el ingreso a la app, que necesita email (D-039). Ver I-23.
+- **Runamatic** (Tienda Runa, sobre Supabase):
+  - se leyeron los 6 agentes de IA (`docs/referencias/runamatic-agentes.md`);
+  - **no se exportaron las conversaciones**: Tienda Runa no muestra una exportación de chats; abrir cada chat lo marca como leído para el equipo; y leer la base directo con la sesión de Ezequiel quedó bloqueado por seguridad (es usar su credencial).
+  - Alternativas: pedirle a Tienda Runa una exportación de los chats, o que Ezequiel autorice explícitamente la lectura directa.
+
+### D-049 · 20/11/2026 · Ezequiel · activación de cuentas por link, invitaciones desde el ERP, ingreso con teléfono e importación de todos los contactos (resuelve I-23, cambia D-039)
+- **Definición**:
+  - **Activación por link**: Via Vinilo difunde un solo link (`viavinilo.tech/activar`). El cliente pone su email, le llega un mail con un link, y con ese link **crea su propia contraseña**. El asesor ya no tiene que mandar una clave a cada uno.
+  - **Botón en el ERP** (Ventas → Clientes) para **invitar a la app** a un cliente o a muchos de una vez, como tarea automatizable. A cada uno le llega el mail con su link para crear la contraseña.
+  - **Ingreso con email o teléfono**: el cliente entra con cualquiera de sus emails **o con su celular**, más su contraseña.
+  - **Importación de los 1790 contactos** del CSV de Runamatic, todos como clientes activos. A los que no tienen email se los marca **"falta email"**: cuando el asesor se lo carga, entran en la automatización de invitaciones. Los que no tienen DNI quedan con "datos a completar".
+- **Por qué**: "agilizarles el trabajo de no tener que mandar la clave a cada uno" (Ezequiel). El teléfono es el dato que tienen casi todos (1772 de 1790); el email solo 380.
+- **Cambia**:
+  - D-039, que solo tenía la contraseña cargada por el asesor. Se mantiene como alternativa desde la ficha.
+  - D-025, que pedía DNI y email obligatorios para estar activo. Para los importados no se exigen: se completan después.
+  - **Resuelve I-23.**
+- **Impacto técnico**:
+  - **Envío de mails en cola** (`OutboundEmail`):
+    - la API anota el mail y el worker lo manda **despacio**, para no quedar bloqueados por spam como `dtf@` (I-22);
+    - después de enviarlo se borra el link del texto guardado.
+    - El envío usa la API de mail de Hostinger desde una casilla que pueda enviar (`MAIL_SENDER_ADDRESS`). **Pendiente**: que Ezequiel elija la casilla y ampliar el token a esa casilla.
+  - **Links de activación** (`AppActivation`):
+    - duran 48 h y se usan una sola vez;
+    - se guarda solo el hash;
+    - pedir uno nuevo anula el anterior;
+    - el pedido público siempre responde lo mismo, exista o no el email.
+  - **Rutas**:
+    - `POST /app/auth/activation/request`, `POST /app/auth/activation/complete`;
+    - `POST /customers/invite` (uno, varios o todos los que tienen email y no tienen contraseña);
+    - `POST /app/auth/login` acepta email o teléfono.
+  - **Importación**: script `apps/api/prisma/import-runamatic.ts`, con prueba en seco. El CSV nunca va al repo. Se normalizan:
+    - nombre (se separa en nombre y apellido);
+    - teléfono;
+    - email;
+    - CUIT (con dígito verificador);
+    - condición frente al IVA (los textos escritos a mano);
+    - domicilio.
+
+    El origen y las etiquetas van a las notas internas. Los emails y teléfonos repetidos se informan y no se duplican.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
