@@ -202,6 +202,20 @@ describe("bot del chat de la app (D-056, D-057)", () => {
     expect((await put("owner", false)).body.enabled).toBe(false);
   });
 
+  it("D-061: '/reset' por el chat de la app borra la memoria del bot y responde al toque", async () => {
+    const id = await convId();
+    await prisma.conversation.update({ where: { id }, data: { needsHuman: true, needsHumanReason: "Reclamo" } });
+    const res = await as("customer").post("/app/chat", { text: "/reset" });
+    expect(res.status).toBe(201);
+    const conv = await prisma.conversation.findUniqueOrThrow({ where: { id } });
+    expect(conv.botResetAt).not.toBeNull();
+    expect(conv.needsHuman).toBe(false);
+    const thread = await as("customer").get("/app/chat");
+    expect(thread.body.messages.at(-1)).toMatchObject({ direction: "OUT", body: "Memoria borrada correctamente.", fromBot: true });
+    // El mensaje "/reset" no queda para el bot.
+    expect((await prisma.message.findFirstOrThrow({ where: { body: "/reset" } })).botStatus).toBeNull();
+  });
+
   it("D-056: el bot no se puede prender en el hilo de alguien que no es cliente", async () => {
     const stranger = await prisma.conversation.findFirstOrThrow({ where: { customerId: null } });
     expect((await as("attention").post(`/conversations/${stranger.id}/bot`, { enabled: true })).status).toBe(422);

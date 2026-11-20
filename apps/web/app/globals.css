@@ -1307,6 +1307,44 @@ table.data tfoot td {
 .menu-item:hover {
   background: var(--color-neutral-100);
 }
+.menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.menu-item:disabled:hover {
+  background: transparent;
+}
+/* D-061: sección de avisos dentro del menú de acciones masivas */
+.menu-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--color-border);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+}
+.menu-state {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-neutral-100);
+}
+.menu-state.on {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+.menu-note {
+  margin: 4px 10px 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
 .menu-confirm {
   display: grid;
   gap: 10px;

@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { openAiLlm, parseAnswer, type ChatTurn, type Llm } from "../src/bot/llm";
-import { processBotReplies } from "../src/bot/reply";
+import { decideAnswer, processBotReplies } from "../src/bot/reply";
 import { startTestDb } from "./test-db";
 
 let prisma: PrismaClient;
@@ -97,7 +97,7 @@ describe("bot del chat de la app (D-056)", () => {
 
   it("D-056: si deriva a un asesor, marca el chat 'Pide asesor' y el bot se apaga en ese chat", async () => {
     await botOn();
-    const msg = await customerWrites("Les paso una foto de cómo quedó el estampado");
+    const msg = await customerWrites("el estampado quedó con un color raro, ¿es normal?");
     const { llm } = fakeLlm({ reply: "Te paso con un asesor.", handoff: true, reason: "Quiere cancelar" });
     expect((await processBotReplies(prisma, llm)).handoffs).toBe(1);
     const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
@@ -131,6 +131,21 @@ describe("bot del chat de la app (D-056)", () => {
     expect(replies[0]).toBe("¡Hola Ana! Soy el asistente de Via Vinilo. ¿En qué te ayudo?");
     expect(replies[1]).toContain("granformato@viavinilo.com");
     expect(replies[2]).toMatch(/VV-\d+ \(DTF, Remeras logo\): Terminado, listo para retirar/);
+  });
+
+  it("D-061: después de un /reset el bot no recuerda nada anterior y vuelve a saludar", async () => {
+    await botOn();
+    const t = Date.now();
+    await prisma.message.create({ data: { conversationId, direction: "IN", channel: "APP", body: "algo viejo", createdAt: new Date(t - 9000) } });
+    await prisma.message.create({ data: { conversationId, direction: "OUT", channel: "APP", body: "respuesta vieja", fromBot: true, createdAt: new Date(t - 8000) } });
+    await prisma.conversation.update({ where: { id: conversationId }, data: { botResetAt: new Date(t - 5000) } });
+    await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t - 1000));
+    const { llm, calls } = fakeLlm({ reply: "Te cuento." });
+    await processBotReplies(prisma, llm);
+    const turns = calls[0]!;
+    expect(turns.map((x) => x.content)).not.toContain("algo viejo");
+    expect(turns.map((x) => x.content)).not.toContain("respuesta vieja");
+    expect(turns[0]!.content).toContain("Es el primer mensaje: saludá una sola vez");
   });
 
   it("D-057: cancelar, reclamos, precios, comprobantes o pedir una persona van a un asesor sin pasar por la IA", async () => {
@@ -172,6 +187,14 @@ describe("bot del chat de la app (D-056)", () => {
     expect(r.failed).toBe(1);
     expect((await prisma.message.findUniqueOrThrow({ where: { id: msg.id } })).botStatus).toBe("ERROR");
     expect(await prisma.message.count({ where: { fromBot: true } })).toBe(0);
+  });
+});
+
+describe("controles sobre la IA (D-061)", () => {
+  it("D-061: si el cliente no dijo el material, la IA no elige casilla", async () => {
+    const llm: Llm = async () => ({ reply: "Mandalo a dtf@viavinilo.com", handoff: false, reason: null });
+    const a = await decideAnswer({ text: "Graciela, tel 0387 4322063", firstName: null, alreadyTalking: true, noticesOn: false, jobs: [], turns: [], llm, now: new Date() });
+    expect(a.reply).toMatch(/de qué material/);
   });
 });
 

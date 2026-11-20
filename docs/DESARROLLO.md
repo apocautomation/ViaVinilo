@@ -1007,6 +1007,31 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Pestaña "Enviar" de la app**: simulaba un envío ("¡Recibimos tu trabajo!") sin mandar nada. Ahora explica a qué casilla mandar el archivo según el servicio y abre el correo con la casilla y los datos del cliente ya cargados. Subir archivos desde la app sigue pendiente (I-19).
 - **Por qué**: Ezequiel: "antes de avisarle si está listo hay que pedirle el archivo, verificarlo, la cotización, la seña si es necesaria y recién ahí se le avisa", "¿podemos automatizar eso por la app o por mail cuando pase a listo para retirar?".
 
+### D-061 · 20/11/2026 · Ezequiel · comando /reset, avisos en el menú ☰ y prueba del bot con mensajes reales
+- **Avisos en el menú ☰ de acciones masivas**: sección "Avisos automáticos a clientes", con el estado (prendidos o apagados) y "Prender" y "Apagar", igual que el bot. Todos ven el estado; los cambia solo el dueño, porque salen mails reales.
+- **Comando `/reset`**: si un cliente manda `/reset` por el chat de la app o por mail (en la primera línea), se responde "Memoria borrada correctamente." y el bot deja de recordar todo lo anterior con ese cliente.
+  - No se borra ningún mensaje: se guarda desde cuándo lee el bot (`Conversation.botResetAt`), y el equipo sigue viendo el hilo completo.
+  - También saca la marca "Pide asesor". El bot sigue prendido o apagado en ese chat como estaba.
+  - Por mail, la respuesta sale en el mismo hilo y no crea pedido (resultado `COMMAND` en el log de mails).
+  - Sirve para probar el bot desde cero.
+- **Prueba de punta a punta con mensajes reales**:
+  - Se pasaron por el bot 24 mails reales de clientes y la conversación de prueba de Ezequiel, con el modelo del VPS. Se usó una imagen aparte, sin tocar producción ni la base, y los datos se borraron al terminar.
+  - Se agregó `node dist/bot-dry-run.js` para repetir la prueba. Usa la misma decisión que el bot (`decideAnswer`).
+  - **Primera pasada: 7 de 27 mal**:
+    - "vinilo DTF textil" fue a Ecosolvente;
+    - "lo retiro en la sucursal San Juan" respondió horarios;
+    - "ahí va en png" respondió formatos;
+    - "ENVIAR A LA SAN JUAN" y "urgente, para hoy" recibieron promesas de la IA;
+    - con mensajes sin material, la IA mandaba todo a `dtf@`.
+  - **Arreglos**:
+    - primero cuenta el servicio que nombra el cliente y después el material;
+    - horarios, formatos y tiempos se responden solo si es una pregunta;
+    - "adjunto", "ahí va" o un nombre de archivo cuentan como trabajo nuevo;
+    - urgencia o envío a otra sucursal van a un asesor (regla de Runamatic);
+    - la IA no puede nombrar una casilla si el cliente no dijo el material.
+  - **Segunda pasada: 27 de 27 con respuesta correcta**: 22 por flujos fijos, 2 derivadas a un asesor y el resto preguntando el material.
+- **Por qué**: Ezequiel: "que los avisos se puedan prender y apagar del menú de acciones masivas", "/reset para testear más fácil" y "una prueba end to end con los mensajes de ejemplo de los clientes".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

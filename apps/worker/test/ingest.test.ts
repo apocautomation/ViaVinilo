@@ -306,6 +306,20 @@ describe("reenvíos desde una casilla nuestra (D-057)", () => {
   });
 });
 
+describe("comando /reset por mail (D-061)", () => {
+  it("D-061: '/reset' por mail borra la memoria del bot, responde en el mismo hilo y no crea pedido", async () => {
+    const before = await prisma.jobOrder.count();
+    const raw = await buildMail({ from: "juan@remeras.test", to: "dtf@viavinilo.test", subject: "prueba", messageId: nextId(), text: "/reset\n\nSaludos" });
+    const r = await ingestMail(deps(), dtf, raw, { uid: 77 });
+    expect(r.result).toBe("COMMAND");
+    expect(await prisma.jobOrder.count()).toBe(before);
+    const out = await prisma.outboundEmail.findFirstOrThrow({ where: { kind: "bot-reset" } });
+    expect(out).toMatchObject({ to: "juan@remeras.test", text: "Memoria borrada correctamente.", fromAddress: "dtf@viavinilo.test", inReplyToUid: 77, subject: "Re: prueba" });
+    const conv = await prisma.conversation.findFirstOrThrow({ where: { customer: { emails: { some: { email: "juan@remeras.test" } } } } });
+    expect(conv.botResetAt).not.toBeNull();
+  });
+});
+
 describe("mails que no son pedidos", () => {
   it("I-15: un mail sin adjuntos ni links no crea orden y queda en el log", async () => {
     const raw = await buildMail({
