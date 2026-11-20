@@ -260,6 +260,84 @@ describe("mails que no son pedidos", () => {
 });
 
 describe("lectura de casillas", () => {
+  it("D-043: API de Hostinger: arranca desde ahora, lee solo los nuevos (con paginado) y nunca marca leído", async () => {
+    const inbox: { uid: number; source: Buffer }[] = [];
+    const add = async (uid: number) =>
+      inbox.push({
+        uid,
+        source: await buildMail({
+          from: "juan@remeras.test",
+          to: "dtf@viavinilo.test",
+          subject: `API ${uid}`,
+          messageId: `<api-${uid}@cliente.test>`,
+          attachments: [fakePdf(`api-${uid}.pdf`)],
+        }),
+      });
+    const calls: string[] = [];
+    // Simula la API real (probada el 20/11): "n:*" devuelve al menos el último mail aunque sea viejo.
+    const fakeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? "GET";
+      calls.push(`${method} ${url.pathname}`);
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer token-de-prueba");
+      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+      if (url.pathname.endsWith("/me")) {
+        return json({ data: { mailboxes: [{ resourceId: "ACdtf", address: "DTF@viavinilo.test" }] } });
+      }
+      const source = /\/messages\/(\d+)\/source$/.exec(url.pathname);
+      if (source) return new Response(inbox.find((m) => m.uid === Number(source[1]))!.source);
+      if (url.pathname.endsWith("/messages/search")) {
+        const from = Number(String(JSON.parse(String(init?.body)).uid).split(":")[0]);
+        const all = inbox.filter((m) => m.uid >= from);
+        const matched = all.length ? all : inbox.slice(-1);
+        const per = Number(url.searchParams.get("perPage"));
+        const page = Number(url.searchParams.get("page"));
+        return json({
+          data: matched.slice((page - 1) * per, page * per).map((m) => ({ uid: m.uid })),
+          pagination: { page, totalPages: Math.ceil(matched.length / per) },
+        });
+      }
+      if (url.pathname.endsWith("/messages")) {
+        return json({ data: inbox.slice(-1).map((m) => ({ uid: m.uid })), pagination: { page: 1, totalPages: 1 } });
+      }
+      throw new Error(`ruta inesperada ${method} ${url.pathname}`);
+    }) as typeof fetch;
+
+    const { hostingerMailboxIds, openHostingerMailbox } = await import("../src/mail/sources/hostinger-api");
+    const config = { token: "token-de-prueba", baseUrl: "https://api.test/api/v1" };
+    const ids = await hostingerMailboxIds(config, fakeFetch);
+    expect(ids.get("dtf@viavinilo.test")).toBe("ACdtf");
+
+    const open = () => openHostingerMailbox(config, "ACdtf", fakeFetch);
+    const ingest = (raw: Buffer) => ingestMail(deps(), dtf, raw);
+
+    // Historial de la casilla: no se importa.
+    for (const uid of [10, 11, 12]) await add(uid);
+    expect((await pollImapSector(prisma, dtf, open, ingest)).processed).toBe(0);
+    // Sin mails nuevos la búsqueda igual devuelve el último: no se procesa de nuevo.
+    expect((await pollImapSector(prisma, dtf, open, ingest)).processed).toBe(0);
+
+    // 120 mails nuevos: más de una página de la API (100 por página).
+    for (let uid = 13; uid < 133; uid++) await add(uid);
+    expect((await pollImapSector(prisma, dtf, open, ingest)).processed).toBe(120);
+    expect((await pollImapSector(prisma, dtf, open, ingest)).processed).toBe(0);
+
+    const state = await prisma.mailboxState.findUniqueOrThrow({ where: { sectorId: dtf.id } });
+    expect(state.lastUid).toBe(132);
+    expect(await prisma.jobOrder.count({ where: { sourceMessageId: { startsWith: "<api-" } } })).toBe(120);
+    // Solo lee: nunca cambia marcas (leído, respondido) ni mueve mails.
+    expect(calls.some((c) => c.startsWith("PATCH") || c.includes("/flags") || c.includes("/move"))).toBe(false);
+  });
+
+  it("D-043: con MAIL_SOURCE=hostinger-api el token es obligatorio", async () => {
+    const { loadConfig } = await import("../src/config");
+    expect(() => loadConfig({ MAIL_SOURCE: "hostinger-api" })).toThrow(/HOSTINGER_MAIL_API_TOKEN/);
+    expect(loadConfig({ MAIL_SOURCE: "hostinger-api", HOSTINGER_MAIL_API_TOKEN: "x" }).hostinger).toMatchObject({
+      token: "x",
+      baseUrl: "https://api.mail.hostinger.com/api/v1",
+    });
+  });
+
   it("IMAP: la primera vez arranca desde ahora, después lee solo los nuevos y avanza el UID", async () => {
     const inbox: { uid: number; source: Buffer }[] = [];
     const add = async (uid: number) =>
