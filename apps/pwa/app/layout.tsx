@@ -10,7 +10,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 export const metadata: Metadata = {
   title: "Via Vinilo",
   description: "Seguí tus trabajos de impresión de Via Vinilo.",
-  icons: { apple: "/icons/apple-touch-icon.png" },
+  // D-058: la mascota en la pestaña (el ícono explícito anula el app/icon de Next).
+  icons: { icon: [{ url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" }], apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
