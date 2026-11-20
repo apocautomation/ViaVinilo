@@ -7,7 +7,7 @@ import { startTestDb } from "./test-db";
 let app: INestApplication;
 let prisma: PrismaClient;
 let stopDb: () => Promise<void>;
-const tokens = { attention: "", production: "", customer: "" };
+const tokens = { attention: "", production: "", customer: "", owner: "" };
 let customerId = "";
 let dtfId = "";
 
@@ -15,6 +15,7 @@ const http = () => request(app.getHttpServer());
 const as = (who: keyof typeof tokens) => ({
   get: (url: string) => http().get(url).set("Authorization", `Bearer ${tokens[who]}`),
   post: (url: string, body?: object) => http().post(url).set("Authorization", `Bearer ${tokens[who]}`).send(body),
+  put: (url: string, body?: object) => http().put(url).set("Authorization", `Bearer ${tokens[who]}`).send(body),
 });
 
 beforeAll(async () => {
@@ -35,6 +36,8 @@ beforeAll(async () => {
   const impresor = await prisma.user.create({ data: { email: "impresor@viavinilo.test", name: "Imp", roles: ["PRODUCTION"] } });
   tokens.attention = await jwt.signAsync({ sub: asesor.id });
   tokens.production = await jwt.signAsync({ sub: impresor.id });
+  const duena = await prisma.user.create({ data: { email: "duena@viavinilo.test", name: "Dueña", roles: ["OWNER"] } });
+  tokens.owner = await jwt.signAsync({ sub: duena.id });
 
   const dtf = await prisma.sector.create({ data: { code: "DTF", name: "DTF", inboxEmail: "dtf@viavinilo.test" } });
   dtfId = dtf.id;
@@ -136,5 +139,53 @@ describe("Conversaciones: chat de la app y mails en un solo hilo (D-045)", () =>
   it("D-045: busca por nombre del cliente o por email", async () => {
     expect((await as("attention").get("/conversations?search=gomez")).body.total).toBe(1);
     expect((await as("attention").get("/conversations?search=nuevo@grafica")).body.total).toBe(1);
+  });
+});
+
+describe("bot del chat de la app (D-056)", () => {
+  const convId = async () => (await prisma.conversation.findUniqueOrThrow({ where: { customerId } })).id;
+  const lastIn = () => prisma.message.findFirstOrThrow({ where: { direction: "IN", channel: "APP" }, orderBy: { createdAt: "desc" } });
+
+  it("D-056: arranca apagado en general y en todos los chats: los mensajes no quedan para el bot", async () => {
+    const status = await as("attention").get("/conversations/bot");
+    expect(status.body).toMatchObject({ enabled: false, chatsWithBot: 0 });
+    await as("customer").post("/app/chat", { text: "Hola" });
+    expect((await lastIn()).botStatus).toBeNull();
+  });
+
+  it("D-056: solo el dueño prende el bot general, y queda en auditoría", async () => {
+    expect((await as("attention").put("/conversations/bot", { enabled: true })).status).toBe(403);
+    const res = await as("owner").put("/conversations/bot", { enabled: true });
+    expect(res.status).toBe(200);
+    expect(res.body.enabled).toBe(true);
+    const audit = await prisma.auditLog.findFirst({ where: { entity: "AppSetting", entityId: "bot" } });
+    expect(audit?.after).toEqual({ enabled: true });
+  });
+
+  it("D-056: con el general prendido, solo responde en los chats donde se prendió", async () => {
+    await as("customer").post("/app/chat", { text: "¿Abren el sábado?" });
+    expect((await lastIn()).botStatus).toBeNull();
+
+    const id = await convId();
+    expect((await as("attention").post(`/conversations/${id}/bot`, { enabled: true })).body.botEnabled).toBe(true);
+    await as("customer").post("/app/chat", { text: "¿Y el domingo?" });
+    expect((await lastIn()).botStatus).toBe("PENDING");
+  });
+
+  it("D-056: un chat 'Pide asesor' no le pasa mensajes al bot; cuando responde una persona deja de estar marcado", async () => {
+    const id = await convId();
+    await prisma.conversation.update({ where: { id }, data: { needsHuman: true, needsHumanReason: "Reclamo" } });
+    expect((await as("attention").get("/conversations?filter=HUMAN")).body.total).toBe(1);
+    await as("customer").post("/app/chat", { text: "¿Hay alguien?" });
+    expect((await lastIn()).botStatus).toBeNull();
+
+    await as("attention").post(`/conversations/${id}/messages`, { text: "Hola Ana, te ayudo yo.", channel: "APP" });
+    expect((await prisma.conversation.findUniqueOrThrow({ where: { id } })).needsHuman).toBe(false);
+    expect((await as("attention").get("/conversations?filter=HUMAN")).body.total).toBe(0);
+  });
+
+  it("D-056: el bot no se puede prender en el hilo de alguien que no es cliente", async () => {
+    const stranger = await prisma.conversation.findFirstOrThrow({ where: { customerId: null } });
+    expect((await as("attention").post(`/conversations/${stranger.id}/bot`, { enabled: true })).status).toBe(422);
   });
 });

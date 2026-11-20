@@ -14,6 +14,7 @@ import { api } from "../../session";
 interface Msg {
   id: string;
   direction: "IN" | "OUT";
+  fromBot?: boolean;
   channel: "APP" | "MAIL";
   subject: string | null;
   body: string;
@@ -76,7 +77,7 @@ function Chat() {
         )}
         {msgs?.map((m) => (
           <div key={m.id} className={`bubble ${m.direction === "IN" ? "me" : "bot"}`}>
-            {m.direction === "OUT" && <span className="bot-name">Via Vinilo</span>}
+            {m.direction === "OUT" && <span className="bot-name">{m.fromBot ? "Asistente virtual de Via Vinilo" : "Via Vinilo"}</span>}
             {m.channel === "MAIL" && (
               <span className="via-mail">
                 <Mail size={12} aria-hidden /> {m.direction === "IN" ? "Tu mail" : "Por mail"}

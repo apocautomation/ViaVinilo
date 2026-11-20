@@ -1,4 +1,5 @@
 import { SECTOR_CODES, type SectorCode } from "@viavinilo/contracts";
+import type { LlmConfig } from "./bot/llm";
 import { HOSTINGER_MAIL_API, type HostingerMailConfig } from "./mail/sources/hostinger-api";
 import type { ImapCredentials } from "./mail/sources/imap";
 
@@ -17,6 +18,8 @@ export interface WorkerConfig {
   /** Casilla desde la que salen los mails a clientes con la API de Hostinger (D-049). */
   mailSenderAddress: string | null;
   smtp: { url: string; from: string; contactUrl: string };
+  /** IA del bot de la app (D-056). Sin clave el bot no responde aunque esté prendido. */
+  bot: LlmConfig | null;
 }
 
 /** Lee la configuración del entorno. Nunca hay credenciales en el código (CLAUDE.md). */
@@ -61,5 +64,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
       from: env.SMTP_FROM ?? "Via Vinilo <no-responder@viavinilo.local>",
       contactUrl: env.SUPPORT_WHATSAPP_URL ?? "",
     },
+    bot: env.OPENAI_API_KEY?.trim()
+      ? {
+          apiKey: env.OPENAI_API_KEY.trim(),
+          baseUrl: env.BOT_API_URL?.trim() || "https://api.openai.com/v1",
+          model: env.BOT_MODEL?.trim() || "gpt-4.1-mini",
+        }
+      : null,
   };
 }

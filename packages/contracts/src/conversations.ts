@@ -5,7 +5,8 @@ export const MESSAGE_CHANNELS = ["APP", "MAIL"] as const;
 export const messageChannelSchema = z.enum(MESSAGE_CHANNELS);
 export type MessageChannel = z.infer<typeof messageChannelSchema>;
 
-export const CONVERSATION_FILTERS = ["ALL", "UNREAD", "APP", "MAIL"] as const;
+/** HUMAN: chats que el bot derivó a un asesor (D-056). */
+export const CONVERSATION_FILTERS = ["ALL", "UNREAD", "HUMAN", "APP", "MAIL"] as const;
 
 export const listConversationsSchema = z.object({
   filter: z.enum(CONVERSATION_FILTERS).default("ALL"),
@@ -23,3 +24,6 @@ export type SendMessageInput = z.input<typeof sendMessageSchema>;
 
 /** El cliente escribe desde la pestaña Chat de la app (D-045). */
 export const appChatMessageSchema = z.object({ text: textSchema });
+
+/** Prende o apaga el bot: en general (solo el dueño) o en un chat (D-056). */
+export const botToggleSchema = z.object({ enabled: z.boolean() });
