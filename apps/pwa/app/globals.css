@@ -1003,7 +1003,123 @@ details.faq p {
   min-height: 80dvh;
   display: grid;
   place-content: center;
+  justify-items: center;
   gap: 14px;
   text-align: center;
   color: var(--color-text-muted);
+}
+
+/* ── Escritorio: menú a la izquierda y contenido ancho. En el celular no cambia nada. ── */
+.tabbar-brand {
+  display: none;
+}
+@media (min-width: 960px) {
+  :root {
+    --side-w: 240px;
+  }
+  .app-shell {
+    max-width: 1180px;
+    display: grid;
+    grid-template-columns: var(--side-w) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+  }
+  .app-shell > .appbar,
+  .app-shell > .screen,
+  .app-shell > .composer {
+    grid-column: 2;
+  }
+  .app-shell > .splash,
+  .app-shell > .splash-error {
+    grid-column: 1 / -1;
+  }
+  /* Con el logo en el menú, la barra de arriba no lo repite. */
+  .app-shell .appbar-logo {
+    display: none;
+  }
+  .app-shell .appbar {
+    padding: 14px 28px;
+    min-height: 64px;
+  }
+
+  /* La barra inferior pasa a ser el menú lateral. */
+  .tabbar {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    position: sticky;
+    top: 0;
+    left: auto;
+    transform: none;
+    width: auto;
+    height: 100dvh;
+    padding: 20px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 0;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-surface);
+    backdrop-filter: none;
+  }
+  .tabbar-brand {
+    display: block;
+    padding: 4px 8px 20px;
+  }
+  .tabbar-brand img {
+    width: 100%;
+    max-width: 180px;
+  }
+  .tab {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 11px 12px;
+    font-size: 14.5px;
+  }
+  .tab:hover {
+    background: var(--color-neutral-50);
+    color: var(--color-text);
+  }
+  .tab[aria-current="page"] {
+    background: var(--color-brand-50);
+  }
+  .tab-send {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Contenido: más aire y los pedidos en columnas. */
+  .app-shell > .screen {
+    padding: 28px 28px 40px;
+    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+  .app-shell > .screen > :not(.order) {
+    grid-column: 1 / -1;
+  }
+  .app-shell > .screen > .seg {
+    justify-self: start;
+    min-width: 360px;
+  }
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 220px));
+  }
+
+  /* El chat del asistente queda abajo del contenido, no flotando sobre el menú. */
+  .app-shell > .composer {
+    position: sticky;
+    bottom: 0;
+    left: auto;
+    transform: none;
+    width: auto;
+  }
+
+  /* Ingreso: tarjeta centrada en lugar de pantalla de celular. */
+  .auth {
+    max-width: 440px;
+    min-height: auto;
+    margin: 6vh auto;
+    padding: 36px 32px;
+    border-radius: 20px;
+  }
 }
