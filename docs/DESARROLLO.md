@@ -661,6 +661,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - Para no repetir, se guarda el último `uid` de cada casilla. La deduplicación por Message-ID sigue igual.
     - Para responder se usa `POST /mailboxes/{id}/send` con `inReplyTo` = el `uid` del mail original, así queda en el mismo hilo.
     - Para recibir al instante hay webhooks `message.received`. Al principio alcanza con revisar cada minuto.
+  - **Fuente `hostinger-api` implementada (20/11)**:
+    - Se presenta como una casilla IMAP y reusa `pollImapSector`: arranca desde "ahora" sin importar el historial, avanza el último UID y deduplica por Message-ID.
+    - La API no expone el UIDVALIDITY; se usa un valor fijo.
+    - Se activa con `MAIL_SOURCE=hostinger-api`. El token es obligatorio.
+  - **Prueba en seco contra las casillas reales (20/11)**, con una imagen aparte y sin tocar la base:
+    - leyó los últimos mails de las 6 casillas y los mails siguieron sin leer;
+    - aparecieron dos cosas para revisar antes de prenderla:
+      - En `dtf@` llegan rebotes "Sin entregar: …": confirma I-22, DTF no puede enviar. La ingesta los descarta como respuesta automática.
+      - **Varios pedidos reales vienen sin adjunto** (por ejemplo "IMPRESION Y CALANDRADO - …", "impresion …"). Si tampoco traen un link de WeTransfer o Drive, con la regla de I-15 no crean orden y quedan en el log como "sin archivo". Hay que confirmar con Verónica si esos pedidos mandan el archivo después, en otro mail, o por otra vía.
 - **Por qué**: Ezequiel señaló que el MCP de Hostinger ya está conectado. Con la API no hace falta pedir contraseñas, que es lo que trababa la ingesta real desde D-027.
 
 ### D-044 · 19/11/2026 · Ezequiel · la E1 se entrega completa para cobrarla
