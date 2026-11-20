@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, Smartphone, X } from "lucide-react";
+import { Bot, BotOff, ExternalLink, FileText, Hand, Link2, Mail, Menu, MessagesSquare, Search, Send, SlidersHorizontal, Smartphone, X } from "lucide-react";
 import { JOB_STATUS_LABELS, parseMailBody, type JobStatus } from "@viavinilo/contracts";
 import { api, ApiError } from "../../../lib/api";
 import { Help } from "../../help";
@@ -15,13 +15,17 @@ import { CustomerRecord } from "../clientes/customer-record";
  * sector y en el mismo hilo del mail del cliente.
  */
 type Channel = "APP" | "MAIL";
-const FILTERS = [
+/** D-059: tres pestañas principales; el canal (App / Mail) se elige con el botón de filtros. */
+const TABS = [
   { label: "Todas", value: "ALL" },
   { label: "Sin leer", value: "UNREAD" },
   { label: "Pide asesor", value: "HUMAN" },
-  { label: "App", value: "APP" },
-  { label: "Mail", value: "MAIL" },
 ] as const;
+const CHANNELS = [
+  { label: "Solo chat de la app", value: "APP" },
+  { label: "Solo mails", value: "MAIL" },
+] as const;
+type Filter = (typeof TABS)[number]["value"] | (typeof CHANNELS)[number]["value"];
 /** Cada cuánto se refresca la bandeja (hasta tener avisos en vivo). */
 const REFRESH_MS = 10_000;
 
@@ -86,13 +90,18 @@ const initials = (name: string) =>
     .map((p) => p[0]!.toUpperCase())
     .join("") || "?";
 
-function when(iso: string) {
+/** "recién", "hace 5 min", "hace 2 h", "ayer" o la fecha (D-059). */
+function ago(iso: string) {
   const d = new Date(iso);
-  const today = new Date().toDateString() === d.toDateString();
-  return today
-    ? d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+  const min = Math.floor((Date.now() - d.getTime()) / 60_000);
+  if (min < 1) return "recién";
+  if (min < 60) return `hace ${min} min`;
+  if (min < 12 * 60 && new Date().toDateString() === d.toDateString()) return `hace ${Math.floor(min / 60)} h`;
+  const yesterday = new Date(Date.now() - 86_400_000).toDateString() === d.toDateString();
+  if (new Date().toDateString() === d.toDateString()) return d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return yesterday ? "ayer" : d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
 }
+
 
 const errorText = (e: unknown) => (e instanceof ApiError ? e.message : "Algo salió mal. Probá de nuevo.");
 
@@ -171,24 +180,6 @@ interface BotStatus {
   needsHuman: number;
 }
 
-/**
- * Estado del bot (D-057): es individual, se prende en cada chat con el botón del encabezado.
- * Acá se ve en cuántos chats responde y se puede apagar en todos de una vez.
- */
-function BotBar({ status }: { status: BotStatus | null }) {
-  if (!status) return null;
-  const on = status.chatsWithBot > 0;
-  return (
-    <div className={`bot-bar${on ? " on" : ""}`}>
-      <Bot size={16} aria-hidden />
-      <span>
-        <b>{on ? `Bot prendido en ${status.chatsWithBot} ${status.chatsWithBot === 1 ? "chat" : "chats"}` : "Bot apagado en todos los chats"}</b>
-        {!status.configured && <small className="error">El servidor todavía no tiene la IA local configurada.</small>}
-        {status.configured && <small>Se prende en cada chat, o en todos con el menú ☰ del hilo.</small>}
-      </span>
-    </div>
-  );
-}
 
 /** Cuerpo de un mensaje (D-057): el mail tal cual, pero con los links aparte y lo citado plegado. */
 function MessageBody({ m }: { m: Message }) {
@@ -284,7 +275,9 @@ function BotBulkMenu({ onDone }: { onDone: (s: BotStatus) => void }) {
 }
 
 export default function ConversacionesPage() {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]["value"]>("ALL");
+  const [filter, setFilter] = useState<Filter>("ALL");
+  const [showChannels, setShowChannels] = useState(false);
+  const [total, setTotal] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [list, setList] = useState<ConversationRow[] | null>(null);
@@ -324,7 +317,9 @@ export default function ConversacionesPage() {
     const params = new URLSearchParams({ filter, pageSize: "50" });
     if (query) params.set("search", query);
     try {
-      setList((await api<{ items: ConversationRow[] }>(`/conversations?${params}`)).items);
+      const res = await api<{ items: ConversationRow[]; total: number }>(`/conversations?${params}`);
+      setList(res.items);
+      setTotal(res.total);
     } catch (e) {
       setError(errorText(e));
     }
@@ -361,30 +356,59 @@ export default function ConversacionesPage() {
     <div className="inbox">
       <aside className="inbox-list" aria-label="Conversaciones">
         <div className="inbox-list-head">
-          <h1>
-            <span style={{ display: "flex", alignItems: "center" }}>
+          <div className="list-title">
+            <h1>
               Conversaciones
+              {total !== null && <span className="count">{total}</span>}
+            </h1>
+            <div className="list-tools">
+              {bot && bot.chatsWithBot > 0 && (
+                <span className="tool-chip" title={`El bot está prendido en ${bot.chatsWithBot} ${bot.chatsWithBot === 1 ? "chat" : "chats"}`}>
+                  <Bot size={15} aria-hidden /> {bot.chatsWithBot}
+                </span>
+              )}
+              <button
+                className={`tool-btn${CHANNELS.some((c) => c.value === filter) ? " active" : ""}`}
+                aria-label="Filtrar por canal"
+                aria-expanded={showChannels}
+                onClick={() => setShowChannels((v) => !v)}
+              >
+                <SlidersHorizontal size={17} aria-hidden />
+              </button>
               <Help label="Qué es Conversaciones">
                 Un hilo por cliente con todo lo que manda: el chat de la app y los mails a las casillas de cada sector
                 (con o sin archivo). Si trae un trabajo, el pedido ya está creado y se ve a la derecha. Respondé por la
                 app o por mail: el mail sale desde la casilla del sector y en el mismo hilo.
               </Help>
-            </span>
-          </h1>
-          <label className="search" style={{ width: "100%" }}>
-            <Search size={15} aria-hidden />
+            </div>
+          </div>
+          <label className="search search-wide">
+            <Search size={16} aria-hidden />
             <input
-              placeholder="Buscar cliente, N.º o email…"
+              placeholder="Buscar por nombre, N.º o email"
               aria-label="Buscar conversación"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          <BotBar status={bot} />
-          <div className="chip-row">
-            {FILTERS.map((f) => (
-              <button key={f.value} className="fchip" aria-pressed={filter === f.value} onClick={() => setFilter(f.value)}>
-                {f.label}
+          {showChannels && (
+            <div className="channel-filter">
+              {CHANNELS.map((c) => (
+                <button
+                  key={c.value}
+                  className="fchip"
+                  aria-pressed={filter === c.value}
+                  onClick={() => setFilter(filter === c.value ? "ALL" : c.value)}
+                >
+                  {c.value === "APP" ? <Smartphone size={13} aria-hidden /> : <Mail size={13} aria-hidden />} {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="tabs3" role="tablist">
+            {TABS.map((t) => (
+              <button key={t.value} role="tab" aria-selected={filter === t.value} onClick={() => setFilter(t.value)}>
+                {t.label}
               </button>
             ))}
           </div>
@@ -394,21 +418,41 @@ export default function ConversacionesPage() {
             const name = nameOf(c);
             return (
               <button key={c.id} className="chat-row" role="option" aria-selected={c.id === selected} onClick={() => setSelected(c.id)}>
-                <span className="avatar">{initials(name)}</span>
-                <span style={{ minWidth: 0, display: "grid", gap: 3 }}>
-                  <span className="name">{name}</span>
-                  <span className="last">{c.lastMessagePreview || "—"}</span>
-                  <span style={{ display: "flex", gap: 4 }}>
-                    {c.lastChannel && <span className={`mini-tag ${c.lastChannel === "APP" ? "tag-app" : "tag-mail"}`}>{c.lastChannel === "APP" ? "App" : "Mail"}</span>}
-                    {!c.customer && <span className="mini-tag tag-human">No es cliente</span>}
-                    {c.customer?.status === "PENDING" && <span className="mini-tag tag-human">Alta pendiente</span>}
-                    {c.needsHuman && <span className="mini-tag tag-human">Pide asesor</span>}
-                    {c.botEnabled && <span className="mini-tag tag-app">Bot</span>}
-                  </span>
+                <span className="avatar-wrap">
+                  <span className="avatar avatar-lg">{initials(name)}</span>
+                  {c.lastChannel && (
+                    <span className={`channel-badge ${c.lastChannel === "APP" ? "app" : "mail"}`} title={c.lastChannel === "APP" ? "Chat de la app" : "Mail"}>
+                      {c.lastChannel === "APP" ? <Smartphone size={10} aria-hidden /> : <Mail size={10} aria-hidden />}
+                    </span>
+                  )}
                 </span>
-                <span className="meta">
-                  {when(c.lastMessageAt)}
-                  {c.staffUnread > 0 && <span className="unread">{c.staffUnread}</span>}
+                <span className="row-main">
+                  <span className="row-line">
+                    <span className="name">{name}</span>
+                    <span className="time">{ago(c.lastMessageAt)}</span>
+                  </span>
+                  <span className="row-line">
+                    <span className="last">{c.lastMessagePreview || "—"}</span>
+                    <span className="row-icons">
+                      {c.needsHuman && (
+                        <span className="row-icon human" title="Pide un asesor">
+                          <Hand size={12} aria-hidden />
+                        </span>
+                      )}
+                      {c.botEnabled && (
+                        <span className="row-icon bot" title="Bot prendido en este chat">
+                          <Bot size={12} aria-hidden />
+                        </span>
+                      )}
+                      {c.staffUnread > 0 && <span className="unread">{c.staffUnread}</span>}
+                    </span>
+                  </span>
+                  {(!c.customer || c.customer.status === "PENDING") && (
+                    <span className="row-tags">
+                      {!c.customer && <span className="mini-tag tag-human">No es cliente</span>}
+                      {c.customer?.status === "PENDING" && <span className="mini-tag tag-human">Alta pendiente</span>}
+                    </span>
+                  )}
                 </span>
               </button>
             );
@@ -563,8 +607,11 @@ export default function ConversacionesPage() {
       ) : (
         <section className="thread" style={{ gridColumn: "2 / -1" }}>
           <div className="empty inbox-placeholder">
-            <MessagesSquare size={36} aria-hidden />
-            <strong>Elegí una conversación</strong>
+            <span className="placeholder-icon">
+              <MessagesSquare size={34} aria-hidden />
+            </span>
+            <strong>Elegí un chat</strong>
+            <span className="muted">Abrí una conversación de la lista para leerla y responder.</span>
             <span className="channels">
               <span>
                 <Smartphone size={15} aria-hidden /> Chat de la app
