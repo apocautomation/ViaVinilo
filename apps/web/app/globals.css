@@ -231,6 +231,29 @@ a {
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
+/* D-064: "Tableros por sector" como desplegable dentro del menú */
+.menu-group {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-group > span {
+  flex: 1;
+}
+.menu-group-chevron {
+  transition: transform 120ms ease;
+  color: var(--color-text-muted);
+}
+.menu-group[aria-expanded="true"] .menu-group-chevron {
+  transform: rotate(180deg);
+}
+.menu-item.menu-sub {
+  padding-left: 38px;
+  font-weight: 400;
+}
 .dd-sep {
   grid-column: 1 / -1;
   width: 100%;

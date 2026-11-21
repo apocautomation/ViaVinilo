@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
-import { formatJobNumber, JOB_STATUS_LABELS } from "@viavinilo/contracts";
-import { ASK_MATERIAL, fixedFlow, serviceFor } from "./flows";
+import { formatJobNumber, JOB_STATUS_LABELS, SECTOR_CODES } from "@viavinilo/contracts";
+import { ASK_MATERIAL, boardFor, fixedFlow, serviceFor, type ExtraBoard } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildSystemPrompt, type BotJob } from "./prompt";
@@ -31,19 +31,26 @@ export async function decideAnswer(input: {
   alreadyTalking: boolean;
   noticesOn: boolean;
   jobs: BotJob[];
+  boards?: ExtraBoard[];
   turns: ChatTurn[];
   llm: Llm;
   now: Date;
 }): Promise<BotAnswer & { source: "handoff" | "flow" | "ai" }> {
   const fixed = fixedHandoff(input.text);
   if (fixed) return { reply: handoffReply(input.now), handoff: true, reason: fixed, source: "handoff" };
-  const flow = fixedFlow(input.text, { firstName: input.firstName, alreadyTalking: input.alreadyTalking, noticesOn: input.noticesOn, jobs: input.jobs });
+  const flow = fixedFlow(input.text, {
+    firstName: input.firstName,
+    alreadyTalking: input.alreadyTalking,
+    noticesOn: input.noticesOn,
+    jobs: input.jobs,
+    boards: input.boards,
+  });
   if (flow) return { reply: flow, handoff: false, reason: null, source: "flow" };
   const answer = await input.llm(input.turns);
   let reply = fixMailboxes(toVoseo(answer.reply));
   if (!input.noticesOn) reply = dropNoticePromises(reply);
   // D-061: si el cliente no dijo el material, la IA no elige casilla (tendía a mandar todo a dtf@).
-  if (/@viavinilo\.com/i.test(reply) && !serviceFor(input.text)) return { reply: ASK_MATERIAL, handoff: false, reason: null, source: "flow" };
+  if (/@viavinilo\.com/i.test(reply) && !serviceFor(input.text) && !boardFor(input.text, input.boards)) return { reply: ASK_MATERIAL, handoff: false, reason: null, source: "flow" };
   return { ...answer, reply, source: "ai" };
 }
 
@@ -97,6 +104,10 @@ export async function processBotReplies(
     const customer = conv.customer;
     // D-057: los casos que siempre van a un asesor no pasan por la IA.
     const incoming = await prisma.message.findUniqueOrThrow({ where: { id: msg.id }, select: { body: true } });
+    // D-064: los tableros creados desde el ERP también los conoce el bot.
+    const boards: ExtraBoard[] = (
+      await prisma.sector.findMany({ where: { active: true, code: { notIn: [...SECTOR_CODES] } }, select: { name: true, inboxEmail: true } })
+    ).map((s) => ({ name: s.name, email: s.inboxEmail }));
     const jobs = await prisma.jobOrder.findMany({
       where: { customerId: customer.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
@@ -132,6 +143,7 @@ export async function processBotReplies(
       // D-060: memoria por conversación. Si ya hubo una respuesta en el hilo, no se saluda de nuevo.
       alreadyTalking,
       noticesOn: notices,
+      boards,
     });
     const turns: ChatTurn[] = [
       { role: "system", content: system },
@@ -149,6 +161,7 @@ export async function processBotReplies(
         alreadyTalking,
         noticesOn: notices,
         jobs: botJobs,
+        boards,
         turns,
         llm,
         now: now(),

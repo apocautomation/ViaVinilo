@@ -1070,6 +1070,22 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Pendiente (importante)**: el backup queda **en el mismo disco del VPS**. Si se rompe el disco o se pierde el VPS, se pierde también el backup. Falta la copia fuera del VPS (base y archivos); hay que definir el destino.
 - **Por qué**: al revisar dónde se guardan los archivos, se vio que D-015 estaba decidido pero no programado (el disco crecería unos 120 GB por año) y que no había ningún backup.
 
+### D-064 · 21/11/2026 · Ezequiel · tableros en un desplegable y creación de tableros desde el ERP
+- **Menú Producción**: "Tableros por sector" es un desplegable (arranca cerrado, salvo que estés en un tablero). Se sacó el ítem "Tableros" que estaba repetido; en su lugar está "Administrar tableros".
+- **Crear tableros** (Producción → Administrar tableros, solo el dueño):
+  - nombre, casilla de mail opcional y si lleva el paso "En proceso de calandra";
+  - nace con los pasos comunes: Archivo recibido → Cotizado → Seña recibida → Impreso → Terminado → Entregado;
+  - se puede desactivar: sale del menú, pero sus pedidos quedan. No se borra;
+  - queda en auditoría quién lo creó o lo cambió.
+- **Lo que pasa solo con un tablero nuevo**:
+  - aparece en el menú sin recargar;
+  - si tiene casilla, los mails que lleguen ahí crean pedidos en ese tablero (la lectura ya recorría los tableros activos). El token de la API de mail de Hostinger tiene que tener acceso a esa casilla;
+  - el bot lo conoce: si el cliente lo nombra ("necesito TPU"), lo manda a esa casilla o al clip del chat;
+  - la app lo ofrece al mandar un archivo desde el chat.
+- **Técnica**: el código del tablero pasó de enum a texto (`Sector.code`). La migración convierte la columna en el lugar. El diff automático proponía borrarla y crearla de nuevo, lo que perdía los códigos; se reescribió a mano, tiene un test de conservación y se probó sobre una copia de la base de producción (los 6 tableros conservaron código y pedidos).
+- **Pendiente**: editar los pasos de un tablero desde la pantalla (hoy se elige entre la secuencia común y la de calandra), asignar usuarios de producción al tablero nuevo, y sumar los tableros nuevos a la página Ayuda de la app. Sigue abierto I-26 (qué tableros faltan: TPU, Embroidery, Corte): ahora se resuelve creándolos.
+- **Por qué**: Ezequiel: "el tablero por sector tiene que ser un desplegable y está 2 veces", "que se puedan crear nuevos tableros y eso se agregue a la información del bot y a la automatización".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

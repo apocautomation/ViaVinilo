@@ -29,6 +29,8 @@ export interface BotContext {
   alreadyTalking?: boolean;
   /** Los avisos automáticos de estado están prendidos: el bot puede decir "te avisamos" (D-060). */
   noticesOn?: boolean;
+  /** Tableros creados desde el ERP (D-064). */
+  boards?: { name: string; email: string | null }[];
 }
 
 const ars = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
@@ -116,7 +118,7 @@ export function buildSystemPrompt(c: BotContext): string {
 - Si el cliente dice "gracias" o "después lo paso a buscar", agradecé y cerrá.
 
 # Cómo es un pedido (no te saltees pasos)
-1. El cliente manda el archivo POR MAIL a la casilla del servicio, con sus datos (la app todavía no recibe archivos).
+1. El cliente manda el archivo con el clip de este chat (elige el servicio y escribe medidas y cantidad) o por mail a la casilla del servicio, con sus datos.
 2. Via Vinilo revisa el archivo. Si tiene un problema, queda "Archivo con error" y hay que mandarlo de nuevo.
 3. Se cotiza: queda "Cotizado" con el precio.
 4. Si corresponde seña, se paga y queda "Seña recibida". Recién ahí entra a producción.
@@ -144,7 +146,11 @@ Cuando derives, decile que un asesor del equipo le responde por este mismo chat 
 # Datos del negocio
 ${knowledge()}
 
-${customerBlock(c)}
+${
+  c.boards?.length
+    ? `## Otros servicios (tableros nuevos)\n${c.boards.map((b) => `- ${b.name}: ${b.email ? `se manda a ${b.email} o` : "se manda"} con el clip del chat.`).join("\n")}\n\n`
+    : ""
+}${customerBlock(c)}
 
 # Respuesta
 Respondé SOLO con un JSON: {"reply": "texto para el cliente", "handoff": true|false, "reason": "por qué derivás (solo si handoff)"}`;

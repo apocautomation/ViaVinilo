@@ -95,6 +95,8 @@ export default function ErpLayout({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [sectors, setSectors] = useState<{ code: string; name: string }[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  /** "Tableros por sector" es un desplegable dentro del menú Producción (D-064). */
+  const [boardsToggle, setBoardsToggle] = useState<boolean | null>(null);
   const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -103,11 +105,18 @@ export default function ErpLayout({ children }: { children: ReactNode }) {
       return;
     }
     setUser(getUser());
-    api<{ code: string; name: string }[]>("/sectors").then(setSectors).catch(() => undefined);
+    const loadSectors = () => api<{ code: string; name: string }[]>("/sectors").then(setSectors).catch(() => undefined);
+    void loadSectors();
+    // "Administrar tableros" avisa cuando cambia la lista, así el menú se actualiza sin recargar (D-064).
+    window.addEventListener("vv:sectors", loadSectors);
+    return () => window.removeEventListener("vv:sectors", loadSectors);
   }, [router]);
 
   // Al navegar se cierra el menú.
-  useEffect(() => setOpen(null), [pathname]);
+  useEffect(() => {
+    setOpen(null);
+    setBoardsToggle(null);
+  }, [pathname]);
 
   // Clic afuera o Escape cierran el menú.
   useEffect(() => {
@@ -124,7 +133,10 @@ export default function ErpLayout({ children }: { children: ReactNode }) {
   }, [open]);
 
   const current = findNavItem(pathname);
-  const sectionOf = (s: NavSection) => s.items.some((i) => i.href === current?.href);
+  const sectionOf = (s: NavSection) =>
+    s.items.some((i) => i.href === current?.href) || (s.title === "Producción" && pathname.startsWith("/produccion"));
+  // Arranca cerrado, salvo que ya estés parado en un tablero.
+  const boardsOpen = boardsToggle ?? sectors.some((s) => pathname === `/produccion/${s.code}`);
 
   return (
     <div className="erp">
@@ -156,19 +168,28 @@ export default function ErpLayout({ children }: { children: ReactNode }) {
                 extra={
                   section.title === "Producción" && sectors.length > 0 ? (
                     <>
-                      <p className="dd-title">Tableros por sector</p>
-                      {sectors.map((s) => (
-                        <Link
-                          key={s.code}
-                          href={`/produccion/${s.code}`}
-                          className="menu-item"
-                          role="menuitem"
-                          aria-current={pathname === `/produccion/${s.code}` ? "page" : undefined}
-                        >
-                          <Factory size={17} strokeWidth={1.75} aria-hidden />
-                          <span>{s.name}</span>
-                        </Link>
-                      ))}
+                      <button
+                        type="button"
+                        className="menu-item menu-group"
+                        aria-expanded={boardsOpen}
+                        onClick={() => setBoardsToggle(!boardsOpen)}
+                      >
+                        <Factory size={17} strokeWidth={1.75} aria-hidden />
+                        <span>Tableros por sector</span>
+                        <ChevronDown size={15} className="menu-group-chevron" aria-hidden />
+                      </button>
+                      {boardsOpen &&
+                        sectors.map((s) => (
+                          <Link
+                            key={s.code}
+                            href={`/produccion/${s.code}`}
+                            className="menu-item menu-sub"
+                            role="menuitem"
+                            aria-current={pathname === `/produccion/${s.code}` ? "page" : undefined}
+                          >
+                            <span>{s.name}</span>
+                          </Link>
+                        ))}
                       <hr className="dd-sep" />
                     </>
                   ) : undefined

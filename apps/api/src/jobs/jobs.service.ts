@@ -7,7 +7,7 @@ import {
   UnprocessableEntityException,
   StreamableFile,
 } from "@nestjs/common";
-import { Prisma, type JobStatus, type SectorCode } from "@prisma/client";
+import { Prisma, type JobStatus } from "@prisma/client";
 import {
   JOB_STATUS_LABELS,
   allowedTransitions,
@@ -15,6 +15,7 @@ import {
   formatJobNumber,
   normalizeSearch,
   parseJobNumber,
+  type SectorCode,
 } from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
 import type { AuthUser } from "../auth/decorators";

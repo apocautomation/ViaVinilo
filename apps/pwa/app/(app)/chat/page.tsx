@@ -32,15 +32,25 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
   const service = help.SERVICES.find((s) => s.id === serviceId);
+  /** Tableros creados desde el ERP que no son un servicio de base (D-064). */
+  const [extra, setExtra] = useState<{ code: string; name: string }[]>([]);
+  useEffect(() => {
+    const base = new Set<string>(Object.values(SECTOR_OF));
+    api<{ code: string; name: string }[]>("/app/sectors")
+      .then((all) => setExtra(all.filter((x) => !base.has(x.code))))
+      .catch(() => undefined);
+  }, []);
+  const extraBoard = extra.find((x) => `sector:${x.code}` === serviceId);
 
   async function send(e: FormEvent) {
     e.preventDefault();
     if (!file || !serviceId) return;
     if (file.size > MAX_UPLOAD_BYTES) return setError("El archivo es muy grande: el máximo es 150 MB.");
     const form = new FormData();
-    form.append("sector", SECTOR_OF[serviceId]!);
-    const extra = [service ? `Servicio: ${service.name}` : "", note.trim()].filter(Boolean).join("\n");
-    if (extra) form.append("note", extra);
+    form.append("sector", extraBoard ? extraBoard.code : SECTOR_OF[serviceId]!);
+    const label = service?.name ?? extraBoard?.name;
+    const details = [label ? `Servicio: ${label}` : "", note.trim()].filter(Boolean).join("\n");
+    if (details) form.append("note", details);
     form.append("file", file);
     setError("");
     setProgress(0);
@@ -67,6 +77,11 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
           {help.SERVICES.map((s) => (
             <button type="button" key={s.id} className="choice" aria-pressed={serviceId === s.id} onClick={() => setServiceId(s.id)}>
               {s.name}
+            </button>
+          ))}
+          {extra.map((x) => (
+            <button type="button" key={x.code} className="choice" aria-pressed={serviceId === `sector:${x.code}`} onClick={() => setServiceId(`sector:${x.code}`)}>
+              {x.name}
             </button>
           ))}
         </div>

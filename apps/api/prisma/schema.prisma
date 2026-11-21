@@ -12,16 +12,6 @@ datasource db {
 
 // ───────────────────────── Enums ─────────────────────────
 
-/// Debe coincidir con SECTOR_CODES de @viavinilo/contracts.
-enum SectorCode {
-  DTF
-  DTF_UV
-  GRAN_FORMATO
-  LATEX
-  CALANDRADO
-  SUBLIMACION
-}
-
 /// Debe coincidir con JOB_STATUSES de @viavinilo/contracts. Textos para el cliente en JOB_STATUS_LABELS.
 enum JobStatus {
   PENDING_SIGNUP // Alta pendiente (D-014): mail de alguien que todavía no es cliente activo
@@ -334,7 +324,8 @@ model UserSector {
 
 model Sector {
   id         String          @id @default(cuid())
-  code       SectorCode      @unique
+  /// Código del tablero en mayúsculas (DTF, GRAN_FORMATO…). Texto libre desde D-064: se crean tableros desde el ERP.
+  code       String          @unique
   name       String
   /// Casilla de Hostinger del sector (dtf@, granformato@, ...).
   inboxEmail String?         @unique

@@ -1,4 +1,4 @@
-import { help } from "@viavinilo/contracts";
+import { help, normalizeSearch } from "@viavinilo/contracts";
 import type { BotJob } from "./prompt";
 
 /**
@@ -12,7 +12,23 @@ export interface FlowContext {
   alreadyTalking: boolean;
   noticesOn: boolean;
   jobs: BotJob[];
+  /** Tableros creados desde el ERP (D-064), además de los servicios de base. */
+  boards?: ExtraBoard[];
 }
+
+export interface ExtraBoard {
+  name: string;
+  email: string | null;
+}
+
+/** Si el cliente nombra un tablero creado desde el ERP ("TPU"), se usa ese. */
+export function boardFor(text: string, boards: ExtraBoard[] = []): ExtraBoard | null {
+  const t = ` ${normalizeSearch(text).replace(/[^a-z0-9]+/g, " ")} `;
+  return boards.find((b) => t.includes(` ${normalizeSearch(b.name).replace(/[^a-z0-9]+/g, " ").trim()} `)) ?? null;
+}
+
+const HOW_TO_SEND = (email: string | null) =>
+  email ? `Mandá el archivo con el clip 📎 de este chat o por mail a ${email}` : "Mandá el archivo con el clip 📎 de este chat";
 
 const GREETING = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis|qu[eé] tal)[\s!.,¿?]*$/i;
 const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo retiro|retiro)|estado de mi|mi pedido|c[oó]mo va|lo puedo retirar)\b/i;
@@ -91,10 +107,14 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
   }
 
   if (NEW_JOB.test(text)) {
+    const board = boardFor(text, c.boards);
+    if (board) {
+      return `¡Dale! ${HOW_TO_SEND(board.email)} (${board.name}) con tus datos: nombre, medidas y cantidad, y en qué sucursal lo retirás. Cuando lo recibimos lo revisamos y te pasamos el precio.`;
+    }
     if (!service) {
       return ASK_MATERIAL;
     }
-    return `¡Dale! Mandá el archivo por mail a ${service.email} (${service.name}) con tus datos: nombre, medidas y cantidad, y en qué sucursal lo retirás. Formato: ${service.formats}. Cuando lo recibimos lo revisamos y te pasamos el precio.`;
+    return `¡Dale! ${HOW_TO_SEND(service.email)} (${service.name}) con tus datos: nombre, medidas y cantidad, y en qué sucursal lo retirás. Formato: ${service.formats}. Cuando lo recibimos lo revisamos y te pasamos el precio.`;
   }
 
   return null;

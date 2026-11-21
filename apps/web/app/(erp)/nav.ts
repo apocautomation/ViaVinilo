@@ -4,7 +4,6 @@ import {
   BookOpenText,
   Building2,
   ClipboardList,
-  Factory,
   HandCoins,
   Landmark,
   LayoutDashboard,
@@ -55,7 +54,8 @@ export const NAV: NavSection[] = [
   {
     title: "Producción",
     items: [
-      { href: "/produccion", label: "Tableros", icon: Factory, stage: 1 },
+      // Los tableros de cada sector van en un desplegable arriba de estos ítems (D-064).
+      { href: "/produccion/tableros", label: "Administrar tableros", icon: Settings, stage: 1 },
       { href: "/produccion-tiempos", label: "Panel de tiempos", icon: Timer, stage: 1 },
     ],
   },

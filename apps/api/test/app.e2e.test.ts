@@ -337,3 +337,29 @@ describe("clientes", () => {
     });
   });
 });
+
+describe("tableros creados desde el ERP (D-064)", () => {
+  it("D-064: el dueño crea un tablero con sus pasos y su casilla; atención no puede", async () => {
+    expect((await api("attention").post("/sectors", { name: "TPU / Embroidery" })).status).toBe(403);
+    const res = await api("owner").post("/sectors", { name: "TPU / Embroidery", inboxEmail: "TPU@viavinilo.test" });
+    expect(res.status).toBe(201);
+    expect(res.body.code).toBe("TPU_EMBROIDERY");
+    const sector = await prisma.sector.findUniqueOrThrow({ where: { code: "TPU_EMBROIDERY" }, include: { stages: { orderBy: { position: "asc" } } } });
+    expect(sector.inboxEmail).toBe("tpu@viavinilo.test");
+    expect(sector.stages.map((s) => s.status)).toEqual(["RECEIVED", "QUOTED", "DEPOSIT_RECEIVED", "PRINTED", "READY", "DELIVERED"]);
+    // Aparece en el menú y tiene su tablero.
+    expect((await api("owner").get("/sectors")).body.map((s: { code: string }) => s.code)).toContain("TPU_EMBROIDERY");
+    expect((await api("owner").get("/jobs/board?sector=TPU_EMBROIDERY")).status).toBe(200);
+    // No se puede repetir.
+    expect((await api("owner").post("/sectors", { name: "tpu embroidery" })).status).toBe(409);
+  });
+
+  it("D-064: desactivar un tablero lo saca del menú sin borrarlo; queda en auditoría", async () => {
+    const s = await prisma.sector.findUniqueOrThrow({ where: { code: "TPU_EMBROIDERY" } });
+    const res = await api("owner").patch(`/sectors/${s.id}`, { active: false });
+    expect(res.body.active).toBe(false);
+    expect((await api("owner").get("/sectors")).body.map((x: { code: string }) => x.code)).not.toContain("TPU_EMBROIDERY");
+    expect((await api("owner").get("/sectors/all")).body.map((x: { code: string }) => x.code)).toContain("TPU_EMBROIDERY");
+    expect(await prisma.auditLog.count({ where: { entity: "Sector", entityId: s.id } })).toBe(2);
+  });
+});

@@ -21,12 +21,35 @@ describe("schema de Prisma", () => {
     expect(prismaEnum("JobStatus")).toEqual([...JOB_STATUSES]);
   });
 
-  it("el enum SectorCode coincide con @viavinilo/contracts", () => {
-    expect(prismaEnum("SectorCode")).toEqual([...SECTOR_CODES]);
+  it("D-064: el código de tablero es texto (se crean tableros desde el ERP); los 6 de base siguen en contracts", () => {
+    expect(schema).not.toMatch(/enum SectorCode/);
+    expect(SECTOR_CODES).toHaveLength(6);
   });
 });
 
 describe("migraciones", () => {
+  it("D-064: pasar el código de tablero a texto conserva los tableros y sus pedidos", async () => {
+    const db = new PGlite();
+    const dir = join(prismaDir, "migrations");
+    const all = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+    const cut = all.indexOf("20261121120000_sector_code_text");
+    expect(cut).toBeGreaterThan(0);
+    for (const m of all.slice(0, cut)) await db.exec(readFileSync(join(dir, m, "migration.sql"), "utf8"));
+    await db.exec(`
+      INSERT INTO "Customer" (id, "updatedAt") VALUES ('c1', now());
+      INSERT INTO "Sector" (id, code, name, "updatedAt") VALUES ('s1', 'DTF', 'DTF', now()), ('s2', 'GRAN_FORMATO', 'Gran Formato', now());
+      INSERT INTO "JobOrder" (id, "customerId", "sectorId", status, source, "updatedAt") VALUES ('j1', 'c1', 's2', 'RECEIVED', 'EMAIL', now());
+    `);
+    await db.exec(readFileSync(join(dir, all[cut]!, "migration.sql"), "utf8"));
+    const sectors = await db.query<{ id: string; code: string }>(`SELECT id, code FROM "Sector" ORDER BY id`);
+    expect(sectors.rows).toEqual([{ id: "s1", code: "DTF" }, { id: "s2", code: "GRAN_FORMATO" }]);
+    // Sigue siendo único y ahora acepta un código nuevo.
+    await db.exec(`INSERT INTO "Sector" (id, code, name, "updatedAt") VALUES ('s3', 'TPU', 'TPU', now())`);
+    await expect(db.exec(`INSERT INTO "Sector" (id, code, name, "updatedAt") VALUES ('s4', 'TPU', 'Otro', now())`)).rejects.toThrow();
+    expect((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM "JobOrder" WHERE "sectorId" = 's2'`)).rows[0]!.n).toBe(1);
+  });
+
+
   it("se aplican en orden sobre un Postgres vacío y crean las tablas de la E1", async () => {
     const db = new PGlite();
     const dir = join(prismaDir, "migrations");
