@@ -76,7 +76,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Sistema",
-    items: [{ href: "/configuracion", label: "Configuración", icon: Settings, preview: true }],
+    items: [{ href: "/configuracion", label: "Configuración", icon: Settings }],
   },
 ];
 

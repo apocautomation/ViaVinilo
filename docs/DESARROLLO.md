@@ -1123,6 +1123,20 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Tablero compacto**: cada tarjeta ocupa 3 renglones (número y tiempo, cliente con importe y seña, detalle) y el botón del paso siguiente; se abre con un clic para ver todo. Cada columna tiene su propio scroll. El tilde "Vista compacta" se recuerda en el navegador.
 - **Por qué**: Ezequiel: "cuando salen muchos pedidos no se agrupa… que no sea tan largo el scroll para abajo" y "hacé una prueba end to end del bot porque mirá estas conversaciones".
 
+### D-067 · 21/11/2026 · Ezequiel · campanita con avisos reales y Configuración (usuarios, roles, tableros)
+- **Campanita**: deja de ser un adorno. Muestra lo que hay pendiente, calculado al momento (no hay una bandeja guardada): chats que piden un asesor, chats sin atención hace mucho, chats con mensajes nuevos, pedidos con archivo con problema, pedidos sin cotizar y altas pendientes sin aprobar. Lo urgente va primero; cada aviso lleva a su pantalla. El punto rojo aparece solo si hay algo. Se actualiza cada 30 segundos.
+  - Atención y el dueño ven todo; Producción ve solo los avisos de pedidos de sus tableros.
+  - **Tiempos configurables** (Configuración → Avisos, solo el dueño): chat sin atención después de 30 minutos, pedido sin cotizar después de 4 horas, alta pendiente después de 24 horas. Son valores iniciales nuestros: TODO(spec) confirmarlos con Verónica.
+  - No manda nada al cliente ni al equipo por fuera del ERP (R-NOT-1 no se toca).
+- **Configuración** (rueda, solo el dueño) reemplaza la vista previa con datos de ejemplo:
+  - **Usuarios y roles**: crear, editar, desactivar y cambiar la contraseña. A cada usuario se le asigna el rol (Dueño, Atención, Producción) y, si es de Producción, los tableros que ve. Lo que puede hacer cada rol se muestra en la misma pantalla.
+  - **Permisos**: se asignan por rol y por tablero. La matriz de permisos a medida (tildar permiso por permiso) sigue siendo de la E3 (D-017); no se adelanta.
+  - **Tableros y máquinas**: alta y baja de máquinas por tablero; los tableros se siguen administrando en su pantalla (D-064).
+  - **Motivos de error**: alta y baja de los motivos de "Archivo con error" que lee el cliente.
+  - **Datos fiscales y Certificados ARCA**: quedan vacíos con el cartel "Etapa 3"; sin datos inventados.
+- **Seguridad**: contraseña del personal de 10 caracteres como mínimo; la define el dueño y se la pasa en persona (no se manda por mail ni se vuelve a mostrar). Nunca queda en la auditoría ni en las respuestas de la API. Siempre tiene que quedar un dueño activo y nadie se saca a sí mismo el acceso. Un usuario desactivado deja de entrar al toque. Todo cambio queda en auditoría con quién lo hizo.
+- **Por qué**: Ezequiel: "la campanita arreglala que muestre las notificaciones de los mensajes cuando pasa mucho tiempo sin atención un lead… que se pueda configurar en la rueda de configuración que está al lado, y hacé todo el apartado de configuración, roles… que se pueda asignar permisos".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

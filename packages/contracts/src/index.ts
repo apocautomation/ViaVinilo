@@ -11,3 +11,4 @@ export * as help from "./help-content";
 export * from "./mail-body";
 export * from "./files";
 export * from "./file-check";
+export * from "./admin";

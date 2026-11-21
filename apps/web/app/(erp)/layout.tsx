@@ -88,6 +88,75 @@ function Dropdown({
   );
 }
 
+interface Notice {
+  kind: string;
+  level: "urgent" | "normal";
+  title: string;
+  detail: string;
+  href: string;
+  count: number;
+}
+
+/** Campanita (D-067): avisos reales, calculados por la API. El punto rojo aparece solo si hay algo. */
+function NoticeBell({ isOwner }: { isOwner: boolean }) {
+  const pathname = usePathname();
+  const [data, setData] = useState<{ total: number; items: Notice[] }>({ total: 0, items: [] });
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const load = () => {
+      if (document.visibilityState === "visible" && getToken()) api<{ total: number; items: Notice[] }>("/notifications").then(setData).catch(() => undefined);
+    };
+    load();
+    const timer = setInterval(load, 30_000);
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    };
+  }, [pathname]);
+
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const label = data.total > 0 ? `Avisos: ${data.total} ${data.total === 1 ? "pendiente" : "pendientes"}` : "Avisos: nada pendiente";
+  return (
+    <div className="bell" ref={ref}>
+      <button className="icon-btn" aria-label={label} title="Avisos" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Bell size={18} strokeWidth={1.75} />
+        {data.total > 0 && <span className="icon-dot" />}
+      </button>
+      {open && (
+        <div className="bell-panel">
+          <div className="bell-head">
+            <strong>Avisos</strong>
+            {isOwner && <Link href="/configuracion?tab=avisos">Cambiar los tiempos</Link>}
+          </div>
+          {data.items.map((n) => (
+            <Link key={n.kind} href={n.href} className="bell-item" data-level={n.level}>
+              <strong>{n.title}</strong>
+              <small>{n.detail}</small>
+            </Link>
+          ))}
+          {data.items.length === 0 && <div className="bell-empty">No hay nada pendiente.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Estructura del ERP: barra superior con un menú desplegable por apartado (D-033). */
 export default function ErpLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -204,10 +273,7 @@ export default function ErpLayout({ children }: { children: ReactNode }) {
             <Search size={16} aria-hidden />
             <input type="search" placeholder="Buscar…" aria-label="Buscar orden, cliente o comprobante" />
           </label>
-          <button className="icon-btn" aria-label="Notificaciones">
-            <Bell size={18} strokeWidth={1.75} />
-            <span className="icon-dot" />
-          </button>
+          <NoticeBell isOwner={user?.roles.includes("OWNER") ?? false} />
           <Link href="/configuracion" className="icon-btn" aria-label="Configuración" title="Configuración">
             <Settings size={18} strokeWidth={1.75} />
           </Link>
