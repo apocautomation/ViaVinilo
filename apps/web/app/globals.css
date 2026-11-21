@@ -250,8 +250,9 @@ a {
 .menu-group[aria-expanded="true"] .menu-group-chevron {
   transform: rotate(180deg);
 }
-.menu-sub {
-  padding-left: 40px;
+.menu-item.menu-sub {
+  padding-left: 38px;
+  font-weight: 400;
 }
 .dd-sep {
   grid-column: 1 / -1;
