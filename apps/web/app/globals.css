@@ -1484,6 +1484,10 @@ table.data tfoot td {
   background: var(--color-success-bg);
   color: var(--color-success);
 }
+.file-check.hint {
+  background: var(--color-neutral-100);
+  color: var(--color-text-muted);
+}
 
 /* D-062: archivos al responder y descargas */
 .composer-files {

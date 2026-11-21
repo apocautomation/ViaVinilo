@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFile, readImageInfo } from "./file-check";
+import { checkFile, readImageInfo, readPdfPageSize } from "./file-check";
 
 /** Cabecera mínima de un PNG con ese tamaño. */
 function png(width: number, height: number, colorType = 6): Uint8Array {
@@ -51,5 +51,48 @@ describe("control automático del archivo (D-047, D-065)", () => {
     expect(checkFile({ ...dtf, image: readImageInfo(png(100, 100)), measures: [{ widthCm: 58, heightCm: 100 }, { widthCm: 30, heightCm: 40 }] }).verdict).toBe("unknown");
     expect(checkFile({ ...dtf, image: readImageInfo(png(100, 100)), measures: [{ widthCm: 58 }] }).verdict).toBe("unknown");
     expect(checkFile({ ...dtf, filename: "a.pdf", image: null, measures: [{ widthCm: 58, heightCm: 100 }] }).verdict).toBe("unknown");
+  });
+});
+
+describe("control del archivo: PDF y medidas sin unidad (D-071)", () => {
+  const pdfBytes = (box: string) => new TextEncoder().encode(`%PDF-1.4\n1 0 obj\n<< /Type /Page /MediaBox ${box} >>\nendobj\n`);
+
+  it("D-071: lee el tamaño real de la página de un PDF", () => {
+    // 58 cm = 1644,09 pt; 100 cm = 2834,65 pt.
+    expect(readPdfPageSize(pdfBytes("[0 0 1644.09 2834.65]"))).toEqual({ widthCm: 58, heightCm: 100 });
+    expect(readPdfPageSize(pdfBytes("[ 0 0 595 842 ]"))).toEqual({ widthCm: 21, heightCm: 29.7 });
+    expect(readPdfPageSize(new TextEncoder().encode("%PDF-1.7 sin página legible"))).toBeNull();
+    expect(readPdfPageSize(png(100, 100))).toBeNull();
+  });
+
+  it("D-071: un PDF que mide lo pedido se da por bueno, también si viene girado", () => {
+    const pdf = { widthCm: 58, heightCm: 100 };
+    expect(checkFile({ ...dtf, filename: "a.pdf", image: null, pdf, measures: [{ widthCm: 58, heightCm: 100 }] })).toMatchObject({ verdict: "ok", detail: "El PDF mide 58 × 100 cm, lo pedido." });
+    expect(checkFile({ ...dtf, filename: "a.pdf", image: null, pdf, measures: [{ widthCm: 100, heightCm: 58.5 }] }).verdict).toBe("ok");
+  });
+
+  it("D-071: un PDF con otra medida se marca para revisar; sin medida, se informa cuánto mide", () => {
+    const pdf = { widthCm: 21, heightCm: 29.7 };
+    const other = checkFile({ ...dtf, filename: "a.pdf", image: null, pdf, measures: [{ widthCm: 58, heightCm: 100 }] });
+    expect(other.verdict).toBe("review");
+    expect(other.detail).toContain("El PDF mide 21 × 29,7 cm y el pedido dice 58 × 100 cm");
+    const none = checkFile({ ...dtf, filename: "a.pdf", image: null, pdf, measures: [] });
+    expect(none).toMatchObject({ verdict: "unknown", hint: "El PDF mide 21 × 29,7 cm." });
+  });
+
+  it("D-071: sin medida, igual dice hasta qué tamaño se puede imprimir bien", () => {
+    // 5709 px a 250 dpi = 58 cm; 9843 px = 100 cm.
+    const r = checkFile({ ...dtf, image: readImageInfo(png(5709, 9843)), measures: [] });
+    expect(r.verdict).toBe("unknown");
+    expect(r.hint).toBe("Tiene 5709 × 9843 píxeles: alcanza para imprimir hasta 58 × 100 cm a 250 dpi.");
+  });
+
+  it("D-071: con la medida supuesta nunca se da el archivo por malo: se pide revisarlo", () => {
+    const bad = checkFile({ ...dtf, image: readImageInfo(png(1500, 2586)), measures: [{ widthCm: 58, heightCm: 100, assumed: true }] });
+    expect(bad.verdict).toBe("review");
+    expect(bad.detail).toContain("El cliente no puso la unidad");
+    expect(checkFile({ ...dtf, image: readImageInfo(png(6850, 11811)), measures: [{ widthCm: 58, heightCm: 100, assumed: true }] }).verdict).toBe("ok");
+    // Con la unidad escrita por el cliente, el mismo archivo sí es un error.
+    expect(checkFile({ ...dtf, image: readImageInfo(png(1500, 2586)), measures: [{ widthCm: 58, heightCm: 100 }] }).verdict).toBe("error");
   });
 });

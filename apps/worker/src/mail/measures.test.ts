@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractTransferLinks } from "./links";
-import { extractMeasures } from "./measures";
+import { assumePair, extractMeasures } from "./measures";
 
 describe("medidas declaradas en el mail", () => {
   it("lee ancho x alto con la unidad al final", () => {
@@ -48,5 +48,32 @@ describe("links de transferencia", () => {
   it("no repite el mismo link del texto y del HTML", () => {
     const url = "https://wetransfer.com/downloads/abc";
     expect(extractTransferLinks(url, `<a href="${url}">${url}</a>`)).toEqual([url]);
+  });
+});
+
+describe("medidas pegadas o sin unidad (D-071)", () => {
+  it("D-071: lee la unidad pegada a la x", () => {
+    expect(extractMeasures("TELA-153.091CMX185.181CM-URGENTE")).toMatchObject([{ widthCm: 153.09, heightCm: 185.18 }]);
+    expect(extractMeasures("lona 2mx1m")).toMatchObject([{ widthCm: 200, heightCm: 100 }]);
+  });
+
+  it("D-071: una palabra que empieza con m no se toma como metros", () => {
+    expect(extractMeasures("30 maria")).toEqual([]);
+  });
+
+  it("D-071: supone la unidad de un par sin unidad según el número", () => {
+    expect(assumePair("58x30")).toEqual({ widthCm: 58, heightCm: 30 });
+    expect(assumePair("58 ×30")).toEqual({ widthCm: 58, heightCm: 30 });
+    expect(assumePair("0.58x0.40")).toEqual({ widthCm: 58, heightCm: 40 });
+    expect(assumePair("1.50 X 40")).toEqual({ widthCm: 150, heightCm: 40 });
+    expect(assumePair("1,20 x 2")).toEqual({ widthCm: 120, heightCm: 200 });
+    expect(assumePair("385X145")).toEqual({ widthCm: 385, heightCm: 145 });
+  });
+
+  it("D-071: si el número es dudoso no supone nada", () => {
+    expect(assumePair("2481×3508")).toBeNull(); // píxeles
+    expect(assumePair("568 X 1.598")).toBeNull(); // ¿1,598 m o 1598?
+    expect(assumePair("5 x 7")).toBeNull();
+    expect(assumePair("58 x 30 cm")).toBeNull(); // ya tiene unidad: no es este caso
   });
 });

@@ -104,4 +104,28 @@ describe("control automático del archivo en el pedido (D-065)", () => {
     job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: first.jobId! }, include: { files: true } });
     expect(job.fileCheck).toMatchObject({ verdict: "ok", file: "remera-corregida.png" });
   });
+
+  it("D-071: con la medida sin unidad ('58x100') controla igual, pero nunca mueve el pedido solo", async () => {
+    await autoOn();
+    const r = await ingestMail(deps(), sector as never, await mail("dtf 58x100 para el sábado", png(1500, 2586)));
+    expect(await processFileChecks(prisma, storage)).toEqual({ checked: 1, errors: 0 });
+    const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: r.jobId! } });
+    expect(job.status).toBe("RECEIVED");
+    expect(job.fileCheck).toMatchObject({ verdict: "review", effectiveDpi: 66 });
+  });
+
+  it("D-071: sin ninguna medida deja el dato de hasta qué tamaño se puede imprimir", async () => {
+    const r = await ingestMail(deps(), sector as never, await mail("Hola, te mando el archivo", png(5709, 9843)));
+    await processFileChecks(prisma, storage);
+    const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: r.jobId! } });
+    expect(job.fileCheck).toMatchObject({ verdict: "unknown", hint: "Tiene 5709 × 9843 píxeles: alcanza para imprimir hasta 58 × 100 cm a 250 dpi." });
+  });
+
+  it("D-071: un PDF se controla por el tamaño de su página", async () => {
+    const pdf = Buffer.from(["%PDF-1.4", "1 0 obj", "<< /Type /Page /MediaBox [0 0 1644.09 2834.65] >>", "endobj", ""].join("\n"));
+    const r = await ingestMail(deps(), sector as never, await mail("Medida: 58 x 100 cm", pdf, "remeras.pdf"));
+    await processFileChecks(prisma, storage);
+    const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: r.jobId! } });
+    expect(job.fileCheck).toMatchObject({ verdict: "ok", detail: "El PDF mide 58 × 100 cm, lo pedido.", file: "remeras.pdf" });
+  });
 });

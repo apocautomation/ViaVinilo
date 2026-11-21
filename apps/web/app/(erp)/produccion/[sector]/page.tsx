@@ -24,7 +24,7 @@ interface Card {
   estimatedReadyAt: string | null;
   fileCount: number;
   /** Resultado del control automático del archivo (D-065). */
-  fileCheck: { verdict: "ok" | "review" | "error" | "unknown"; detail: string } | null;
+  fileCheck: { verdict: "ok" | "review" | "error" | "unknown"; detail: string; hint?: string } | null;
   linkCount: number;
   machine: { id: string; name: string } | null;
   material: { id: string; name: string } | null;
@@ -457,6 +457,8 @@ export default function BoardPage() {
                     </p>
                   )}
                   {card.status === "RECEIVED" && card.fileCheck?.verdict === "ok" && <p className="file-check ok">Archivo controlado: {card.fileCheck.detail}</p>}
+                  {/* D-071: aunque no se pudo decidir, el dato del archivo le sirve al operador para cotizar. */}
+                  {card.status === "RECEIVED" && card.fileCheck?.verdict === "unknown" && card.fileCheck.hint && <p className="file-check hint">{card.fileCheck.hint}</p>}
 
                   {card.fileCount > 0 && ["RECEIVED", "QUOTED", "DEPOSIT_RECEIVED"].includes(card.status) && (
                     printUnlocked(card) ? (

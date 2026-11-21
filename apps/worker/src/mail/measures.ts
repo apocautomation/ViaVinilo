@@ -12,7 +12,8 @@ export interface DeclaredMeasure {
   lengthCm?: number;
 }
 
-const UNIT = String.raw`(cm|mm|mts?|metros?|m)\b`;
+// La unidad puede venir pegada a la "x" ("153CMX185CM"): por eso no se pide fin de palabra, solo que no siga otra letra.
+const UNIT = String.raw`(cm|mm|mts?|metros?|m)(?![a-wyzáéíóúñ])`;
 const NUM = String.raw`(\d+(?:[.,]\d+)?)`;
 const PAIR = new RegExp(String.raw`${NUM}\s*(?:${UNIT})?\s*[x×X*]\s*${NUM}\s*(?:${UNIT})?`, "gi");
 const SINGLE = new RegExp(String.raw`${NUM}\s*${UNIT}`, "gi");
@@ -57,4 +58,25 @@ export function extractMeasures(text: string): DeclaredMeasure[] {
     seen.add(key);
     return true;
   });
+}
+
+/**
+ * Medida escrita sin unidad ("58x30", "0.58 x 0.40", "1,50 X 40"): se supone la unidad por el número
+ * (D-071). Con decimales y menor a 10 son metros; un entero de 10 a 2000 son centímetros. Si un número
+ * no encaja (por ejemplo "2481×3508", que son píxeles, o "1.598", que puede ser 1598), no se supone nada.
+ */
+export function assumePair(raw: string): { widthCm: number; heightCm: number } | null {
+  const m = /^\s*(\d+(?:[.,]\d+)?)\s*[x×X*]\s*(\d+(?:[.,]\d+)?)\s*$/.exec(raw);
+  if (!m) return null;
+  const guess = (value: string): number | null => {
+    if (/[.,]\d{3}$/.test(value)) return null; // "1.598": ¿1,598 m o 1598?
+    const n = Number(value.replace(",", "."));
+    if (!Number.isFinite(n) || n <= 0) return null;
+    if (/[.,]/.test(value)) return n < 10 ? round(n * 100) : n <= 2000 ? round(n) : null;
+    if (n <= 3) return n * 100; // "1 x 2": metros
+    return n >= 10 && n <= 2000 ? n : null;
+  };
+  const widthCm = guess(m[1]!);
+  const heightCm = guess(m[2]!);
+  return widthCm && heightCm ? { widthCm, heightCm } : null;
 }
