@@ -5,9 +5,10 @@ import { CatalogController } from "./catalog.controller";
 import { JobsController } from "./jobs.controller";
 import { JobsService } from "./jobs.service";
 import { SectorAccess } from "./sector-access";
+import { TimesController, TimesService } from "./times.controller";
 
 @Module({
-  controllers: [JobsController, CatalogController, AppJobsController],
-  providers: [JobsService, AppJobsService, SectorAccess, AuditService],
+  controllers: [TimesController, JobsController, CatalogController, AppJobsController],
+  providers: [JobsService, AppJobsService, TimesService, SectorAccess, AuditService],
 })
 export class JobsModule {}
