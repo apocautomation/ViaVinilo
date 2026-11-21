@@ -10,6 +10,9 @@ describe("derivación fija a un asesor (D-057)", () => {
     expect(fixedHandoff("quiero hablar con un asesor")).toBe("Pide hablar con una persona");
     expect(fixedHandoff("Envian san juan Urgente porfavor, para hoy")).toBe("Pide urgencia o que lo manden a otra sucursal");
     expect(fixedHandoff("ENVIAR A LA SAN JUAN")).toBe("Pide urgencia o que lo manden a otra sucursal");
+    expect(fixedHandoff("ya te transferí")).toBe("Manda un comprobante de pago");
+    // Pedir el alias para transferir no es mandar un comprobante (D-066).
+    expect(fixedHandoff("me pasas el alias para transferir?")).toBeNull();
     expect(fixedHandoff("¿ya está listo mi pedido?")).toBeNull();
     expect(fixedHandoff("¿cómo mando el archivo para DTF?")).toBeNull();
   });

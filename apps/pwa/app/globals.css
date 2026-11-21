@@ -1452,3 +1452,13 @@ details.faq .help-body p.help-warn {
     padding-bottom: 24px;
   }
 }
+
+/* D-066: links dentro de un mensaje del chat */
+.bubble-text a {
+  color: var(--color-link);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.bubble.me .bubble-text a {
+  color: #fff;
+}

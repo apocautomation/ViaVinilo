@@ -8,6 +8,24 @@ import { ACCEPT_ATTRIBUTE, attachmentsOf, formatBytes, help, MAX_UPLOAD_BYTES, t
 import { AppBar } from "../../components";
 import { api, downloadFile, upload } from "../../session";
 
+/** Texto del mensaje con los links tocables (D-066): el bot manda mapas y la tienda. */
+function Linkified({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a key={i} href={part.replace(/[.,;)]+$/, "")} target="_blank" rel="noreferrer">
+            {part.replace(/^https?:\/\/(www\.)?/, "").replace(/[.,;)]+$/, "")}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 /** Servicio de la Ayuda → tablero donde entra el pedido (D-062). */
 const SECTOR_OF: Record<string, SectorCode> = {
   "dtf-textil": "DTF",
@@ -189,7 +207,9 @@ function Chat() {
                 {m.subject ? ` · ${m.subject}` : ""}
               </span>
             )}
-            <span className="bubble-text">{m.body}</span>
+            <span className="bubble-text">
+              <Linkified text={m.body} />
+            </span>
             {attachmentsOf(m.attachments).map((a, i) =>
               a.key ? (
                 <button

@@ -16,9 +16,18 @@ export function fixMailboxes(text: string): string {
   });
 }
 
+/** Corta en oraciones: el punto de un mail o de un link ("dtf@viavinilo.com") no es fin de oración. */
+const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+/).filter(Boolean);
+
+/** Saca las oraciones que cumplen el patrón. Devuelve "" si no queda nada. */
+export function dropSentencesWith(text: string, re: RegExp): string {
+  return sentencesOf(text)
+    .filter((s) => !re.test(s))
+    .join(" ")
+    .trim();
+}
+
 export function dropNoticePromises(text: string): string {
-  const sentences = text.match(/[^.!?]+[.!?]*/g) ?? [text];
-  const kept = sentences.filter((s) => !/\bte (avisamos|avisaremos|vamos a avisar|notificamos)\b/i.test(s));
-  const out = kept.join("").trim();
+  const out = dropSentencesWith(text, /\bte (avisamos|avisaremos|vamos a avisar|notificamos)\b/i);
   return out || text;
 }

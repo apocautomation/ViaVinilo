@@ -6,7 +6,7 @@ const RULES: { reason: string; re: RegExp }[] = [
   { reason: "Quiere cancelar o cambiar un pedido", re: /\b(cancel\w*|anul\w*|dar de baja|cambiar (el|mi) pedido|modificar (el|mi) pedido)\b/i },
   { reason: "Reclamo por una falla", re: /\b(reclam\w*|falla\w*|fallado|defect\w*|salió mal|salio mal|vino mal|se despeg\w*|se borr\w*|manch\w*)\b/i },
   { reason: "Pide precio o presupuesto", re: /\b(precio\w*|cu[aá]nto (sale|cuesta|vale|es|ser[ií]a)|presupuesto\w*|cotiz\w*|lista de precios)\b/i },
-  { reason: "Manda un comprobante de pago", re: /\b(comprobante|transfer[ií]\w*|ya pagu[eé]|te pagu[eé]|pagu[eé] la seña|seña pagada)\b/i },
+  { reason: "Manda un comprobante de pago", re: /\b(comprobante|ya (te |les )?(transfer[ií]|pagu[eé]|deposit[eé])|(te|les) (transfer[ií]|pagu[eé]|deposit[eé])|pagu[eé] la seña|seña pagada)/i },
   {
     reason: "Pide urgencia o que lo manden a otra sucursal",
     re: /\b(urgente|para hoy|lo antes posible|lo m[aá]s r[aá]pido|env[ií]a(r|n|lo)? a (la )?(sucursal|san juan|chile)|mand(ar|en|alo) a (la )?(sucursal|san juan)|cambi(ar|o) de sucursal)\b/i,
