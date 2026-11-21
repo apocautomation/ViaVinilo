@@ -1176,6 +1176,20 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Permisos**: dueño y atención ven todos los tableros; producción, solo los suyos.
 - **Por qué**: Ezequiel: "seguí con el panel de tiempos". Era el último punto de la E1 sin datos reales.
 
+### D-071 · 21/11/2026 · Ezequiel · el control de archivos decide en más casos: PDF y medidas sin unidad
+- **Problema**: en producción, de 227 pedidos en "Archivo recibido" el control no decidía nada en 195: 92 llegaron por un link y no tienen el archivo guardado, 79 no tenían la medida "con unidad" y 32 no eran PNG ni JPG (30 PDF, 2 CorelDraw).
+- **Medidas sin unidad**: muchos clientes escriben "58x30", "0.58x0.40" o "1.50 X 40". Ahora se supone la unidad por el número: con decimales y menor a 10 son metros; un entero de 10 a 2000 son centímetros.
+  - Si el número es dudoso no se supone nada: "2481×3508" (son píxeles) o "568 X 1.598" (¿1,598 m o 1598?).
+  - **Con la medida supuesta nunca se da el archivo por malo**: como mucho queda "Revisar el archivo", y el pedido no se mueve solo aunque el paso automático esté prendido. El detalle aclara que la unidad se supuso.
+  - También se lee la unidad pegada a la x ("153CMX185CM"), que antes no se reconocía.
+- **PDF**: se lee el tamaño real de la página. Si coincide con la medida pedida (3% de tolerancia, también girado) queda controlado; si no, "Revisar el archivo" con las dos medidas. La resolución de lo que hay dentro del PDF no se controla.
+- **Sin ninguna medida**: el control igual deja un dato útil en la tarjeta para cotizar: "alcanza para imprimir hasta 58 × 100 cm a 250 dpi" o "El PDF mide 58 × 100 cm".
+- **CorelDraw (.cdr)**: sigue sin controlarse; son muy pocos.
+- **Sin IA**: se evaluó usar el modelo local para leer medidas de texto libre (I-09) y se descartó por ahora: el modelo chico inventa números, y con estas reglas se cubren los casos reales.
+- **Pedidos que ya estaban**: después de subirlo se vuelve a controlar todo lo que había quedado sin decidir.
+- **Pendiente** (PR siguiente): bajar el archivo de los links de Google Drive (son casi todos los links). TODO(spec): I-24 sigue abierto por el límite del error automático.
+- **Por qué**: Ezequiel: "bien, mejorá en todos esos casos".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

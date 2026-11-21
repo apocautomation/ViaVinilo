@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { checkFile, readImageInfo, type FileCheck } from "@viavinilo/contracts";
-import { extractMeasures, type DeclaredMeasure } from "./mail/measures";
+import { checkFile, readImageInfo, readPdfPageSize, type FileCheck } from "@viavinilo/contracts";
+import { assumePair, extractMeasures, type DeclaredMeasure } from "./mail/measures";
 import type { FileStorage } from "./storage";
 
 /**
@@ -21,12 +21,32 @@ async function autoSince(prisma: PrismaClient): Promise<Date | null> {
 }
 
 const IMAGE = /\.(png|jpe?g)$/i;
+const PDF = /\.pdf$/i;
 
-function measuresOf(specs: unknown, description: string | null): DeclaredMeasure[] {
+type CheckMeasure = DeclaredMeasure & { assumed?: boolean };
+
+/**
+ * Medidas del pedido: las que ya se leyeron al entrar el mail y, si no alcanzan, las que haya en el
+ * asunto, el cuerpo, la nota o la descripción. Si el cliente escribió un par sin unidad ("58x30"),
+ * se supone la unidad por el número (D-071).
+ */
+export function measuresOf(specs: unknown, description: string | null): CheckMeasure[] {
   const s = (specs ?? {}) as { measures?: unknown; note?: unknown; subject?: unknown; body?: unknown };
-  if (Array.isArray(s.measures) && s.measures.length) return s.measures as DeclaredMeasure[];
+  const stored = Array.isArray(s.measures) ? (s.measures as DeclaredMeasure[]) : [];
   const text = [s.note, s.subject, s.body, description].filter((x): x is string => typeof x === "string").join("\n");
-  return extractMeasures(text);
+  const found: CheckMeasure[] = stored.some((m) => m.widthCm && m.heightCm) ? stored : [...stored, ...extractMeasures(text)];
+  if (found.some((m) => m.widthCm && m.heightCm)) return found;
+  // Ninguna con unidad: se prueba suponerla. Si quedan varias distintas, checkFile no decide.
+  const seen = new Set<string>();
+  const assumed: CheckMeasure[] = [];
+  for (const m of found) {
+    const pair = assumePair(m.raw);
+    const key = pair ? `${pair.widthCm}|${pair.heightCm}` : "";
+    if (!pair || seen.has(key)) continue;
+    seen.add(key);
+    assumed.push({ raw: m.raw, ...pair, assumed: true });
+  }
+  return assumed.length ? assumed : found;
 }
 
 export async function processFileChecks(
@@ -45,18 +65,20 @@ export async function processFileChecks(
   let errors = 0;
 
   for (const job of jobs) {
-    // Se controla el archivo de imagen más nuevo (si mandó uno corregido, ese).
-    const file = job.files.find((f) => IMAGE.test(f.filename));
+    // Se controla el archivo más nuevo que se pueda leer: primero una imagen, si no un PDF.
+    const file = job.files.find((f) => IMAGE.test(f.filename)) ?? job.files.find((f) => PDF.test(f.filename));
     let check: FileCheck;
     if (!file) {
-      check = { verdict: "unknown", detail: job.files.length ? "El archivo no es PNG ni JPG: no se puede controlar la resolución." : "El pedido no tiene archivos guardados (llegó por un link)." };
+      check = { verdict: "unknown", detail: job.files.length ? "El archivo no es PNG, JPG ni PDF: no se puede controlar solo." : "El pedido no tiene archivos guardados (llegó por un link)." };
     } else {
       const head = await storage.getHead(file.storageKey, 2 * 1024 * 1024).catch(() => null);
+      const isPdf = PDF.test(file.filename);
       check = checkFile({
         sectorCode: job.sector.code,
         sectorName: job.sector.name,
         filename: file.filename,
-        image: head ? readImageInfo(head) : null,
+        image: head && !isPdf ? readImageInfo(head) : null,
+        pdf: head && isPdf ? readPdfPageSize(head) : null,
         measures: measuresOf(job.requestedSpecs, job.description),
       });
     }
