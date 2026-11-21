@@ -8,6 +8,7 @@ import { processBotReplies } from "./bot/reply";
 import { processFileChecks } from "./file-check";
 import { createSmtpNotifier } from "./mail/invite";
 import { processNotices } from "./notices";
+import { processPush, webPushSender } from "./push";
 import { purgeOldFiles } from "./retention";
 import { hostingerSender, sendOutbox, smtpSender, type MailSender } from "./mail/outbox";
 import { pollAllMailboxes } from "./mail/poll";
@@ -143,6 +144,27 @@ async function main() {
   fileCheckWorker.on("failed", (_job, err) => console.error("[archivos] falló el control", err.message));
   await fileCheckQueue.upsertJobScheduler("file-check", { every: 20_000 }, { name: "check" });
 
+  // Notificaciones push de la app (D-068): cada 5 s manda al celular los mensajes nuevos del chat.
+  const pushQueue = new Queue(QUEUES.push, { connection });
+  const pushSender = config.push ? webPushSender(config.push) : null;
+  const pushWorker = new Worker(
+    QUEUES.push,
+    async () => {
+      if (!pushSender) return;
+      const r = await processPush(prisma, pushSender);
+      if (r.sent || r.failed || r.removed) console.log(`[push] ${r.sent} notificaciones enviadas, ${r.failed} con error, ${r.removed} suscripciones dadas de baja`);
+    },
+    { connection, concurrency: 1 },
+  );
+  pushWorker.on("failed", (_job, err) => console.error("[push] falló", err.message));
+  if (pushSender) {
+    await pushQueue.upsertJobScheduler("app-push", { every: 5_000 }, { name: "push" });
+    console.log("[worker] notificaciones push: prendidas");
+  } else {
+    await pushQueue.removeJobScheduler("app-push");
+    console.log("[worker] notificaciones push: sin claves (VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY), no se mandan");
+  }
+
   const shutdown = async () => {
     console.log("[worker] cerrando…");
     await mailWorker.close();
@@ -153,6 +175,8 @@ async function main() {
     await noticesWorker.close();
     await fileCheckWorker.close();
     await fileCheckQueue.close();
+    await pushWorker.close();
+    await pushQueue.close();
     await retentionWorker.close();
     await retentionQueue.close();
     await noticesQueue.close();

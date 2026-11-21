@@ -1,35 +1,57 @@
+"use client";
+
 import Link from "next/link";
-import { AlertTriangle, CircleDollarSign, PackageCheck, Printer } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BellRing } from "lucide-react";
 import { AppBar } from "../../components";
+import { api } from "../../session";
 
-/** Avisos que llegan por push (y mail de respaldo) en cada cambio de estado (actualización §2.6). */
-const AVISOS = [
-  { icon: PackageCheck, tone: "alert-ok", text: "VV-000418 está listo para retirar.", at: "Hoy 12:20", href: "/pedidos/418" },
-  { icon: Printer, tone: "alert-info", text: "VV-000411 ya está impreso y pasó a calandra.", at: "Hoy 11:15", href: "/pedidos/411" },
-  { icon: CircleDollarSign, tone: "alert-info", text: "VV-000421 está cotizado: $ 21.600,00.", at: "Hoy 10:22", href: "/pedidos/421" },
-  { icon: AlertTriangle, tone: "alert-bad", text: "VV-000415 tiene un problema con el archivo.", at: "Hoy 09:58", href: "/pedidos/415" },
-];
+interface Notice {
+  id: string;
+  subject: string | null;
+  body: string;
+  createdAt: string;
+}
 
+const when = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Salta", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+/** Avisos automáticos de los pedidos (D-060, D-068): los mismos que llegan al celular y por mail. */
 export default function AvisosPage() {
+  const [notices, setNotices] = useState<Notice[] | null>(null);
+  useEffect(() => {
+    api<{ messages: Notice[] }>("/app/chat")
+      .then((r) => setNotices(r.messages.filter((m) => m.subject === "Aviso automático").reverse()))
+      .catch(() => setNotices([]));
+  }, []);
+
   return (
     <>
       <AppBar title="Avisos" back right={<span />} />
       <main className="screen">
-        <section className="card">
-          {AVISOS.map(({ icon: Icon, tone, text, at, href }) => (
-            <Link key={text} href={href} className="list-link">
-              <span className={`list-ico alert ${tone}`} style={{ padding: 0 }}>
-                <Icon size={18} />
-              </span>
-              <span>
-                {text}
-                <small className="muted" style={{ display: "block", fontSize: 12 }}>
-                  {at}
-                </small>
-              </span>
-            </Link>
-          ))}
-        </section>
+        {notices?.length === 0 && (
+          <section className="card empty-orders">
+            <BellRing size={28} aria-hidden />
+            <strong>Todavía no tenés avisos</strong>
+            <span className="muted">Acá vas a ver las novedades de tus pedidos: cuando estén cotizados, listos para retirar o si hay que corregir el archivo.</span>
+          </section>
+        )}
+        {notices && notices.length > 0 && (
+          <section className="card">
+            {notices.map((n) => (
+              <Link key={n.id} href="/chat" className="list-link">
+                <span className="list-ico">
+                  <BellRing size={18} />
+                </span>
+                <span>
+                  {n.body}
+                  <small className="muted" style={{ display: "block", fontSize: 12 }}>
+                    {when.format(new Date(n.createdAt))}
+                  </small>
+                </span>
+              </Link>
+            ))}
+          </section>
+        )}
       </main>
     </>
   );

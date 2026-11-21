@@ -295,3 +295,68 @@ describe("ficha completa del cliente en el ERP (D-038)", () => {
     expect(dup.body.message).toBe("Ya existe un cliente con ese CUIT");
   });
 });
+
+describe("notificaciones push de la app (D-068)", () => {
+  const ENDPOINT = "https://fcm.googleapis.com/fcm/send/dispositivo-1";
+  const keys = { p256dh: "clave-publica-del-navegador-de-prueba", auth: "secreto-auth-prueba" };
+  // Token firmado directo: los tests de arriba cambian contraseñas y estados de estos clientes.
+  const tokenOf = async (n: number) => {
+    const { JwtService } = await import("@nestjs/jwt");
+    const c = await prisma.customer.findFirstOrThrow({ where: { lastName: `Gómez ${n}` } });
+    if (c.status !== "ACTIVE") await prisma.customer.update({ where: { id: c.id }, data: { status: "ACTIVE" } });
+    return app.get(JwtService).signAsync({ sub: c.id, kind: "customer" });
+  };
+  const asCustomer = (token: string) => ({
+    get: (url: string) => http().get(url).set("Authorization", `Bearer ${token}`),
+    post: (url: string, body?: object) => http().post(url).set("Authorization", `Bearer ${token}`).send(body),
+    put: (url: string, body?: object) => http().put(url).set("Authorization", `Bearer ${token}`).send(body),
+  });
+
+  it("D-068: sin sesión de cliente no se puede suscribir; el personal tampoco", async () => {
+    expect((await http().post("/app/push/subscriptions").send({ endpoint: ENDPOINT, keys })).status).toBe(401);
+    expect((await staff().post("/app/push/subscriptions", { endpoint: ENDPOINT, keys })).status).toBe(401);
+  });
+
+  it("D-068: el cliente suscribe su celular; repetirlo no lo duplica", async () => {
+    const c = asCustomer(await tokenOf(1));
+    expect((await c.post("/app/push/subscriptions", { endpoint: ENDPOINT, keys })).status).toBe(200);
+    expect((await c.post("/app/push/subscriptions", { endpoint: ENDPOINT, keys })).status).toBe(200);
+    expect(await prisma.pushSubscription.count({ where: { endpoint: ENDPOINT } })).toBe(1);
+  });
+
+  it("D-068: rechaza una dirección que no es de un servicio de push", async () => {
+    const c = asCustomer(await tokenOf(1));
+    expect((await c.post("/app/push/subscriptions", { endpoint: "https://postgres:5432/x", keys })).status).toBe(400);
+    expect((await c.post("/app/push/subscriptions", { endpoint: "http://fcm.googleapis.com/fcm/send/x", keys })).status).toBe(400);
+  });
+
+  it("D-068: si otro cliente entra en el mismo celular, la suscripción pasa a ese cliente", async () => {
+    const c4 = asCustomer(await tokenOf(4));
+    await c4.post("/app/push/subscriptions", { endpoint: ENDPOINT, keys });
+    const sub = await prisma.pushSubscription.findUniqueOrThrow({ where: { endpoint: ENDPOINT }, include: { customer: true } });
+    expect(sub.customer.lastName).toBe("Gómez 4");
+  });
+
+  it("D-068: un cliente no puede dar de baja la suscripción de otro; la suya sí", async () => {
+    await asCustomer(await tokenOf(1)).post("/app/push/unsubscribe", { endpoint: ENDPOINT });
+    expect(await prisma.pushSubscription.count({ where: { endpoint: ENDPOINT } })).toBe(1);
+    await asCustomer(await tokenOf(4)).post("/app/push/unsubscribe", { endpoint: ENDPOINT });
+    expect(await prisma.pushSubscription.count({ where: { endpoint: ENDPOINT } })).toBe(0);
+  });
+
+  it("D-068: el cliente elige sus avisos y quedan guardados", async () => {
+    const c = asCustomer(await tokenOf(1));
+    expect((await c.put("/app/notification-prefs", { push: false, email: true })).body).toEqual({ push: false, email: true });
+    expect((await c.get("/app/me")).body.notificationPrefs).toEqual({ push: false, email: true });
+    expect((await c.put("/app/notification-prefs", { push: "si" })).status).toBe(400);
+  });
+
+  it("D-068: la clave pública sale del entorno; sin claves, la app no ofrece notificaciones", async () => {
+    const c = asCustomer(await tokenOf(1));
+    delete process.env.VAPID_PUBLIC_KEY;
+    expect((await c.get("/app/push/key")).body).toEqual({ publicKey: null });
+    process.env.VAPID_PUBLIC_KEY = "clave-publica-de-prueba";
+    expect((await c.get("/app/push/key")).body).toEqual({ publicKey: "clave-publica-de-prueba" });
+    delete process.env.VAPID_PUBLIC_KEY;
+  });
+});

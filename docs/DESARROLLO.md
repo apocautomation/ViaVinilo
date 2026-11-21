@@ -1137,6 +1137,20 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Seguridad**: contraseña del personal de 10 caracteres como mínimo; la define el dueño y se la pasa en persona (no se manda por mail ni se vuelve a mostrar). Nunca queda en la auditoría ni en las respuestas de la API. Siempre tiene que quedar un dueño activo y nadie se saca a sí mismo el acceso. Un usuario desactivado deja de entrar al toque. Todo cambio queda en auditoría con quién lo hizo.
 - **Por qué**: Ezequiel: "la campanita arreglala que muestre las notificaciones de los mensajes cuando pasa mucho tiempo sin atención un lead… que se pueda configurar en la rueda de configuración que está al lado, y hacé todo el apartado de configuración, roles… que se pueda asignar permisos".
 
+### D-068 · 21/11/2026 · Ezequiel · notificaciones push en la app de clientes
+- **Qué**: todo mensaje que le queda al cliente en el chat de la app (respuesta del equipo, respuesta del bot o aviso automático de un pedido, D-060) le llega también como notificación al celular. Al tocarla se abre la app en el chat.
+  - No es WhatsApp (R-NOT-1 no se toca): es la notificación de la propia app instalada. El mail sigue como respaldo.
+  - Los avisos automáticos de estado siguen apagados hasta que se prendan en el ERP; hoy lo que notifica es la respuesta del equipo.
+- **Cómo lo prende el cliente**: en la pantalla principal aparece una tarjeta "Enterate al toque" (una sola vez), o desde Cuenta → Notificaciones en el celular. El interruptor es de cada dispositivo; "Avisos por mail" es de la cuenta. Las dos preferencias ahora las guarda el cliente desde la app (antes solo un asesor).
+  - **iPhone**: Apple solo permite notificaciones con la app instalada ("Agregar a inicio"). La app lo explica.
+  - Si el cliente las bloqueó en el navegador, la app le dice dónde habilitarlas.
+- **Envío**: el worker revisa cada 5 segundos los mensajes nuevos para el cliente y manda la notificación una sola vez. Si falla no se repite (queda el chat y el mail). Un mensaje de más de 30 minutos no se notifica. Si el celular ya no acepta avisos, la suscripción se borra sola. Cliente bloqueado o con las notificaciones apagadas: no se manda.
+- **Seguridad**: las claves (VAPID) van por entorno (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`); sin claves la app no ofrece notificaciones y el worker no manda nada. Solo se aceptan suscripciones de los servicios de push de los navegadores (Google, Apple, Mozilla, Microsoft), porque el sistema le escribe a esa dirección. Máximo 10 dispositivos por cliente.
+- **Pantalla Avisos de la app**: mostraba avisos de ejemplo; ahora muestra los avisos automáticos reales del cliente, o "Todavía no tenés avisos". El punto rojo fijo de la campanita de la app se sacó.
+- **Pendiente detectado**: "Mis pedidos" de la app sigue vacío (los pedidos reales del cliente no están conectados, "paso 6"). Es parte de la E1 y va en el PR siguiente.
+- **No probado**: la entrega real en un celular. El navegador de desarrollo bloquea notificaciones; hay que probarlo en producción con un Android y un iPhone.
+- **Por qué**: el contrato (E1) pide "PWA con… push. Email como respaldo"; era lo que faltaba para cerrar la etapa.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
