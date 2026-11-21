@@ -178,7 +178,7 @@ export const BRANCHES = [
       { days: "Lunes a viernes", time: "08:30 a 19:30" },
       { days: "Sábados", time: "08:30 a 13:00" },
     ],
-    mapUrl: "https://www.google.com/maps/search/?api=1&query=San+Juan+714+Salta+Argentina",
+    mapUrl: "https://maps.google.com/?q=San+Juan+714,+Salta",
   },
 ];
 

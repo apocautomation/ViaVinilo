@@ -1104,6 +1104,25 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **A confirmar** (`TODO(spec): I-24`): el límite de "la mitad del mínimo" para el paso automático lo propuso desarrollo.
 - **Fix**: "Administrar tableros" leía el rol del usuario durante el primer dibujo y React tenía que redibujar la página (error de hidratación). Ahora lo lee después de montar.
 
+### D-066 · 21/11/2026 · Ezequiel · respuestas del bot ordenadas y tablero compacto
+- **Prueba de punta a punta del chat** (28 preguntas típicas contra el bot del servidor). Primera pasada, lo que estaba mal:
+  - la dirección y los horarios salían como un bloque de texto con un link larguísimo;
+  - a "gracias" y a "ok" respondía preguntando el material;
+  - a "¿hacen envíos?" la IA inventó "Sí, hacemos envíos";
+  - pedir el alias para transferir derivaba a un asesor en vez de dar los datos;
+  - "¿tienen WhatsApp?", "¿hacen diseños?" y "¿dónde retiro lo de DTF?" los contestaba la IA, mal o de forma rara.
+- **Definición**: todo lo que se puede contestar con datos del sistema se contesta sin IA. Flujos nuevos:
+  - dirección y horarios por sucursal, en bloques cortos; con el servicio, solo su sucursal; "¿abren los sábados?" y "¿hasta qué hora hoy?" responden eso;
+  - datos de pago por servicio (Macro o Mercado Pago) y cuándo se pide seña;
+  - cierre ("gracias", "ok"), servicios que se hacen (con los tableros nuevos), espejo, diseño, insumos, retiro por cadete, envíos (se retira en sucursal; si necesita envío, asesor) y contacto (se atiende por el chat).
+  - Segunda pasada: las 28 bien; ninguna pasa por la IA salvo las derivaciones fijas.
+- **Otros arreglos**:
+  - pedir el alias ya no cuenta como "mandó un comprobante";
+  - al cortar una respuesta en oraciones, el punto de un mail ("dtf@viavinilo.com") ya no corta la oración;
+  - en la app, los links de los mensajes se pueden tocar; el mapa de la Sucursal Centro usa un link corto.
+- **Tablero compacto**: cada tarjeta ocupa 3 renglones (número y tiempo, cliente con importe y seña, detalle) y el botón del paso siguiente; se abre con un clic para ver todo. Cada columna tiene su propio scroll. El tilde "Vista compacta" se recuerda en el navegador.
+- **Por qué**: Ezequiel: "cuando salen muchos pedidos no se agrupa… que no sea tan largo el scroll para abajo" y "hacé una prueba end to end del bot porque mirá estas conversaciones".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

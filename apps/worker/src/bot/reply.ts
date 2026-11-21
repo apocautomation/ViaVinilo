@@ -4,7 +4,7 @@ import { ASK_MATERIAL, boardFor, fixedFlow, serviceFor, type ExtraBoard } from "
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildSystemPrompt, type BotJob } from "./prompt";
-import { dropNoticePromises, fixMailboxes } from "./guard";
+import { dropNoticePromises, dropSentencesWith, fixMailboxes } from "./guard";
 import { toVoseo } from "./voseo";
 
 const HISTORY = 12;
@@ -44,13 +44,17 @@ export async function decideAnswer(input: {
     noticesOn: input.noticesOn,
     jobs: input.jobs,
     boards: input.boards,
+    now: input.now,
   });
   if (flow) return { reply: flow, handoff: false, reason: null, source: "flow" };
   const answer = await input.llm(input.turns);
   let reply = fixMailboxes(toVoseo(answer.reply));
   if (!input.noticesOn) reply = dropNoticePromises(reply);
   // D-061: si el cliente no dijo el material, la IA no elige casilla (tendía a mandar todo a dtf@).
-  if (/@viavinilo\.com/i.test(reply) && !serviceFor(input.text) && !boardFor(input.text, input.boards)) return { reply: ASK_MATERIAL, handoff: false, reason: null, source: "flow" };
+  if (/@viavinilo\.com/i.test(reply) && !serviceFor(input.text) && !boardFor(input.text, input.boards)) {
+    reply = dropSentencesWith(reply, /@viavinilo\.com/i);
+    if (!reply) return { reply: ASK_MATERIAL, handoff: false, reason: null, source: "flow" };
+  }
   return { ...answer, reply, source: "ai" };
 }
 

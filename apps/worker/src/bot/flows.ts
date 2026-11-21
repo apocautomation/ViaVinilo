@@ -2,9 +2,9 @@ import { help, normalizeSearch } from "@viavinilo/contracts";
 import type { BotJob } from "./prompt";
 
 /**
- * Flujos fijos del bot, sin IA (D-060). Son los pasos del pedido que no pueden fallar: el modelo
- * local es chico y llegó a inventar "el archivo se recibió". La IA queda para el resto de las
- * preguntas (cómo preparar el archivo, horarios, pagos…).
+ * Flujos fijos del bot, sin IA (D-060, D-066). Son las respuestas que no pueden fallar: el modelo
+ * local es chico y llegó a inventar "el archivo se recibió" o "sí, hacemos envíos". Todo lo que se
+ * puede contestar con datos del sistema se contesta acá; la IA queda para lo demás.
  */
 
 export interface FlowContext {
@@ -14,6 +14,8 @@ export interface FlowContext {
   jobs: BotJob[];
   /** Tableros creados desde el ERP (D-064), además de los servicios de base. */
   boards?: ExtraBoard[];
+  /** Para "¿hasta qué hora atienden hoy?". */
+  now?: Date;
 }
 
 export interface ExtraBoard {
@@ -31,16 +33,31 @@ const HOW_TO_SEND = (email: string | null) =>
   email ? `Mandá el archivo con el clip 📎 de este chat o por mail a ${email}` : "Mandá el archivo con el clip 📎 de este chat";
 
 const GREETING = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis|qu[eé] tal)[\s!.,¿?]*$/i;
+/** Cierre corto: "gracias", "ok", "dale", "listo"… No es un pedido ni una pregunta. */
+const THANKS = /^\s*(much[ií]simas |muchas |mil )?(gracias|ok(ey)?|oka|dale|listo|perfecto|genial|buen[ií]simo|b[aá]rbaro|joya|de una)\b[^?]{0,25}$/i;
 const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo retiro|retiro)|estado de mi|mi pedido|c[oó]mo va|lo puedo retirar)\b/i;
 /** Un trabajo nuevo: pide imprimir, manda medidas o un archivo, o avisa que adjunta (D-060, D-061). */
 const NEW_JOB =
   /\b(imprimir|impresi[oó]n|quiero (hacer|mandar|imprimir)|te paso|necesito|adjunto|adjunta|ah[ií] va|te mando|les? (env[ií]o|mando|paso)|env[ií]o (el|un|los|unos|este)? ?archivos?|archivos? para)\b|\d+([.,]\d+)?\s*(m|cm|mts?)?\s*[x×]\s*\d|\.(png|jpe?g|pdf|tiff?|eps|ai|cdr|psd)\b/i;
 
-/** Horarios y formatos se responden solo si el cliente pregunta (D-061): "lo retiro en la sucursal" es un dato, no una pregunta. */
-const ASKS = /\?|^\s*(d[oó]nde|qu[eé]|cu[aá]l|cu[aá]ndo|a qu[eé] hora|hasta qu[eé] hora|c[oó]mo|puedo|se puede|tienen|hay)\b/i;
-const HOURS = /\b(horarios?|d[oó]nde (queda|est[aá]n|es)|direcci[oó]n|sucursal(es)?|abren|cierran|atienden)\b/i;
-const FORMAT = /\b(formatos?|dpi|resoluci[oó]n|requisitos?|qu[eé] archivo|pdf|png|jpe?g|tiff?|espejo|c[oó]mo (lo )?(mando|preparo|env[ií]o))\b/i;
-const TIMES = /\b(cu[aá]nto (tarda|demora|tiempo)|demora|plazo|en cu[aá]nto (est[aá]|lo tienen))\b/i;
+/** Las preguntas frecuentes se responden solo si el cliente pregunta (D-061): "lo retiro en la sucursal" es un dato. */
+const ASKS =
+  /\?|^\s*(d[oó]nde|qu[eé]|cu[aá]l|cu[aá]ndo|cu[aá]nto|a qu[eé] hora|hasta qu[eé] hora|c[oó]mo|puedo|se puede|tienen|hay|hacen|venden|abren|me pas[aá]s|me pod[eé]s|pasame)\b/i;
+const WHERE = /\b(d[oó]nde|direcci[oó]n|ubicaci[oó]n|sucursal(es)?|c[oó]mo llego|mapa)\b/i;
+const HOURS = /\b(horarios?|abren|cierran|atienden|abierto|hasta qu[eé] hora|a qu[eé] hora)\b/i;
+const SATURDAY = /\bs[aá]bados?\b/i;
+const TODAY = /\b(hoy|ahora)\b/i;
+const MIRROR = /\b(espejo|espejad\w*)\b/i;
+const DESIGN = /\b(dise[ñn]\w*|vectoriz\w*|retoc\w*|arregl\w* (el|mi) archivo|(sacar|quitar)\w* el fondo)\b/i;
+const PAY = /\b(alias|cbu|c[oó]mo (pago|se paga|abono|transfiero)|(medios?|formas?) de pago|d[oó]nde (pago|transfiero|deposito)|datos (bancarios|para transferir|de pago|de la cuenta)|para transferir|mercado ?pago)\b/i;
+const DEPOSIT = /\bse[ñn]as?\b/i;
+const THIRD_PARTY = /\b(cadete|uber|moto|comisionista|otra persona|un tercero|un amigo|mi (hermano|hermana|pareja|empleado))\b/i;
+const SHIPPING = /\b(env[ií]os?|env[ií]an|mandan|a domicilio|correo|encomienda|despach\w*|otra provincia|al interior)\b/i;
+const SUPPLIES = /\b(venden|vend[eé]s|insumos?|comprar|tienda)\b/i;
+const SERVICES = /\b(qu[eé] servicios|servicios (tienen|ofrecen|hacen)|qu[eé] (hacen|imprimen|trabajos hacen)|a qu[eé] se dedican)\b/i;
+const CONTACT = /\b(whats ?app|wsp|wpp|tel[eé]fono|n[uú]mero|llamar|celular)\b/i;
+const FORMAT = /\b(formatos?|dpi|resoluci[oó]n|requisitos?|qu[eé] archivo|pdf|png|jpe?g|tiff?|c[oó]mo (lo |tengo que )?(mando|mandar|preparo|preparar|env[ií]o|enviar))\b/i;
+const TIMES = /\b(cu[aá]nto (tarda|tardan|demora|demoran|tiempo)|demora|plazo|para cu[aá]ndo|en cu[aá]nto (est[aá]|lo tienen))\b/i;
 
 /**
  * Material o servicio → casilla. El primero que coincide gana: primero el nombre del servicio que
@@ -70,6 +87,39 @@ export function serviceFor(text: string) {
   return hit ? help.SERVICES.find((s) => s.id === hit.id) ?? null : null;
 }
 
+/** DTF y DTF UV se retiran y se pagan en la Sucursal Centro; el resto, en la Planta de Av. Chile. */
+const isCentro = (serviceId: string) => serviceId === "dtf-textil" || serviceId === "dtf-uv";
+type Branch = (typeof help.BRANCHES)[number];
+const faq = (start: string) => help.FAQ.find((f) => f.q.startsWith(start))!.a;
+
+/** Una sucursal en pocas líneas: nombre y dirección, qué se hace ahí, horario y mapa. */
+function branchCard(b: Branch): string {
+  return [`${b.name} · ${b.address}`, b.services, b.hours.map((h) => `${h.days} de ${h.time}`).join(" · "), `Mapa: ${b.mapUrl}`].join("\n");
+}
+
+function whereAndWhen(text: string, serviceId: string | null, now: Date | undefined): string {
+  const branches = serviceId ? [help.BRANCHES[isCentro(serviceId) ? 1 : 0]!] : [...help.BRANCHES];
+  // "¿Abren los sábados?"
+  if (SATURDAY.test(text)) {
+    return `Sí, los sábados a la mañana: ${branches.map((b) => `${b.name} de ${b.hours[1]!.time}`).join(" y ")}.`;
+  }
+  // "¿Hasta qué hora atienden hoy?"
+  if (TODAY.test(text) && HOURS.test(text) && now) {
+    const day = now.toLocaleString("en-US", { timeZone: "America/Argentina/Salta", weekday: "short" });
+    if (day === "Sun") return `Hoy domingo está cerrado. ${branches.map((b) => `${b.name}: ${b.hours[0]!.days.toLowerCase()} de ${b.hours[0]!.time}`).join("; ")}.`;
+    const i = day === "Sat" ? 1 : 0;
+    return `Hoy atendemos: ${branches.map((b) => `${b.name} de ${b.hours[i]!.time}`).join(" y ")}.`;
+  }
+  if (branches.length === 1) return branchCard(branches[0]!);
+  return `Tenemos dos sucursales:\n\n${branches.map(branchCard).join("\n\n")}\n\nEl pedido se retira en la sucursal del servicio. ¿Para cuál es?`;
+}
+
+function howToPay(serviceId: string | null): string {
+  const list = serviceId ? [help.PAYMENTS[isCentro(serviceId) ? 1 : 0]!] : [...help.PAYMENTS];
+  const blocks = list.map((p) => [`${p.services}: ${p.method}`, ...p.lines].join("\n"));
+  return `${blocks.join("\n\n")}\n\nMandá el comprobante por este chat. En el mostrador se paga en efectivo o débito.`;
+}
+
 /** Devuelve la respuesta fija, o null si el mensaje no es de estos flujos (lo responde la IA). */
 export function fixedFlow(text: string, c: FlowContext): string | null {
   const name = c.firstName ? ` ${c.firstName}` : "";
@@ -77,31 +127,48 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
   if (GREETING.test(text)) {
     return c.alreadyTalking ? "¿En qué te ayudo?" : `¡Hola${name}! Soy el asistente de Via Vinilo. ¿En qué te ayudo?`;
   }
+  if (THANKS.test(text)) return /gracias/i.test(text) ? "¡De nada! Cualquier cosa, escribime por acá." : "¡Dale! Cualquier cosa, escribime por acá.";
 
   if (STATUS.test(text) && !NEW_JOB.test(text)) {
     const active = c.jobs.filter((j) => j.status !== "Entregado" && j.status !== "Cancelado");
     if (active.length === 0) {
-      return "Todavía no veo pedidos tuyos en curso en el sistema. Si ya mandaste el archivo por mail, puede tardar unos minutos en aparecer. Si no, mandalo a la casilla del servicio y te pasamos el precio.";
+      return "Todavía no veo pedidos tuyos en curso. Si mandaste el archivo recién, puede tardar unos minutos en aparecer. Si todavía no lo mandaste, usá el clip 📎 de este chat y te pasamos el precio.";
     }
     const lines = active.slice(0, 3).map((j) => `${j.label} (${j.sector}${j.description ? `, ${j.description}` : ""}): ${j.status}`);
     const after = c.noticesOn ? " Cuando cambie, te llega un aviso por acá y por mail." : "";
     return `${active.length === 1 ? "Tu pedido" : "Tus pedidos"}: ${lines.join("; ")}.${after}`;
   }
 
-  // Preguntas frecuentes con datos del sistema (D-060): no pasan por la IA.
+  // Preguntas frecuentes con datos del sistema (D-060, D-066): no pasan por la IA.
   const service = serviceFor(text);
-  if (HOURS.test(text) && ASKS.test(text)) {
-    const centro = service && (service.id === "dtf-textil" || service.id === "dtf-uv");
-    const branches = service ? [help.BRANCHES[centro ? 1 : 0]!] : help.BRANCHES;
-    const lines = branches.map((b) => `${b.name}, ${b.address} (${b.services}): ${b.hours.map((h) => `${h.days} ${h.time}`).join("; ")}. Mapa: ${b.mapUrl}`);
-    return lines.join("\n");
+  const asks = ASKS.test(text);
+  if (asks && MIRROR.test(text)) return faq("¿Lo mando en espejo?");
+  if (asks && DESIGN.test(text)) return faq("¿Me arreglan o diseñan");
+  if (asks && PAY.test(text)) return howToPay(service?.id ?? null);
+  if (asks && DEPOSIT.test(text)) {
+    return `Se pide seña según el servicio y los metros:\n${help.DEPOSITS.map((d) => `${d.service}: ${d.rule}`).join("\n")}\n\nCon la seña paga, el pedido entra a producción. Si querés los datos para pagarla, pedime el alias.`;
   }
-  if (FORMAT.test(text) && ASKS.test(text)) {
+  if (asks && THIRD_PARTY.test(text)) return faq("¿Puede retirar un Uber");
+  if (asks && SHIPPING.test(text) && !/\barchivos?\b/i.test(text)) {
+    return "Los pedidos se retiran en la sucursal. Puede pasar un cadete o un Uber, pero tiene que entrar al local. Si necesitás que te lo envíen, decime y te paso con un asesor.";
+  }
+  if (asks && SUPPLIES.test(text)) {
+    return `Los insumos (vinilos, papeles, telas) se compran en la tienda online: ${help.STORE_URL}\nEste chat es para impresión, corte y calandrado.`;
+  }
+  if (asks && SERVICES.test(text)) {
+    const all = [...help.SERVICES.map((s) => s.name), ...(c.boards ?? []).map((b) => b.name)];
+    return `Hacemos: ${all.join(", ")}.\n¿Cuál necesitás? Te digo cómo mandar el archivo.`;
+  }
+  if (asks && CONTACT.test(text)) {
+    return "Atendemos por este chat de la app. Si necesitás hablar con una persona, decime y te paso con un asesor.";
+  }
+  if (asks && (WHERE.test(text) || HOURS.test(text) || /\bretir\w*/i.test(text))) return whereAndWhen(text, service?.id ?? null, c.now);
+  if (asks && FORMAT.test(text)) {
     if (!service) return "¿Para qué servicio es? (DTF, DTF UV, calandra, sublimación, lona o vinilo, rígidos, látex o corte). Así te paso el formato exacto.";
-    const warn = service.warnings?.length ? ` ${service.warnings.join(" ")}` : "";
-    return `${service.name}: ${service.formats}. ${service.requirements.join(" ")}${warn} Se manda por mail a ${service.email}.`;
+    const warn = service.warnings?.length ? `\n${service.warnings.join(" ")}` : "";
+    return `${service.name}: ${service.formats}.\n${service.requirements.join(" ")}${warn}\n${HOW_TO_SEND(service.email)}.`;
   }
-  if (TIMES.test(text) && ASKS.test(text)) {
+  if (asks && TIMES.test(text)) {
     const after = c.noticesOn ? " Cuando está listo te llega un aviso por acá y por mail." : "";
     return `Entre 24 y 48 horas hábiles desde que recibimos el archivo y, si corresponde, la seña. Va por orden de llegada; lo que entra el sábado a la tarde arranca el lunes.${after}`;
   }
