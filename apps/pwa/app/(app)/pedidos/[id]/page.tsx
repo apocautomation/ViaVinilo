@@ -2,14 +2,37 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Check, FileText, MessageCircle, PackageCheck, Upload, X } from "lucide-react";
 import { AppBar, StatusPill } from "../../../components";
-import { ORDERS, STATUS_LABEL, ars, type Status } from "../../../data";
+import { STATUS_LABEL, ars, formatWhen, type Order, type Status } from "../../../data";
+import { api } from "../../../session";
 
 /** Detalle de un pedido: estado, precio, cuándo está listo, historial y archivos (SPEC E1.5). */
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>();
-  const o = ORDERS.find((x) => x.id === id);
+  const [o, setOrder] = useState<Order | null>(null);
+  const [state, setState] = useState<"loading" | "ok" | "missing">("loading");
+  useEffect(() => {
+    const load = () =>
+      api<Order>(`/app/jobs/${encodeURIComponent(id)}`)
+        .then((r) => (setOrder(r), setState("ok")))
+        .catch(() => setState((s) => (s === "ok" ? "ok" : "missing")));
+    void load();
+    const timer = setInterval(() => document.visibilityState === "visible" && void load(), 30_000);
+    return () => clearInterval(timer);
+  }, [id]);
+
+  if (state === "loading") {
+    return (
+      <>
+        <AppBar title="Pedido" back />
+        <main className="screen">
+          <p className="muted center">Cargando…</p>
+        </main>
+      </>
+    );
+  }
   if (!o) {
     return (
       <>
@@ -23,7 +46,12 @@ export default function PedidoPage() {
 
   const error = o.status === "FILE_ERROR";
   const pos = o.steps.indexOf(o.status);
-  const when = (s: Status) => o.history.find((h) => h.status === s)?.at;
+  const when = (s: Status) => {
+    const at = o.history.find((h) => h.status === s)?.at;
+    return at ? formatWhen(at) : undefined;
+  };
+  const amount = o.amount ? Number(o.amount) : null;
+  const deposit = o.depositAmount ? Number(o.depositAmount) : null;
 
   return (
     <>
@@ -36,7 +64,7 @@ export default function PedidoPage() {
               {o.sector}
             </span>
           </div>
-          <span className="big">{o.amount ? ars.format(o.amount) : "Sin cotizar"}</span>
+          <span className="big">{amount !== null ? ars.format(amount) : "Sin cotizar"}</span>
           <span className="muted">{o.desc}</span>
         </section>
 
@@ -48,9 +76,9 @@ export default function PedidoPage() {
                 <strong>Hay un problema con el archivo.</strong> {o.error}
               </span>
             </div>
-            <button className="btn btn-danger btn-block">
-              <Upload size={18} /> Reenviar archivo
-            </button>
+            <Link href={`/chat?pedido=${o.num}`} className="btn btn-danger btn-block">
+              <Upload size={18} /> Reenviar el archivo por el chat
+            </Link>
           </section>
         )}
 
@@ -66,21 +94,28 @@ export default function PedidoPage() {
         <section className="card card-pad">
           <dl className="kv">
             <dt>Medida</dt>
-            <dd>{o.measure}</dd>
+            <dd>{o.measure || "—"}</dd>
             <dt>Precio</dt>
-            <dd>{o.amount ? ars.format(o.amount) : "—"}</dd>
-            {o.deposit && (
+            <dd>{amount !== null ? ars.format(amount) : "—"}</dd>
+            {o.depositRequired && (
               <>
                 <dt>Seña</dt>
-                <dd>{ars.format(o.deposit)} · pagada</dd>
-                <dt>Saldo a pagar</dt>
-                <dd>{ars.format((o.amount ?? 0) - o.deposit)}</dd>
+                <dd>
+                  {deposit !== null ? `${ars.format(deposit)} · ` : ""}
+                  {o.depositPaid ? "pagada" : "pendiente"}
+                </dd>
+                {o.depositPaid && deposit !== null && amount !== null && (
+                  <>
+                    <dt>Saldo a pagar</dt>
+                    <dd>{ars.format(amount - deposit)}</dd>
+                  </>
+                )}
               </>
             )}
             <dt>Listo para retirar</dt>
-            <dd>{o.readyAt ?? "—"}</dd>
+            <dd>{o.readyAt ? formatWhen(o.readyAt) : "—"}</dd>
             <dt>Enviado por</dt>
-            <dd>{o.channel === "App" ? "La app" : "Mail"}</dd>
+            <dd>{o.channel === "App" ? "La app" : o.channel}</dd>
           </dl>
         </section>
 
@@ -125,6 +160,7 @@ export default function PedidoPage() {
 
         <h2 className="section-title">Archivos</h2>
         <section className="card">
+          {o.files.length === 0 && <p className="muted" style={{ margin: 0, padding: 16 }}>No hay archivos guardados para este pedido.</p>}
           {o.files.map((f) => (
             <div key={f.name} className="file">
               <span className="file-ico">
@@ -132,7 +168,7 @@ export default function PedidoPage() {
               </span>
               <span>
                 {f.name}
-                <small>{f.size}</small>
+                <small>{f.available ? f.size : "Ya no está guardado (se borra a los 30 días de la entrega)"}</small>
               </span>
             </div>
           ))}

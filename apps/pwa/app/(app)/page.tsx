@@ -1,18 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronRight, ClipboardList, Clock, PackageCheck } from "lucide-react";
 import { AppBar, PushPrompt, StatusPill, StepsBar } from "../components";
-import { ORDERS, ars } from "../data";
-import { useSession } from "../session";
+import { ars, formatWhen, type Order } from "../data";
+import { api, useSession } from "../session";
 
 /** Mis pedidos: lo primero que ve el cliente al abrir la app (D-034). */
 export default function PedidosPage() {
   const { me } = useSession();
   const [tab, setTab] = useState<"curso" | "entregados">("curso");
-  const active = ORDERS.filter((o) => o.status !== "DELIVERED");
-  const list = tab === "curso" ? active : ORDERS.filter((o) => o.status === "DELIVERED");
+  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const load = () =>
+      api<{ orders: Order[] }>("/app/jobs")
+        .then((r) => (setOrders(r.orders), setFailed(false)))
+        .catch(() => setFailed(true));
+    void load();
+    // El estado se actualiza solo mientras la app está abierta.
+    const timer = setInterval(() => document.visibilityState === "visible" && void load(), 30_000);
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
+    };
+  }, []);
+  const all = orders ?? [];
+  const active = all.filter((o) => o.status !== "DELIVERED");
+  const list = tab === "curso" ? active : all.filter((o) => o.status === "DELIVERED");
   const ready = active.filter((o) => o.status === "READY").length;
   const errors = active.filter((o) => o.status === "FILE_ERROR").length;
 
@@ -56,7 +73,14 @@ export default function PedidosPage() {
           </button>
         </div>
 
-        {list.length === 0 && (
+        {failed && orders === null && (
+          <section className="card empty-orders">
+            <strong>No pudimos cargar tus pedidos</strong>
+            <span className="muted">Revisá la conexión; lo volvemos a intentar solos.</span>
+          </section>
+        )}
+        {orders === null && !failed && <section className="card empty-orders" aria-busy="true"><span className="muted">Cargando tus pedidos…</span></section>}
+        {orders !== null && list.length === 0 && (
           <section className="card empty-orders">
             <ClipboardList size={28} aria-hidden />
             <strong>{tab === "curso" ? "No tenés pedidos en curso" : "Todavía no tenés pedidos entregados"}</strong>
@@ -90,11 +114,11 @@ export default function PedidosPage() {
             )}
             <div className="order-foot">
               <StatusPill status={o.status} />
-              {o.amount ? <b>{ars.format(o.amount)}</b> : <span>Sin cotizar</span>}
+              {o.amount ? <b>{ars.format(Number(o.amount))}</b> : <span>Sin cotizar</span>}
             </div>
             {o.readyAt && o.status !== "READY" && o.status !== "DELIVERED" && (
               <div className="order-foot" style={{ justifyContent: "flex-start", gap: 6 }}>
-                <Clock size={14} /> Listo {o.readyAt.toLowerCase()}
+                <Clock size={14} /> Listo {formatWhen(o.readyAt).toLowerCase()}
               </div>
             )}
           </Link>
