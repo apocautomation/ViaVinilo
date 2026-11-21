@@ -40,6 +40,25 @@ services:
       interval: 5s
       retries: 20
 
+  # Backup diario de la base (D-063): un archivo por día en el volumen "backups", 14 días.
+  # OJO: queda en el mismo disco del VPS. La copia fuera del VPS es un paso aparte.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: viavinilo
+      PGPASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      PGDATABASE: viavinilo
+      TZ: America/Argentina/Salta
+      BACKUP_KEEP_DAYS: "14"
+    depends_on:
+      postgres: { condition: service_healthy }
+    volumes:
+      - backups:/backups
+      - ./backup.sh:/backup.sh:ro
+    entrypoint: ["sh", "/backup.sh"]
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -116,6 +135,7 @@ services:
       - ollama:/root/.ollama
 
 volumes:
+  backups:
   ollama:
   pgdata:
   redisdata:

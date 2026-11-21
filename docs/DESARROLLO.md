@@ -1056,6 +1056,20 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - I-19: límite de envíos por cliente y detección de archivos repetidos.
 - **Por qué**: Ezequiel: "en ambos se tiene que poder cargar un archivo, tanto del lado del cliente en la app como en el ERP para responder".
 
+### D-063 · 21/11/2026 · Ezequiel · borrado de archivos a 30 días (implementa D-015) y backup diario de la base
+- **Borrado de archivos (D-015, ahora implementado)**:
+  - todos los días a las 03:30 de Salta, el worker borra del disco los archivos de órdenes **entregadas hace más de 30 días**;
+  - las órdenes sin entregar no se tocan;
+  - el registro del archivo queda con la fecha de borrado (`JobFile.purgedAt`) y en la auditoría queda cuántos archivos se borraron por orden (`files_purged`);
+  - si un archivo no se puede borrar, se reintenta al día siguiente;
+  - no alcanza a los adjuntos que manda el asesor al responder (`conversations/…`): no pertenecen a una orden. Si hace falta, se define aparte.
+- **Backup diario de la base**:
+  - servicio `backup` en `docker-compose.prod.yml` con `deploy/backup.sh`: un `pg_dump` por día en el volumen `backups`, verificado antes de darlo por bueno, y se guardan los últimos 14 días;
+  - para restaurar: `pg_restore --clean --if-exists -d viavinilo /backups/db-AAAA-MM-DD.dump`;
+  - probado el 21/11: un dump de producción restaurado en una base descartable dio los mismos totales (1.899 clientes, 222 pedidos, 240 mensajes, 139 archivos).
+- **Pendiente (importante)**: el backup queda **en el mismo disco del VPS**. Si se rompe el disco o se pierde el VPS, se pierde también el backup. Falta la copia fuera del VPS (base y archivos); hay que definir el destino.
+- **Por qué**: al revisar dónde se guardan los archivos, se vio que D-015 estaba decidido pero no programado (el disco crecería unos 120 GB por año) y que no había ningún backup.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
