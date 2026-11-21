@@ -1151,6 +1151,18 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **No probado**: la entrega real en un celular. El navegador de desarrollo bloquea notificaciones; hay que probarlo en producción con un Android y un iPhone.
 - **Por qué**: el contrato (E1) pide "PWA con… push. Email como respaldo"; era lo que faltaba para cerrar la etapa.
 
+### D-069 · 21/11/2026 · Desarrollo · "Mis pedidos" de la app muestra los pedidos reales
+- **Qué**: la app de clientes deja de mostrar la lista vacía. "Mis pedidos" y el detalle salen directo del tablero de producción: estado, descripción, medida, precio, seña, hora estimada, archivos e historial de pasos. Se actualiza solo cada 30 segundos mientras la app está abierta.
+- **Qué ve el cliente**:
+  - Solo sus pedidos. Pedir el número de otro cliente responde lo mismo que un número que no existe.
+  - El recorrido del tablero de su servicio, sin "Archivo con error" como paso y sin "Seña recibida" si el pedido no lleva seña.
+  - Con el archivo con error: el motivo que eligió el operador y un botón para reenviarlo por el chat.
+  - Con el alta pendiente (D-014): su pedido figura como "Archivo recibido".
+  - Hasta 50 pedidos entregados (los más nuevos).
+- **Qué no ve**: notas internas, quién movió el pedido, el resultado del control automático ni datos del sistema.
+- **Pedidos cancelados**: no se muestran. TODO(spec): confirmar con Verónica si el cliente tiene que verlos como "Cancelado".
+- **Por qué**: el contrato (E1) pide "seguimiento automático en la app a partir de los estados de producción" y "órdenes con estado, medida, precio y hora estimada". Estaba pendiente desde D-045 ("paso 6") y la app mostraba "No tenés pedidos en curso" a todos.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
