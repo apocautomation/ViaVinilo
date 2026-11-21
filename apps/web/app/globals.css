@@ -2318,3 +2318,68 @@ table.data tfoot td {
   color: var(--color-text-muted);
   font-size: 13.5px;
 }
+
+
+/* Panel de tiempos (D-070) */
+.day-bars {
+  display: grid;
+  gap: 4px;
+  height: 190px;
+  align-items: end;
+}
+.day-bar {
+  display: grid;
+  grid-template-rows: 18px 1fr 18px;
+  height: 100%;
+  justify-items: center;
+  min-width: 0;
+}
+.day-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.day-fill {
+  align-self: end;
+  width: min(100%, 34px);
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--color-brand-500);
+}
+.day-fill[data-empty="true"] {
+  background: var(--color-neutral-100);
+}
+.day-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.hbar {
+  display: grid;
+  grid-template-columns: minmax(90px, 160px) 1fr 40px;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.hbar strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hbar-track {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--color-neutral-100);
+  overflow: hidden;
+}
+.hbar-track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 6px;
+  background: var(--color-brand-500);
+}
+.hbar .mono {
+  text-align: right;
+  color: var(--color-text);
+}

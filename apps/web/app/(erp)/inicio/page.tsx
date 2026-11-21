@@ -8,7 +8,8 @@ import { api } from "../../lib/api";
 import { Badge, Kpi, PageHead } from "../ui";
 
 /** Igual que el tablero (D-030): más de 2 h en el mismo paso es una demora. */
-const LATE_MS = 2 * 60 * 60 * 1000;
+/** Límite de "demorado" mientras carga el configurado (Configuración → Avisos). */
+const DEFAULT_LATE_HOURS = 24;
 
 interface Card {
   id: string;
@@ -45,12 +46,17 @@ function elapsed(iso: string): string {
 /** Inicio con los datos reales de los tableros (D-045): sin datos de ejemplo. */
 export default function InicioPage() {
   const [boards, setBoards] = useState<Board[] | null>(null);
+  const [lateHours, setLateHours] = useState(DEFAULT_LATE_HOURS);
+  const LATE_MS = lateHours * 60 * 60 * 1000;
 
   useEffect(() => {
     api<{ code: string }[]>("/sectors")
       .then((sectors) => Promise.all(sectors.map((s) => api<Board>(`/jobs/board?sector=${s.code}`))))
       .then(setBoards)
       .catch(() => setBoards([]));
+    api<{ delayedHours: number }>("/jobs/times/threshold")
+      .then((r) => setLateHours(r.delayedHours))
+      .catch(() => undefined);
   }, []);
 
   const cards = (boards ?? []).flatMap((b) =>
@@ -76,14 +82,14 @@ export default function InicioPage() {
     <div className="page">
       <PageHead
         title="Inicio"
-        help="Resumen del día con los datos reales de los tableros: pedidos que entraron hoy, en producción, listos para retirar y trabajos con más de 2 h en el mismo paso."
+        help="Resumen del día con los datos reales de los tableros: pedidos que entraron hoy, en producción, listos para retirar y trabajos demorados (el límite de horas se cambia en Configuración)."
       />
 
       <div className="kpis">
         <Kpi label="Pedidos de hoy" value={n(cards.filter((c) => isToday(c.createdAt)).length)} icon={ClipboardList} />
         <Kpi label="En producción" value={n(active.filter((c) => c.status !== "READY").length)} icon={Factory} />
         <Kpi label="Listos para retirar" value={n(active.filter((c) => c.status === "READY").length)} icon={PackageCheck} />
-        <Kpi label="Demorados" value={n(late.length)} icon={AlertTriangle} foot="más de 2 h en el mismo paso" />
+        <Kpi label="Demorados" value={n(late.length)} icon={AlertTriangle} foot={`más de ${lateHours} h en el mismo paso`} />
       </div>
 
       <div className="grid-2">
@@ -132,7 +138,7 @@ export default function InicioPage() {
       <section className="panel">
         <div className="panel-head">
           <h2>Trabajos demorados</h2>
-          {late.length > 0 && <Badge tone="warn">{late.length} superan las 2 h en el mismo paso</Badge>}
+          {late.length > 0 && <Badge tone="warn">{late.length} superan las {lateHours} h en el mismo paso</Badge>}
         </div>
         <div className="table-wrap">
           <table className="data">

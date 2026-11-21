@@ -429,8 +429,12 @@ export default function ConfiguracionPage() {
               Alta pendiente sin aprobar después de (horas)
               <input type="number" min={1} max={720} value={alerts.pendingSignupHours} onChange={(e) => setAlerts({ ...alerts, pendingSignupHours: Number(e.target.value) })} required />
             </label>
+            <label className="field">
+              Pedido demorado: más de (horas) en el mismo paso
+              <input type="number" min={1} max={720} value={alerts.delayedHours} onChange={(e) => setAlerts({ ...alerts, delayedHours: Number(e.target.value) })} required />
+            </label>
             <p className="muted field-wide" style={{ margin: 0 }}>
-              La campanita también avisa siempre los chats que piden un asesor, los mensajes nuevos y los archivos con problema.
+              El tiempo de "demorado" se usa en Inicio y en el Panel de tiempos. La campanita también avisa siempre los chats que piden un asesor, los mensajes nuevos y los archivos con problema.
             </p>
             <div className="field-wide form-actions">
               <button className="btn btn-primary">Guardar tiempos</button>

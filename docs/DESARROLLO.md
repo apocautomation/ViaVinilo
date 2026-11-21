@@ -1163,6 +1163,19 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Pedidos cancelados**: no se muestran. TODO(spec): confirmar con Verónica si el cliente tiene que verlos como "Cancelado".
 - **Por qué**: el contrato (E1) pide "seguimiento automático en la app a partir de los estados de producción" y "órdenes con estado, medida, precio y hora estimada". Estaba pendiente desde D-045 ("paso 6") y la app mostraba "No tenés pedidos en curso" a todos.
 
+### D-070 · 21/11/2026 · Ezequiel · Panel de tiempos con datos reales
+- **Qué** (SPEC E1.6): la pantalla deja de estar vacía. Muestra, para los últimos 7, 14, 30 o 90 días y por tablero:
+  - **Trabajos por día**, por tablero y por máquina (los que entraron en el período).
+  - **Tiempo promedio en cada paso**, por tablero. Se mide de un cambio de estado al siguiente; el paso en el que un pedido está parado ahora no cuenta hasta que salga de ahí.
+  - **Pedidos demorados**: los que llevan más de X horas en el mismo paso, del más viejo al más nuevo (hasta 100).
+- **Definiciones nuestras** (TODO(spec): confirmarlas con Verónica):
+  - Las horas son corridas, no hábiles: un pedido que entra el sábado a la tarde suma el domingo.
+  - "Listo para retirar" no cuenta como demorado: espera al cliente, no al taller.
+  - El tiempo en el paso se cuenta desde el último cambio de estado, no desde la última edición del pedido.
+- **Límite configurable**: "Pedido demorado: más de (horas) en el mismo paso", en Configuración → Avisos. Arranca en 24 horas. **Inicio usa el mismo límite** (antes tenía 2 horas fijas, que con horas corridas marcaba como demorado todo lo que quedaba de un día para el otro).
+- **Permisos**: dueño y atención ven todos los tableros; producción, solo los suyos.
+- **Por qué**: Ezequiel: "seguí con el panel de tiempos". Era el último punto de la E1 sin datos reales.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
