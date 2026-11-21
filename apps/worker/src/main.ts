@@ -7,6 +7,7 @@ import { buildSystemPrompt } from "./bot/prompt";
 import { processBotReplies } from "./bot/reply";
 import { createSmtpNotifier } from "./mail/invite";
 import { processNotices } from "./notices";
+import { purgeOldFiles } from "./retention";
 import { hostingerSender, sendOutbox, smtpSender, type MailSender } from "./mail/outbox";
 import { pollAllMailboxes } from "./mail/poll";
 import { QUEUES } from "./queues";
@@ -115,6 +116,19 @@ async function main() {
   noticesWorker.on("failed", (_job, err) => console.error("[avisos] falló", err.message));
   await noticesQueue.upsertJobScheduler("status-notices", { every: 30_000 }, { name: "notices" });
 
+  // Retención (D-015): todos los días a las 03:30 de Salta borra los archivos de órdenes entregadas hace más de 30 días.
+  const retentionQueue = new Queue(QUEUES.fileRetention, { connection });
+  const retentionWorker = new Worker(
+    QUEUES.fileRetention,
+    async () => {
+      const r = await purgeOldFiles(prisma, deps.storage);
+      if (r.purged || r.failed) console.log(`[retención] ${r.purged} archivos borrados de ${r.jobs} órdenes, ${r.failed} con error`);
+    },
+    { connection, concurrency: 1 },
+  );
+  retentionWorker.on("failed", (_job, err) => console.error("[retención] falló", err.message));
+  await retentionQueue.upsertJobScheduler("file-retention", { pattern: "30 3 * * *", tz: "America/Argentina/Salta" }, { name: "purge" });
+
   const shutdown = async () => {
     console.log("[worker] cerrando…");
     await mailWorker.close();
@@ -123,6 +137,8 @@ async function main() {
     await outboxQueue.close();
     await botWorker.close();
     await noticesWorker.close();
+    await retentionWorker.close();
+    await retentionQueue.close();
     await noticesQueue.close();
     await botQueue.close();
     await prisma.$disconnect();
