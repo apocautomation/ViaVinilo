@@ -127,6 +127,35 @@ export default function BoardPage() {
   const [q, setQ] = useState("");
   const [machineId, setMachineId] = useState("");
   const [groupByMaterial, setGroupByMaterial] = useState(false);
+  /**
+   * Vista compacta (D-066): cada tarjeta ocupa 3 renglones y se abre con un clic, para que un tablero
+   * con muchos pedidos no sea un scroll interminable. La elección se recuerda en el navegador.
+   */
+  const [compact, setCompact] = useState(true);
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("vv.board.compact") === "0") setCompact(false);
+    } catch {
+      /* sin almacenamiento: queda compacta */
+    }
+  }, []);
+  const toggleCompact = (value: boolean) => {
+    setCompact(value);
+    setOpened(new Set());
+    try {
+      localStorage.setItem("vv.board.compact", value ? "1" : "0");
+    } catch {
+      /* sin almacenamiento */
+    }
+  };
+  const toggleCard = (id: string) =>
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -297,6 +326,10 @@ export default function BoardPage() {
           <input type="checkbox" checked={groupByMaterial} onChange={(e) => setGroupByMaterial(e.target.checked)} />
           Agrupar por material
         </label>
+        <label className="toggle">
+          <input type="checkbox" checked={compact} onChange={(e) => toggleCompact(e.target.checked)} />
+          Vista compacta
+        </label>
       </div>
 
       <main className="board">
@@ -323,10 +356,46 @@ export default function BoardPage() {
               {col.cards.map((card) => {
                 const mins = minutesSince(card.createdAt, now);
                 const step = stepOf(card.status);
+                const open = !compact || opened.has(card.id);
+                if (!open) {
+                  const check = card.status === "RECEIVED" ? card.fileCheck?.verdict : undefined;
+                  return (
+                    <article key={card.id} className="card card-compact" aria-busy={busy === card.id}>
+                      <button type="button" className="card-toggle" aria-expanded={false} onClick={() => toggleCard(card.id)} title="Ver el pedido completo">
+                        <span className="row">
+                          <span className="num">{card.label}</span>
+                          <span className="age" data-late={mins > LATE_MIN}>
+                            <Clock size={12} aria-hidden /> {age(card.createdAt, now)}
+                          </span>
+                        </span>
+                        <span className="row">
+                          <span className="who-line">{card.customer.name ?? `Cliente N.º ${card.customer.number}`}</span>
+                          <span className="mini">
+                            {(check === "error" || check === "review") && <span className={`dot ${check}`} title={card.fileCheck?.detail} />}
+                            {card.quotedAmount && <span>{money.format(Number(card.quotedAmount))}</span>}
+                            {card.depositRequired && card.next === "DEPOSIT_RECEIVED" && <span className="warn">Seña</span>}
+                          </span>
+                        </span>
+                        {card.description && <span className="desc-line">{card.description}</span>}
+                      </button>
+                      {card.next && (
+                        <button className="btn btn-primary btn-sm" disabled={busy === card.id} onClick={() => clickNext(card)}>
+                          {NEXT_ACTION[card.next] ?? "Avanzar"}
+                        </button>
+                      )}
+                    </article>
+                  );
+                }
                 return (
                 <article key={card.id} className="card" aria-busy={busy === card.id}>
                   <header>
-                    <span className="num">{card.label}</span>
+                    {compact ? (
+                      <button type="button" className="num num-btn" aria-expanded onClick={() => toggleCard(card.id)} title="Achicar">
+                        {card.label} ▴
+                      </button>
+                    ) : (
+                      <span className="num">{card.label}</span>
+                    )}
                     <span className="age" data-late={mins > LATE_MIN} title={fullDate.format(new Date(card.createdAt))}>
                       <Clock size={12} aria-hidden /> {age(card.createdAt, now)}
                     </span>
