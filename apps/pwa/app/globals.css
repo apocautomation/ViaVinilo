@@ -1462,3 +1462,47 @@ details.faq .help-body p.help-warn {
 .bubble.me .bubble-text a {
   color: #fff;
 }
+
+
+/* Notificaciones push (D-068) */
+.push-note {
+  margin: 0;
+  padding: 0 16px 14px 58px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+.push-note-bad {
+  color: var(--color-danger);
+}
+.switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.push-prompt {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.push-prompt strong {
+  display: block;
+  font-size: 15px;
+}
+.push-prompt span {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+.push-prompt .list-ico {
+  flex: none;
+}
+.push-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.push-prompt-actions .btn {
+  min-height: 0;
+  padding: 8px 14px;
+}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AlertTriangle, ChevronRight, ClipboardList, Clock, PackageCheck } from "lucide-react";
-import { AppBar, StatusPill, StepsBar } from "../components";
+import { AppBar, PushPrompt, StatusPill, StepsBar } from "../components";
 import { ORDERS, ars } from "../data";
 import { useSession } from "../session";
 
@@ -30,6 +30,7 @@ export default function PedidosPage() {
           </div>
         </section>
 
+        <PushPrompt />
 
         <div className="stats">
           <div className="card stat">

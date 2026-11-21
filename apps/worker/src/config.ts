@@ -1,5 +1,6 @@
 import { SECTOR_CODES, type SectorCode } from "@viavinilo/contracts";
 import type { LlmConfig } from "./bot/llm";
+import type { VapidConfig } from "./push";
 import { HOSTINGER_MAIL_API, type HostingerMailConfig } from "./mail/sources/hostinger-api";
 import type { ImapCredentials } from "./mail/sources/imap";
 
@@ -20,6 +21,8 @@ export interface WorkerConfig {
   smtp: { url: string; from: string; contactUrl: string };
   /** IA del bot de la app (D-056, D-057). Sin IA configurada el bot no responde aunque esté prendido. */
   bot: LlmConfig | null;
+  /** Claves de las notificaciones push de la app (D-068). Sin claves no se manda ninguna. */
+  push: VapidConfig | null;
 }
 
 /** Lee la configuración del entorno. Nunca hay credenciales en el código (CLAUDE.md). */
@@ -65,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
       contactUrl: env.SUPPORT_WHATSAPP_URL ?? "",
     },
     bot: botConfig(env),
+    push: pushConfig(env),
   };
 }
 
@@ -78,4 +82,15 @@ export function botConfig(env: NodeJS.ProcessEnv): LlmConfig | null {
   if (baseUrl) return { baseUrl, apiKey: apiKey || "ollama", model: env.BOT_MODEL?.trim() || "qwen2.5:3b" };
   if (apiKey) return { baseUrl: "https://api.openai.com/v1", apiKey, model: env.BOT_MODEL?.trim() || "gpt-4.1-mini" };
   return null;
+}
+
+/**
+ * D-068: claves VAPID de las notificaciones push. Se generan una sola vez con
+ * `pnpm --filter @viavinilo/worker exec web-push generate-vapid-keys` y van por entorno.
+ */
+export function pushConfig(env: NodeJS.ProcessEnv): VapidConfig | null {
+  const publicKey = env.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = env.VAPID_PRIVATE_KEY?.trim();
+  if (!publicKey || !privateKey) return null;
+  return { publicKey, privateKey, subject: env.VAPID_SUBJECT?.trim() || env.APP_PUBLIC_URL?.trim() || "https://viavinilo.tech" };
 }

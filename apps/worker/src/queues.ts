@@ -16,6 +16,8 @@ export const QUEUES = {
   notices: "status-notices",
   /** Control automático del archivo (D-065). */
   fileCheck: "file-check",
+  /** Notificaciones push de la app (D-068). */
+  push: "app-push",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

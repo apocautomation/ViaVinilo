@@ -66,33 +66,33 @@ enum UserRole {
 // ───────────────────────── Clientes ─────────────────────────
 
 model Customer {
-  id                 String          @id @default(cuid())
+  id                 String             @id @default(cuid())
   /// Número de cliente único y visible (actualización §2.1).
   /// TODO(spec): al migrar desde Tango/Runamatic, decidir si se conservan los números existentes.
-  customerNumber     Int             @unique @default(autoincrement())
+  customerNumber     Int                @unique @default(autoincrement())
   firstName          String?
   lastName           String?
   /// Nombre y apellido sin tildes y en minúsculas, para buscar. Lo mantiene el servicio con
   /// customerSearchText() de @viavinilo/contracts; todo el que cree o edite clientes tiene que usarlo.
-  searchText         String          @default("")
+  searchText         String             @default("")
   /// Clave para identificar al cliente. Opcional mientras el alta está pendiente (D-014).
-  dni                String?         @unique
-  status             CustomerStatus  @default(PENDING)
+  dni                String?            @unique
+  status             CustomerStatus     @default(PENDING)
   /// Notas internas, nunca visibles para el cliente.
   internalNotes      String?
-  isTrade            Boolean         @default(true)
+  isTrade            Boolean            @default(true)
   /// Empresa o marca con la que trabaja el cliente (D-038).
   businessName       String?
   /// Datos fiscales para facturar con ARCA (E3). Opcionales hasta la E3 (D-038).
   /// CUIT con 11 dígitos, sin guiones.
-  cuit               String?         @unique
+  cuit               String?            @unique
   legalName          String?
   taxCondition       TaxCondition?
   fiscalAddress      String?
   city               String?
   province           String?
   /// Cuenta corriente habilitada (E3).
-  creditEnabled      Boolean         @default(false)
+  creditEnabled      Boolean            @default(false)
   /// { push: boolean, email: boolean }. Sin valor = los dos prendidos (D-038).
   notificationPrefs  Json?
   /// Contraseña de la app (scrypt). La carga el asesor desde el ERP (D-039). Sin valor = no puede entrar.
@@ -105,16 +105,18 @@ model Customer {
   importSource       String?
   activations        AppActivation[]
   conversation       Conversation?
+  /// Celulares y navegadores donde el cliente aceptó las notificaciones (D-068).
+  pushSubscriptions  PushSubscription[]
   approvedAt         DateTime?
   /// Último mail con el link de alta enviado a un remitente nuevo (D-014). Evita mandarlo en cada mail.
   signupInviteSentAt DateTime?
   approvedById       String?
-  approvedBy         User?           @relation("CustomerApprovedBy", fields: [approvedById], references: [id])
+  approvedBy         User?              @relation("CustomerApprovedBy", fields: [approvedById], references: [id])
   emails             CustomerEmail[]
   phones             CustomerPhone[]
   jobs               JobOrder[]
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
 
   @@index([status])
@@ -237,6 +239,8 @@ model Message {
   fromBot         Boolean          @default(false)
   /// Mensajes IN de la app: si el bot tiene que responderlo y cómo terminó (D-056).
   botStatus       BotStatus?
+  /// Mensajes OUT de la app: cuándo se procesó la notificación al celular (D-068). null = pendiente.
+  pushedAt        DateTime?
   createdAt       DateTime         @default(now())
 
   @@index([conversationId, createdAt])
@@ -551,4 +555,20 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
+}
+
+/// Suscripción de un navegador o celular a las notificaciones push de la app (D-068).
+/// Se borra sola cuando el servicio de push avisa que ya no existe.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Dirección del servicio de push del navegador (Google, Apple, Mozilla o Microsoft).
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
 }
