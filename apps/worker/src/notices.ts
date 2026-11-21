@@ -108,7 +108,7 @@ export async function processNotices(prisma: PrismaClient, opts: { limit?: numbe
         depositRequired: ev.job.depositRequired,
         depositAmount: ev.job.depositAmount?.toString() ?? null,
       },
-      { firstName: customer.firstName, reason: ev.reason?.label ?? null, resent: ev.fromStatus === "FILE_ERROR" },
+      { firstName: customer.firstName, reason: [ev.reason?.label, ev.note?.replace(/^Control automático: /, "")].filter(Boolean).join(". ") || null, resent: ev.fromStatus === "FILE_ERROR" },
     );
     const prefs = notificationPrefsSchema.safeParse(customer.notificationPrefs);
     const wantsEmail = prefs.success ? prefs.data.email : true;

@@ -31,7 +31,23 @@ export default function TablerosPage() {
   const [inboxEmail, setInboxEmail] = useState("");
   const [withCalender, setWithCalender] = useState(false);
   const [busy, setBusy] = useState(false);
-  const isOwner = getUser()?.roles.includes("OWNER") ?? false;
+  // El rol se lee después de montar: en el servidor no hay sesión y el primer dibujo tiene que coincidir.
+  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  useEffect(() => setIsOwner(getUser()?.roles.includes("OWNER") ?? false), []);
+  /** Paso automático a "Archivo con error" (D-065). */
+  const [autoCheck, setAutoCheck] = useState<boolean | null>(null);
+  useEffect(() => {
+    api<{ enabled: boolean }>("/settings/file-check").then((r) => setAutoCheck(r.enabled)).catch(() => setAutoCheck(null));
+  }, []);
+  async function toggleAutoCheck() {
+    setError("");
+    try {
+      const r = await api<{ enabled: boolean }>("/settings/file-check", { method: "PUT", body: JSON.stringify({ enabled: !autoCheck }) });
+      setAutoCheck(r.enabled);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -75,6 +91,14 @@ export default function TablerosPage() {
     }
   }
 
+  if (isOwner === null) {
+    return (
+      <div className="page page-narrow">
+        <PageHead title="Administrar tableros" />
+        <div className="empty" style={{ padding: 32 }}>Cargando…</div>
+      </div>
+    );
+  }
   if (!isOwner) {
     return (
       <div className="page page-narrow">
@@ -92,6 +116,26 @@ export default function TablerosPage() {
       />
       {notice && <div className="notice">{notice}</div>}
       {error && <p className="error">{error}</p>}
+
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Control automático de archivos</h2>
+        </div>
+        <div className="panel-body" style={{ display: "grid", gap: 10 }}>
+          <p className="muted" style={{ margin: 0 }}>
+            Cada archivo PNG o JPG que entra se compara con la medida que pidió el cliente. El resultado se ve en la tarjeta del
+            pedido. Con esto prendido, si la resolución es menos de la mitad de la mínima (250 dpi en DTF y DTF UV, 100 en el
+            resto), el pedido pasa solo a "Archivo con error" con el motivo. Cuando el cliente manda el archivo corregido, vuelve
+            solo a "Archivo recibido".
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Badge tone={autoCheck ? "ok" : "neutral"}>{autoCheck === null ? "…" : autoCheck ? "Prendido" : "Apagado"}</Badge>
+            <button className={`btn ${autoCheck ? "btn-ghost" : "btn-primary"}`} disabled={autoCheck === null} onClick={() => void toggleAutoCheck()}>
+              {autoCheck ? "Apagar el paso automático" : "Prender el paso automático"}
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="panel">
         <div className="panel-head">

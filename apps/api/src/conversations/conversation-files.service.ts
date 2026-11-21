@@ -100,6 +100,32 @@ export class ConversationFilesService {
     const { checksum, ...attachment } = stored;
     const note = input.note?.trim() || null;
 
+    // D-065: con un solo pedido en "Archivo con error" en este tablero, es el archivo corregido.
+    const errored = await this.prisma.jobOrder.findMany({
+      where: { customerId, sectorId: sector.id, status: "FILE_ERROR", deletedAt: null },
+      select: { id: true, number: true },
+      take: 2,
+    });
+    if (errored.length === 1) {
+      const target = errored[0]!;
+      return this.prisma.$transaction(async (tx) => {
+        await tx.jobFile.create({
+          data: { jobId: target.id, filename: attachment.name, storageKey: attachment.key!, sizeBytes: BigInt(attachment.size!), mime: attachment.mime!, checksum },
+        });
+        await tx.jobOrder.update({ where: { id: target.id }, data: { status: "RECEIVED", fileCheck: Prisma.DbNull, ...(note ? { requestedSpecs: { channel: "app", note } } : {}) } });
+        await tx.jobEvent.create({ data: { jobId: target.id, fromStatus: "FILE_ERROR", toStatus: "RECEIVED", note: "El cliente mandó el archivo corregido por la app" } });
+        const msg = await tx.message.create({
+          data: { conversationId, direction: "IN", channel: "APP", body: note ?? "Te mando el archivo corregido.", attachments: [attachment] as unknown as Prisma.InputJsonValue, jobId: target.id },
+          select: { id: true, direction: true, channel: true, subject: true, body: true, attachments: true, createdAt: true, fromBot: true, jobId: true },
+        });
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { lastMessageAt: msg.createdAt, lastMessagePreview: preview(`📎 ${attachment.name}`), staffUnread: { increment: 1 } },
+        });
+        return { message: msg, job: { id: target.id, label: formatJobNumber(target.number), sector: sector.name }, resent: true };
+      });
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const job = await tx.jobOrder.create({
         data: {

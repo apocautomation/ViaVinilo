@@ -14,6 +14,8 @@ export const QUEUES = {
   bot: "bot-replies",
   /** Avisos automáticos de estado al cliente (D-060). */
   notices: "status-notices",
+  /** Control automático del archivo (D-065). */
+  fileCheck: "file-check",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
