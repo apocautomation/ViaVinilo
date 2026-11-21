@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SectorCode } from "./sectors";
+import type { BaseSectorCode } from "./sectors";
 
 /**
  * Estados de una orden de trabajo. Coincide con el enum `JobStatus` de Prisma.
@@ -75,7 +75,7 @@ const CALENDER_SEQUENCE = [
  * "En proceso de calandra" solo en Sublimación y Calandrado (actualización §2.4).
  * TODO(spec): I-11 — confirmar con Verónica las capturas de Runamatic por sector.
  */
-export const DEFAULT_SECTOR_SEQUENCES: Record<SectorCode, readonly JobStatus[]> = {
+export const DEFAULT_SECTOR_SEQUENCES: Record<BaseSectorCode, readonly JobStatus[]> = {
   DTF: BASE_SEQUENCE,
   DTF_UV: BASE_SEQUENCE,
   GRAN_FORMATO: BASE_SEQUENCE,
@@ -83,6 +83,9 @@ export const DEFAULT_SECTOR_SEQUENCES: Record<SectorCode, readonly JobStatus[]> 
   CALANDRADO: CALENDER_SEQUENCE,
   SUBLIMACION: CALENDER_SEQUENCE,
 };
+
+/** Secuencia de un tablero nuevo (D-064): la común, o con "En proceso de calandra". */
+export const sequenceForNewSector = (withCalender: boolean): readonly JobStatus[] => (withCalender ? CALENDER_SEQUENCE : BASE_SEQUENCE);
 
 /** Listado de pedidos del ERP (Ventas → Pedidos). */
 export const JOB_LIST_TABS = ["ACTIVE", "READY", "DELIVERED", "ALL"] as const;

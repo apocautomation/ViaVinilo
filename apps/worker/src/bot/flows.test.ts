@@ -69,3 +69,18 @@ describe("casos de la prueba con mensajes reales (D-061)", () => {
     expect(fixedFlow("Diseño sin título.png", ctx)).toMatch(/de qué material/);
   });
 });
+
+describe("tableros creados desde el ERP (D-064)", () => {
+  const boards = [{ name: "TPU", email: "tpu@viavinilo.com" }, { name: "Bordado", email: null }];
+
+  it("D-064: si el cliente nombra un tablero nuevo, el bot lo manda ahí", () => {
+    const r = fixedFlow("necesito 3 metros de TPU", { ...ctx, boards })!;
+    expect(r).toContain("tpu@viavinilo.com");
+    expect(r).toContain("(TPU)");
+    expect(fixedFlow("quiero hacer un bordado", { ...ctx, boards })).toMatch(/clip 📎 de este chat \(Bordado\)/);
+  });
+
+  it("D-064: un tablero nuevo no confunde palabras parecidas", () => {
+    expect(fixedFlow("necesito imprimir una lona", { ...ctx, boards })).toContain("granformato@viavinilo.com");
+  });
+});
