@@ -320,18 +320,4 @@ export const SCREENS: Record<string, MockScreen> = {
       ["Látex", "41", $(832300), $(390000), "53%", $(20300)],
     ],
   },
-  configuracion: {
-    eyebrow: "Sistema",
-    title: "Configuración",
-    sub: "Usuarios y roles, sectores y máquinas, motivos de error, datos fiscales y certificados de ARCA.",
-    stage: 1,
-    primary: "Nuevo usuario",
-    tabs: ["Usuarios y roles", "Sectores y máquinas", "Motivos de error", "Datos fiscales", "Certificados ARCA"],
-    columns: [{ label: "Usuario" }, { label: "Email" }, { label: "Rol" }, { label: "Sectores" }, { label: "Estado" }],
-    rows: [
-      ["Dueño demo", "dueno@viavinilo.test", info("Dueño"), "Todos", ok("Activo")],
-      ["Impresor DTF", "impresor@viavinilo.test", "Producción", "DTF", ok("Activo")],
-      ["Atención mostrador", "atencion@viavinilo.test", "Atención", "Todos", ok("Activo")],
-    ],
-  },
 };
