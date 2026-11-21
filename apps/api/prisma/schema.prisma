@@ -410,6 +410,9 @@ model JobOrder {
   measure           String?
   /// Lo que el cliente declaró en el mail (texto o datos extraídos).
   requestedSpecs    Json?
+  /// Resultado del control automático del archivo (D-065): { verdict, reasonCode, detail, effectiveDpi, file }.
+  /// Null = todavía no se controló (el worker lo hace al entrar el pedido o al llegar un archivo corregido).
+  fileCheck         Json?
   quotedAmount      Decimal?      @db.Decimal(14, 2)
   quotedAt          DateTime?
   depositRequired   Boolean       @default(false)
@@ -493,6 +496,7 @@ enum MailIngestResult {
   SKIPPED_AUTO_REPLY // respuesta automática, rebote o lista
   REJECTED_BLOCKED // cliente bloqueado (I-14)
   COMMAND // un comando como "/reset" (D-061): no crea orden
+  RESENT // archivo corregido: se sumó a la orden que estaba en "Archivo con error" (D-065)
   ERROR
 }
 

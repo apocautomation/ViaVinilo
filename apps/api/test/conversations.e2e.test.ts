@@ -302,3 +302,34 @@ describe("archivos en Conversaciones (D-062)", () => {
     expect(ok.headers["content-disposition"]).toContain("attachment");
   });
 });
+
+describe("control de archivo y reenvío por la app (D-065)", () => {
+  it("D-065: el paso automático arranca apagado y solo el dueño lo prende", async () => {
+    expect((await as("attention").get("/settings/file-check")).body).toEqual({ enabled: false, since: null });
+    const put = (who: "attention" | "owner", enabled: boolean) =>
+      http().put("/settings/file-check").set("Authorization", `Bearer ${tokens[who]}`).send({ enabled });
+    expect((await put("attention", true)).status).toBe(403);
+    expect((await put("owner", true)).body.enabled).toBe(true);
+    expect(await prisma.auditLog.count({ where: { entity: "AppSetting", entityId: "auto-file-error" } })).toBe(1);
+    expect((await put("owner", false)).body.enabled).toBe(false);
+  });
+
+  it("D-065: con un pedido en 'Archivo con error', el archivo que manda por el chat se suma a ese pedido y vuelve a 'Archivo recibido'", async () => {
+    const job = await prisma.jobOrder.findFirstOrThrow({ where: { source: "API", customerId } });
+    await prisma.jobOrder.update({ where: { id: job.id }, data: { status: "FILE_ERROR", fileCheck: { verdict: "error", detail: "x" } } });
+    const before = await prisma.jobOrder.count();
+    const res = await http()
+      .post("/app/chat/files")
+      .set("Authorization", `Bearer ${tokens.customer}`)
+      .field("sector", "DTF")
+      .attach("file", Buffer.from("%PDF-1.4 corregido"), "corregido.pdf");
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ resent: true, job: { id: job.id } });
+    expect(await prisma.jobOrder.count()).toBe(before);
+    const after = await prisma.jobOrder.findUniqueOrThrow({ where: { id: job.id }, include: { files: true, events: { orderBy: { createdAt: "desc" }, take: 1 } } });
+    expect(after.status).toBe("RECEIVED");
+    expect(after.fileCheck).toBeNull();
+    expect(after.files.map((f) => f.filename)).toContain("corregido.pdf");
+    expect(after.events[0]).toMatchObject({ fromStatus: "FILE_ERROR", toStatus: "RECEIVED" });
+  });
+});

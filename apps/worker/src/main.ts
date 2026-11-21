@@ -5,6 +5,7 @@ import { loadConfig } from "./config";
 import { openAiLlm } from "./bot/llm";
 import { buildSystemPrompt } from "./bot/prompt";
 import { processBotReplies } from "./bot/reply";
+import { processFileChecks } from "./file-check";
 import { createSmtpNotifier } from "./mail/invite";
 import { processNotices } from "./notices";
 import { purgeOldFiles } from "./retention";
@@ -129,6 +130,19 @@ async function main() {
   retentionWorker.on("failed", (_job, err) => console.error("[retención] falló", err.message));
   await retentionQueue.upsertJobScheduler("file-retention", { pattern: "30 3 * * *", tz: "America/Argentina/Salta" }, { name: "purge" });
 
+  // Control automático del archivo (D-065): cada 20 s revisa los pedidos nuevos en "Archivo recibido".
+  const fileCheckQueue = new Queue(QUEUES.fileCheck, { connection });
+  const fileCheckWorker = new Worker(
+    QUEUES.fileCheck,
+    async () => {
+      const r = await processFileChecks(prisma, deps.storage);
+      if (r.errors) console.log(`[archivos] ${r.errors} pedidos pasaron a "Archivo con error" (de ${r.checked} controlados)`);
+    },
+    { connection, concurrency: 1 },
+  );
+  fileCheckWorker.on("failed", (_job, err) => console.error("[archivos] falló el control", err.message));
+  await fileCheckQueue.upsertJobScheduler("file-check", { every: 20_000 }, { name: "check" });
+
   const shutdown = async () => {
     console.log("[worker] cerrando…");
     await mailWorker.close();
@@ -137,6 +151,8 @@ async function main() {
     await outboxQueue.close();
     await botWorker.close();
     await noticesWorker.close();
+    await fileCheckWorker.close();
+    await fileCheckQueue.close();
     await retentionWorker.close();
     await retentionQueue.close();
     await noticesQueue.close();

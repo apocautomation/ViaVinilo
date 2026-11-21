@@ -1383,6 +1383,27 @@ table.data tfoot td {
   gap: 6px;
 }
 
+/* D-065: resultado del control automático del archivo en la tarjeta */
+.file-check {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.file-check.error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+.file-check.review {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+.file-check.ok {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
 /* D-062: archivos al responder y descargas */
 .composer-files {
   display: flex;

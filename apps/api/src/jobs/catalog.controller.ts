@@ -1,6 +1,6 @@
-import { ConflictException, Controller, Get, NotFoundException, Param, Patch, Post } from "@nestjs/common";
+import { ConflictException, Controller, Get, NotFoundException, Param, Patch, Post, Put } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { createSectorSchema, JOB_STATUS_LABELS, sectorCodeFromName, sequenceForNewSector, updateSectorSchema } from "@viavinilo/contracts";
+import { botToggleSchema, createSectorSchema, JOB_STATUS_LABELS, sectorCodeFromName, sequenceForNewSector, updateSectorSchema } from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
 import { CurrentUser, CustomerAuth, Roles, type AuthUser } from "../auth/decorators";
 import { ZodBody } from "../common/zod";
@@ -15,6 +15,34 @@ export class CatalogController {
     private readonly access: SectorAccess,
     private readonly audit: AuditService,
   ) {}
+
+  /**
+   * Control automático del archivo (D-065): si está prendido, un archivo claramente mal pasa solo a
+   * "Archivo con error". Apagado, el control igual corre y deja la sugerencia en la tarjeta.
+   */
+  @Get("settings/file-check")
+  async fileCheckSetting() {
+    const row = await this.prisma.appSetting.findUnique({ where: { key: "auto-file-error" } });
+    const v = row?.value as { enabled?: unknown; since?: unknown } | null;
+    return { enabled: v?.enabled === true, since: typeof v?.since === "string" ? v.since : null };
+  }
+
+  /** Lo prende o apaga solo el dueño. Al prenderlo vale para los archivos que lleguen desde ese momento. */
+  @Put("settings/file-check")
+  @Roles("OWNER")
+  async setFileCheck(@ZodBody(botToggleSchema) body: { enabled: boolean }, @CurrentUser() user: AuthUser) {
+    const before = await this.fileCheckSetting();
+    const value = { enabled: body.enabled, since: body.enabled ? new Date().toISOString() : before.since };
+    await this.prisma.$transaction(async (tx) => {
+      await tx.appSetting.upsert({
+        where: { key: "auto-file-error" },
+        create: { key: "auto-file-error", value, updatedById: user.id },
+        update: { value, updatedById: user.id },
+      });
+      await this.audit.log({ entity: "AppSetting", entityId: "auto-file-error", action: "update", userId: user.id, before: { enabled: before.enabled }, after: { enabled: body.enabled } }, tx);
+    });
+    return this.fileCheckSetting();
+  }
 
   /** Todos los tableros, también los desactivados, para administrarlos (D-064). */
   @Get("sectors/all")

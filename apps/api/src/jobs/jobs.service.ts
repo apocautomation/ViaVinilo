@@ -127,6 +127,8 @@ export class JobsService {
       depositPaidAt: row.depositPaidAt,
       estimatedReadyAt: row.estimatedReadyAt,
       fileCount: row._count.files,
+      /** Resultado del control automático del archivo (D-065). */
+      fileCheck: row.fileCheck as { verdict: string; detail: string } | null,
       linkCount: row.externalLinks.length,
       machine: row.machine,
       material: row.material,

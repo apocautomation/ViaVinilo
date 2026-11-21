@@ -23,6 +23,8 @@ interface Card {
   depositRequired: boolean;
   estimatedReadyAt: string | null;
   fileCount: number;
+  /** Resultado del control automático del archivo (D-065). */
+  fileCheck: { verdict: "ok" | "review" | "error" | "unknown"; detail: string } | null;
   linkCount: number;
   machine: { id: string; name: string } | null;
   material: { id: string; name: string } | null;
@@ -379,6 +381,13 @@ export default function BoardPage() {
                       ))}
                     </select>
                   )}
+
+                  {card.status === "RECEIVED" && (card.fileCheck?.verdict === "error" || card.fileCheck?.verdict === "review") && (
+                    <p className={`file-check ${card.fileCheck.verdict}`} title={card.fileCheck.detail}>
+                      <b>{card.fileCheck.verdict === "error" ? "Archivo con problema" : "Revisar el archivo"}:</b> {card.fileCheck.detail}
+                    </p>
+                  )}
+                  {card.status === "RECEIVED" && card.fileCheck?.verdict === "ok" && <p className="file-check ok">Archivo controlado: {card.fileCheck.detail}</p>}
 
                   {card.fileCount > 0 && ["RECEIVED", "QUOTED", "DEPOSIT_RECEIVED"].includes(card.status) && (
                     printUnlocked(card) ? (

@@ -197,6 +197,39 @@ async function decide(
   const files = mail.files.map((f, i) => ({ ...f, storageKey: `${folder}/${i + 1}-${f.filename}` }));
   for (const f of files) await deps.storage.put(f.storageKey, f.content);
 
+  // D-065: un mail de reenvío leído dos veces: sus archivos ya están en un pedido. No se repite.
+  const already = files.length ? await prisma.jobFile.findUnique({ where: { storageKey: files[0]!.storageKey }, select: { jobId: true } }) : null;
+  if (already) {
+    await log(deps, sector, received, "DUPLICATE", { jobId: already.jobId });
+    return { ...base, result: "DUPLICATE", jobId: already.jobId };
+  }
+
+  // D-065: si el cliente tiene un solo pedido en "Archivo con error" en este tablero, este mail es el
+  // archivo corregido: se suma a ese pedido y vuelve a "Archivo recibido" (no se crea otro).
+  const errored = files.length
+    ? await prisma.jobOrder.findMany({ where: { customerId: customer.id, sectorId: sector.id, status: "FILE_ERROR", deletedAt: null }, select: { id: true }, take: 2 })
+    : [];
+  if (errored.length === 1) {
+    const target = errored[0]!.id;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.jobFile.createMany({
+          data: files.map((f) => ({ jobId: target, filename: f.filename, storageKey: f.storageKey, sizeBytes: BigInt(f.size), mime: f.mime, checksum: f.checksum })),
+        });
+        await tx.jobOrder.update({ where: { id: target }, data: { status: "RECEIVED", fileCheck: Prisma.DbNull } });
+        await tx.jobEvent.create({ data: { jobId: target, fromStatus: "FILE_ERROR", toStatus: "RECEIVED", note: "El cliente mandó el archivo corregido por mail" } });
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // El mismo mail leído dos veces: los archivos ya estaban sumados.
+      await log(deps, sector, received, "DUPLICATE", { jobId: target });
+      return { ...base, result: "DUPLICATE", jobId: target };
+    }
+    await toInbox(customer.id, target);
+    await log(deps, sector, received, "RESENT", { jobId: target, fileCount: files.length });
+    return { ...base, result: "RESENT", jobId: target };
+  }
+
   let jobId: string;
   try {
     const job = await prisma.jobOrder.create({
