@@ -1,35 +1,49 @@
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { MAX_UPLOAD_BYTES } from "@viavinilo/contracts";
-import type { FileStorage } from "../storage";
-import { downloadLink, linkTarget, type DownloadFailure, type DownloadResult, type LinkTarget } from "./download";
+import { StorageFullError, type FileStorage } from "../storage";
+import { isNoiseLink, openLink, PROVIDER_NAME, resolveLink, type DownloadFailure, type LinkProvider, type LinkTarget, type OpenResult } from "./download";
 
 /**
- * Baja al servidor los archivos que el cliente mandó por un link de Google Drive o OneDrive (D-072).
- * El archivo queda en el pedido como si hubiera venido adjunto: el operador lo descarga desde la
- * tarjeta y pasa por el control automático.
+ * Baja al servidor los archivos que el cliente mandó por un link (D-072, D-076): Google Drive (archivos
+ * y carpetas), OneDrive, WeTransfer y Dropbox. El archivo queda en el pedido como si hubiera venido
+ * adjunto: el operador lo descarga desde la tarjeta y pasa por el control automático.
+ * - Sin tope de cantidad de links ni de tamaño por archivo: se escribe directo al disco.
+ * - Lo único que frena una descarga es que el disco se esté quedando sin lugar (ver MIN_FREE_BYTES).
  * - Cada pedido se intenta una sola vez. Si no se puede, la tarjeta dice por qué.
  * - No toca pedidos entregados ni cancelados.
  */
-export type LinkDownloader = (target: LinkTarget) => Promise<DownloadResult>;
+export interface LinkClient {
+  /** De un link, las descargas a hacer (una carpeta da varias). null = servicio que no se baja solo. */
+  resolve(link: string): Promise<{ provider: LinkProvider; targets: LinkTarget[] } | { provider: LinkProvider; failure: DownloadFailure } | null>;
+  open(target: LinkTarget): Promise<OpenResult>;
+}
 
-export const defaultDownloader: LinkDownloader = (target) => downloadLink(target, { maxBytes: MAX_UPLOAD_BYTES });
+export const defaultLinkClient: LinkClient = { resolve: (link) => resolveLink(link), open: (target) => openLink(target) };
+
+/**
+ * Lugar que siempre tiene que quedar libre en el disco. La base de datos y sus copias viven en el
+ * mismo disco: si se llena, se cae todo el sistema.
+ */
+export const MIN_FREE_BYTES = 10 * 1024 * 1024 * 1024;
 
 const WHY: Record<DownloadFailure, string> = {
   private: "el link no es público: pedile al cliente que lo comparta con «cualquier persona que tenga el enlace»",
-  not_found: "el link ya no existe o fue borrado",
-  too_big: "el archivo pesa más de 150 MB",
+  not_found: "el link ya no existe o venció",
   not_a_file: "el link no lleva a un archivo",
+  no_space: "el servidor se está quedando sin lugar en el disco; avisale a soporte",
   error: "no se pudo conectar",
 };
 
+type Storage = Pick<FileStorage, "putStream" | "freeBytes">;
+
 export async function processLinkDownloads(
   prisma: PrismaClient,
-  storage: Pick<FileStorage, "put">,
-  download: LinkDownloader = defaultDownloader,
-  opts: { limit?: number; now?: Date } = {},
+  storage: Storage,
+  client: LinkClient = defaultLinkClient,
+  opts: { limit?: number; now?: Date; minFreeBytes?: number } = {},
 ): Promise<{ jobs: number; files: number; failed: number }> {
   const now = opts.now ?? new Date();
+  const minFree = opts.minFreeBytes ?? MIN_FREE_BYTES;
   const jobs = await prisma.jobOrder.findMany({
     where: { linksFetchedAt: null, deletedAt: null, status: { in: ["RECEIVED", "PENDING_SIGNUP", "FILE_ERROR"] }, NOT: { externalLinks: { isEmpty: true } } },
     orderBy: { createdAt: "desc" },
@@ -44,25 +58,52 @@ export async function processLinkDownloads(
     const { count } = await prisma.jobOrder.updateMany({ where: { id: job.id, linksFetchedAt: null }, data: { linksFetchedAt: now } });
     if (count === 0) continue;
 
-    const targets = job.externalLinks.map((link) => ({ link, target: linkTarget(link) }));
     const notes: string[] = [];
     const created: Prisma.JobFileCreateManyInput[] = [];
-    for (const { link, target } of targets) {
-      if (!target) {
-        notes.push("Hay un link que no se baja solo (no es un archivo de Drive ni de OneDrive): abrilo desde el mail.");
+    const fail = (provider: LinkProvider, reason: DownloadFailure) => {
+      failed++;
+      notes.push(`No se pudo bajar el archivo de ${PROVIDER_NAME[provider]}: ${WHY[reason]}.`);
+    };
+
+    for (const link of job.externalLinks.filter((l) => !isNoiseLink(l))) {
+      const resolved = await client.resolve(link);
+      if (!resolved) {
+        notes.push("Hay un link de un servicio que no se baja solo: abrilo desde el mail.");
         continue;
       }
-      const result = await download(target);
-      if (!result.ok) {
-        failed++;
-        notes.push(`No se pudo bajar el archivo de ${target.provider === "drive" ? "Google Drive" : "OneDrive"}: ${WHY[result.reason]}.`);
+      if ("failure" in resolved) {
+        fail(resolved.provider, resolved.failure);
         continue;
       }
-      const { filename, mime, content } = result.file;
-      // Clave estable por pedido y link: si se repite, pisa el mismo archivo.
-      const storageKey = `links/${job.id}/${createHash("sha256").update(link).digest("hex").slice(0, 16)}-${filename}`;
-      await storage.put(storageKey, content);
-      created.push({ jobId: job.id, filename, storageKey, sizeBytes: BigInt(content.length), mime, checksum: createHash("sha256").update(content).digest("hex") });
+      for (const target of resolved.targets) {
+        const opened = await client.open(target);
+        if (!opened.ok) {
+          fail(target.provider, opened.reason);
+          continue;
+        }
+        const { filename, mime, declaredBytes, body } = opened.file;
+        // Cuánto se puede escribir sin dejar el disco por debajo del mínimo.
+        const room = (await storage.freeBytes()) - minFree;
+        if (room <= 0 || (declaredBytes !== null && declaredBytes > room)) {
+          await body.cancel().catch(() => undefined);
+          fail(target.provider, "no_space");
+          continue;
+        }
+        // Clave estable por pedido y descarga: si se repite, pisa el mismo archivo. La dirección directa de
+        // WeTransfer cambia en cada pedido, así que ahí se usa el link que escribió el cliente.
+        const stable = target.provider === "wetransfer" ? link : target.url;
+        const storageKey = `links/${job.id}/${createHash("sha256").update(stable).digest("hex").slice(0, 16)}-${filename}`;
+        try {
+          const { size, checksum } = await storage.putStream(storageKey, body, { maxBytes: room });
+          if (size === 0) {
+            fail(target.provider, "error");
+            continue;
+          }
+          created.push({ jobId: job.id, filename, storageKey, sizeBytes: BigInt(size), mime, checksum });
+        } catch (err) {
+          fail(target.provider, err instanceof StorageFullError ? "no_space" : "error");
+        }
+      }
     }
 
     await prisma.$transaction(async (tx) => {

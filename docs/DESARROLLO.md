@@ -1228,6 +1228,20 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Fuera de alcance**: "repetir" un pedido ya entregado. Queda en el backlog si lo piden.
 - **Por qué**: Ezequiel: "mostralo y que pueda volver a pedirlo o modificarlo y volver a pedirlo".
 
+### D-076 · 23/11/2026 · Ezequiel · links: sin tope de tamaño y más servicios (WeTransfer, carpetas de Drive, Dropbox)
+- **Sin tope de tamaño** (cambia D-072): se saca el límite de 150 MB para los archivos que llegan por link. El archivo se escribe directo al disco de a pedazos, sin cargarlo en memoria, y la descarga no tiene límite de tiempo (solo 60 segundos para que el otro servidor empiece a responder).
+  - **Único freno, el disco**: siempre quedan 10 GB libres en el servidor. La base de datos y sus copias viven en ese mismo disco; si se llena, se cae todo el sistema. Si un archivo no entra, no se baja (o se corta y se borra lo escrito) y la tarjeta dice "el servidor se está quedando sin lugar en el disco; avisale a soporte".
+  - El límite de 150 MB de los archivos que el cliente sube **desde la app** no cambia (D-062).
+- **Servicios nuevos**:
+  - **WeTransfer** (`we.tl/…`): se le pide la descarga directa a la API de WeTransfer. Si la transferencia tiene varios archivos, llega un .zip. Las transferencias vencen a los pocos días: una vencida figura como "ya no existe o venció".
+  - **Carpetas de Drive**: se bajan todos los archivos del primer nivel de la carpeta (no las subcarpetas).
+  - **Dropbox**: links compartidos (`/s/…`, `/scl/fi/…`), con descarga directa. No hay casos reales todavía.
+- **Links que no son archivos**: los del pie de los mails de Google ("denunciar abuso", "bloquear usuario") se ignoran en silencio; antes dejaban un aviso en la tarjeta.
+- **Siguen sin bajarse solos**: Mega, TransferNow, Smash y cualquier otro servicio. La tarjeta avisa que hay que abrir el link desde el mail. No se puede hacer genérico: cada servicio entrega el archivo de una forma distinta, y dejar que el servidor se conecte a cualquier dirección que venga en un mail es un riesgo de seguridad.
+- **Seguridad**: igual que en D-072. Cada servicio tiene su lista de direcciones permitidas y cada redirección se revisa; la dirección que devuelve la API de WeTransfer también.
+- **Después de subirlo** se vuelven a procesar los pedidos que tenían un link sin bajar (los de más de 150 MB, WeTransfer y la carpeta).
+- **Por qué**: Ezequiel: "sacá la limitación de MB y los links de otros servicios que se descarguen también".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
