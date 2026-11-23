@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, FileText, MessageCircle, PackageCheck, Upload, X } from "lucide-react";
+import { AlertTriangle, Check, FileText, MessageCircle, PackageCheck, RotateCcw, Upload, X } from "lucide-react";
 import { AppBar, StatusPill } from "../../../components";
 import { STATUS_LABEL, ars, formatWhen, type Order, type Status } from "../../../data";
 import { api, ApiError } from "../../../session";
@@ -17,13 +17,37 @@ export default function PedidoPage() {
   const [confirming, setConfirming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [reordering, setReordering] = useState(false);
+  const [measure, setMeasure] = useState("");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+
+  async function reorder() {
+    setSending(true);
+    setCancelError("");
+    try {
+      await api(`/app/jobs/${encodeURIComponent(id)}/reorder`, { method: "POST", body: JSON.stringify({ measure: measure.trim() || undefined, note: note.trim() || undefined }) });
+      setReordering(false);
+      setNote("");
+      setOrder(await api<Order>(`/app/jobs/${encodeURIComponent(id)}`));
+    } catch (e) {
+      setCancelError(e instanceof ApiError ? e.message : "No pudimos volver a pedirlo. Probá de nuevo.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function cancelOrder() {
     setCancelling(true);
     setCancelError("");
     try {
       await api(`/app/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" });
-      router.replace("/");
+      // Si el dueño apagó "mostrar cancelados", el pedido ya no se puede abrir: se vuelve a la lista.
+      const next = await api<Order>(`/app/jobs/${encodeURIComponent(id)}`).catch(() => null);
+      if (!next) return router.replace("/");
+      setOrder(next);
+      setCancelling(false);
+      setConfirming(false);
     } catch (e) {
       setCancelError(e instanceof ApiError ? e.message : "No pudimos cancelar el pedido. Probá de nuevo.");
       setCancelling(false);
@@ -103,9 +127,43 @@ export default function PedidoPage() {
           <div className="alert alert-bad">
             <X size={18} />
             <span>
-              <strong>Este pedido fue cancelado.</strong> Si tenés dudas, consultanos por el chat.
+              <strong>Este pedido fue cancelado.</strong> Lo podés volver a pedir tal cual o con cambios.
             </span>
           </div>
+        )}
+
+        {/* D-075: volver a pedir un pedido cancelado, tal cual o modificado. */}
+        {o.canReorder && !reordering && (
+          <button
+            className="btn btn-primary btn-block"
+            onClick={() => {
+              setMeasure(o.measure);
+              setReordering(true);
+            }}
+          >
+            <RotateCcw size={18} /> Volver a pedirlo
+          </button>
+        )}
+        {o.canReorder && reordering && (
+          <section className="card card-pad" style={{ display: "grid", gap: 12 }}>
+            <strong>Volver a pedir {o.num}</strong>
+            <span className="muted">Usamos el mismo archivo. Si querés cambiar algo, escribilo acá; si no, mandalo así.</span>
+            <label className="field">
+              Medida
+              <input value={measure} onChange={(e) => setMeasure(e.target.value)} maxLength={80} placeholder="Ej.: 58 x 100 cm" />
+            </label>
+            <label className="field">
+              ¿Qué cambiás? (opcional)
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="Ej.: ahora son 20 copias en vez de 10" />
+            </label>
+            <span className="muted" style={{ fontSize: 13 }}>Para cambiar el archivo, mandá el nuevo por el chat después de pedirlo.</span>
+            <button className="btn btn-primary btn-block" disabled={sending} onClick={() => void reorder()}>
+              {sending ? "Enviando…" : "Pedirlo de nuevo"}
+            </button>
+            <button className="btn btn-ghost btn-block" disabled={sending} onClick={() => setReordering(false)}>
+              Ahora no
+            </button>
+          </section>
         )}
 
         {o.status === "READY" && (
@@ -145,8 +203,9 @@ export default function PedidoPage() {
           </dl>
         </section>
 
-        <h2 className="section-title">Seguimiento</h2>
-        <ol className="card timeline">
+        {/* Un pedido cancelado no tiene recorrido para mostrar. */}
+        <h2 className="section-title" style={o.status === "CANCELLED" ? { display: "none" } : undefined}>Seguimiento</h2>
+        <ol className="card timeline" style={o.status === "CANCELLED" ? { display: "none" } : undefined}>
           {error && (
             <>
               <li data-state="done">

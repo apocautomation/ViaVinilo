@@ -1,8 +1,9 @@
-import { ConflictException, Controller, Get, HttpCode, Injectable, NotFoundException, Param, ParseIntPipe, Post, UseGuards } from "@nestjs/common";
+import { ConflictException, Controller, ForbiddenException, Get, HttpCode, Injectable, NotFoundException, Param, ParseIntPipe, Post, UseGuards } from "@nestjs/common";
 import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
-import type { JobStatus, Prisma } from "@prisma/client";
-import { alertSettingsSchema, formatBytes, formatJobNumber } from "@viavinilo/contracts";
+import { Prisma, type JobStatus } from "@prisma/client";
+import { alertSettingsSchema, DEFAULT_ALERT_SETTINGS, formatBytes, formatJobNumber, reorderSchema, type ReorderInput } from "@viavinilo/contracts";
 import { CurrentCustomer, CustomerAuth, type AuthCustomer } from "../auth/decorators";
+import { ZodBody } from "../common/zod";
 import { PrismaService } from "../prisma/prisma.service";
 
 /** Estados que nunca se le muestran al cliente como un paso del recorrido. */
@@ -57,6 +58,8 @@ export class AppJobsService {
       depositPaid: job.depositPaidAt !== null,
       readyAt: job.estimatedReadyAt,
       canCancel: CUSTOMER_CANCELLABLE.includes(job.status),
+      /** Un pedido cancelado se puede volver a pedir (D-075). */
+      canReorder: job.status === "CANCELLED",
       error: status === "FILE_ERROR" ? (lastError?.reason?.label ?? "Hay que corregir el archivo.") : null,
       files: job.files.map((f) => ({ name: f.filename, size: formatBytes(Number(f.sizeBytes)), available: f.purgedAt === null })),
       history: [...history].map(([s, at]) => ({ status: s, at })),
@@ -65,11 +68,11 @@ export class AppJobsService {
     };
   }
 
-  /** Por defecto el cliente no ve sus pedidos cancelados; el dueño lo cambia en Configuración (D-073). */
+  /** El cliente ve sus pedidos cancelados, salvo que el dueño lo apague en Configuración (D-073, D-075). */
   private async showCancelled(): Promise<boolean> {
     const row = await this.prisma.appSetting.findUnique({ where: { key: "alerts" } });
     const parsed = alertSettingsSchema.safeParse(row?.value);
-    return parsed.success && parsed.data.showCancelledToCustomer;
+    return (parsed.success ? parsed.data : DEFAULT_ALERT_SETTINGS).showCancelledToCustomer;
   }
 
   async list(customerId: string) {
@@ -116,6 +119,41 @@ export class AppJobsService {
     });
     return { ok: true };
   }
+
+  /**
+   * El cliente vuelve a pedir un pedido cancelado (D-075), tal cual o con cambios. Es el mismo pedido,
+   * con su número y sus archivos: vuelve a "Archivo recibido" para que el equipo lo revise y lo cotice.
+   */
+  async reorder(customerId: string, number: number, input: ReorderInput) {
+    const customer = await this.prisma.customer.findUnique({ where: { id: customerId }, select: { status: true } });
+    if (customer?.status === "BLOCKED") throw new ForbiddenException("Tu cuenta no puede enviar trabajos. Escribinos por el chat.");
+    const job = await this.prisma.jobOrder.findFirst({ where: { number, customerId, deletedAt: null }, select: { id: true, status: true, number: true, measure: true, requestedSpecs: true } });
+    if (!job) throw new NotFoundException("No encontramos ese pedido");
+    if (job.status !== "CANCELLED") throw new ConflictException("Este pedido no está cancelado.");
+
+    const measure = input.measure || null;
+    const note = input.note || null;
+    const changes = [measure && measure !== job.measure ? `Medida: ${measure}` : null, note].filter(Boolean).join(" · ");
+    const specs = (job.requestedSpecs && typeof job.requestedSpecs === "object" && !Array.isArray(job.requestedSpecs) ? job.requestedSpecs : {}) as Record<string, unknown>;
+    // Con una medida nueva, las medidas leídas del pedido original ya no valen para el control automático.
+    const nextSpecs = changes ? { ...specs, ...(measure ? { measures: [] } : {}), note: changes } : specs;
+
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.jobOrder.updateMany({
+        where: { id: job.id, status: "CANCELLED" },
+        data: { status: "RECEIVED", fileCheck: Prisma.DbNull, requestedSpecs: nextSpecs as Prisma.InputJsonValue, ...(measure ? { measure } : {}) },
+      });
+      if (count === 0) throw new ConflictException("Este pedido no está cancelado.");
+      await tx.jobEvent.create({ data: { jobId: job.id, fromStatus: "CANCELLED", toStatus: "RECEIVED", note: `Vuelto a pedir por el cliente desde la app${changes ? `, con cambios: ${changes}` : ""}`.slice(0, 600) } });
+      await tx.auditLog.create({ data: { entity: "JobOrder", entityId: job.id, action: "customer_reorder", before: { status: "CANCELLED", measure: job.measure }, after: { status: "RECEIVED", measure: measure ?? job.measure, customerId } } });
+      const text = `Volví a pedir el pedido ${formatJobNumber(job.number)} desde la app.${changes ? ` Cambios: ${changes}` : ""}`;
+      const conv =
+        (await tx.conversation.findUnique({ where: { customerId }, select: { id: true } })) ?? (await tx.conversation.create({ data: { customerId }, select: { id: true } }));
+      const msg = await tx.message.create({ data: { conversationId: conv.id, direction: "IN", channel: "APP", body: text, jobId: job.id } });
+      await tx.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: msg.createdAt, lastMessagePreview: text.slice(0, 140), staffUnread: { increment: 1 } } });
+    });
+    return { ok: true };
+  }
 }
 
 @Controller("app/jobs")
@@ -139,5 +177,13 @@ export class AppJobsController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   cancel(@Param("number", ParseIntPipe) number: number, @CurrentCustomer() customer: AuthCustomer) {
     return this.jobs.cancel(customer.id, number);
+  }
+
+  @Post(":number/reorder")
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  reorder(@Param("number", ParseIntPipe) number: number, @ZodBody(reorderSchema) body: ReorderInput, @CurrentCustomer() customer: AuthCustomer) {
+    return this.jobs.reorder(customer.id, number, body);
   }
 }

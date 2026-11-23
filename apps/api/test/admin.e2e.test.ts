@@ -142,7 +142,7 @@ describe("campanita: avisos reales y tiempos configurables (D-067)", () => {
   it("D-067: el dueño cambia los tiempos y los avisos lo respetan", async () => {
     expect((await as("attention").put("/admin/alerts", { unansweredMinutes: 5, unquotedHours: 1, pendingSignupHours: 1 })).status).toBe(403);
     const res = await as("owner").put("/admin/alerts", { unansweredMinutes: 240, unquotedHours: 12, pendingSignupHours: 48 });
-    expect(res.body).toEqual({ unansweredMinutes: 240, unquotedHours: 12, pendingSignupHours: 48, delayedHours: 24, businessHoursOnly: false, showCancelledToCustomer: false });
+    expect(res.body).toEqual({ unansweredMinutes: 240, unquotedHours: 12, pendingSignupHours: 48, delayedHours: 24, businessHoursOnly: false, showCancelledToCustomer: true });
     const kinds = (await as("attention").get("/notifications")).body.items.map((i: { kind: string }) => i.kind);
     // Con 4 h de tolerancia el chat de hace 2 h ya no está "sin atención": cuenta como mensajes nuevos.
     expect(kinds).not.toContain("unattended");

@@ -80,7 +80,16 @@ export const alertSettingsSchema = z.object({
   /** Los tiempos del taller se cuentan solo dentro del horario de atención (D-073). Apagado = horas corridas. */
   businessHoursOnly: z.boolean().default(false),
   /** El cliente ve en la app sus pedidos cancelados (D-073). */
-  showCancelledToCustomer: z.boolean().default(false),
+  showCancelledToCustomer: z.boolean().default(true),
 });
 export type AlertSettings = z.infer<typeof alertSettingsSchema>;
-export const DEFAULT_ALERT_SETTINGS: AlertSettings = { unansweredMinutes: 30, unquotedHours: 4, pendingSignupHours: 24, delayedHours: 24, businessHoursOnly: false, showCancelledToCustomer: false };
+export const DEFAULT_ALERT_SETTINGS: AlertSettings = { unansweredMinutes: 30, unquotedHours: 4, pendingSignupHours: 24, delayedHours: 24, businessHoursOnly: false, showCancelledToCustomer: true };
+
+/** El cliente vuelve a pedir un pedido cancelado, tal cual o con cambios (D-075). */
+export const reorderSchema = z.object({
+  /** Medida nueva, si la cambia. */
+  measure: z.string().trim().max(80).optional(),
+  /** Qué cambia o qué quiere aclarar. */
+  note: z.string().trim().max(500).optional(),
+});
+export type ReorderInput = z.infer<typeof reorderSchema>;

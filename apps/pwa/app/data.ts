@@ -46,6 +46,8 @@ export interface Order {
   readyAt: string | null;
   /** El cliente todavía puede cancelarlo desde la app (hasta "Cotizado"). */
   canCancel: boolean;
+  /** Está cancelado y se puede volver a pedir. */
+  canReorder: boolean;
   error: string | null;
   files: { name: string; size: string; available: boolean }[];
   history: { status: Status; at: string }[];
