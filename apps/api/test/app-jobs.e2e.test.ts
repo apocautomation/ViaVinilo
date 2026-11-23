@@ -153,4 +153,46 @@ describe("pedidos del cliente en la app (D-069)", () => {
     const statuses = (await get("ana", "/app/jobs")).body.orders.map((o: { status: string }) => o.status);
     expect(statuses).toEqual(["QUOTED", "DELIVERED"]);
   });
+
+  it("D-073: si el dueño lo prende, el cliente ve sus pedidos cancelados; apagado, no", async () => {
+    const cancelled = await prisma.jobOrder.findFirstOrThrow({ where: { customerId: anaId, status: "CANCELLED" } });
+    expect((await get("ana", `/app/jobs/${cancelled.number}`)).status).toBe(404);
+    await prisma.appSetting.create({ data: { key: "alerts", value: { unansweredMinutes: 30, unquotedHours: 4, pendingSignupHours: 24, showCancelledToCustomer: true } } });
+    const statuses = (await get("ana", "/app/jobs")).body.orders.map((o: { status: string }) => o.status);
+    expect(statuses).toContain("CANCELLED");
+    expect((await get("ana", `/app/jobs/${cancelled.number}`)).body.status).toBe("CANCELLED");
+    // Sigue sin ver los de otro cliente ni los borrados.
+    expect((await get("beto", `/app/jobs/${cancelled.number}`)).status).toBe(404);
+    expect(statuses.filter((s: string) => s === "RECEIVED")).toHaveLength(0);
+  });
+
+  it("D-074: el cliente cancela su pedido mientras está en cotización o antes; el equipo se entera", async () => {
+    const post = (who: "ana" | "beto", n: number) => request(app.getHttpServer()).post(`/app/jobs/${n}/cancel`).set("Authorization", `Bearer ${tokens[who]}`);
+    const quoted = await prisma.jobOrder.create({ data: { customerId: betoId, sectorId, status: "QUOTED", source: "EMAIL", quotedAmount: "1000" } });
+    expect((await get("beto", `/app/jobs/${quoted.number}`)).body.canCancel).toBe(true);
+    // Otro cliente no puede cancelarlo.
+    expect((await post("ana", quoted.number)).status).toBe(404);
+    expect((await post("beto", quoted.number)).status).toBe(200);
+
+    const after = await prisma.jobOrder.findUniqueOrThrow({ where: { id: quoted.id }, include: { events: true } });
+    expect(after.status).toBe("CANCELLED");
+    expect(after.events.at(-1)).toMatchObject({ fromStatus: "QUOTED", toStatus: "CANCELLED", note: "Cancelado por el cliente desde la app", userId: null });
+    expect(await prisma.auditLog.count({ where: { entity: "JobOrder", entityId: quoted.id, action: "customer_cancel" } })).toBe(1);
+    const conv = await prisma.conversation.findUniqueOrThrow({ where: { customerId: betoId }, include: { messages: true } });
+    expect(conv.staffUnread).toBe(1);
+    expect(conv.messages.at(-1)).toMatchObject({ direction: "IN", channel: "APP", jobId: quoted.id });
+    // Repetirlo no hace nada ni avisa de nuevo.
+    expect((await post("beto", quoted.number)).status).toBe(200);
+    expect((await prisma.conversation.findUniqueOrThrow({ where: { customerId: betoId } })).staffUnread).toBe(1);
+  });
+
+  it("D-074: con la seña pagada, impreso o listo ya no puede cancelarlo desde la app", async () => {
+    for (const status of ["DEPOSIT_RECEIVED", "PRINTED", "CALENDERING", "READY", "DELIVERED"] as const) {
+      const job = await prisma.jobOrder.create({ data: { customerId: betoId, sectorId, status, source: "EMAIL" } });
+      expect((await get("beto", `/app/jobs/${job.number}`)).body.canCancel).toBe(false);
+      const res = await request(app.getHttpServer()).post(`/app/jobs/${job.number}/cancel`).set("Authorization", `Bearer ${tokens.beto}`);
+      expect(res.status).toBe(409);
+      expect((await prisma.jobOrder.findUniqueOrThrow({ where: { id: job.id } })).status).toBe(status);
+    }
+  });
 });

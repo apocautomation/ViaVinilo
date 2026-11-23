@@ -1,11 +1,17 @@
-import { Controller, Get, Injectable, NotFoundException, Param, ParseIntPipe } from "@nestjs/common";
+import { ConflictException, Controller, Get, HttpCode, Injectable, NotFoundException, Param, ParseIntPipe, Post, UseGuards } from "@nestjs/common";
+import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import type { JobStatus, Prisma } from "@prisma/client";
-import { formatBytes, formatJobNumber } from "@viavinilo/contracts";
+import { alertSettingsSchema, formatBytes, formatJobNumber } from "@viavinilo/contracts";
 import { CurrentCustomer, CustomerAuth, type AuthCustomer } from "../auth/decorators";
 import { PrismaService } from "../prisma/prisma.service";
 
 /** Estados que nunca se le muestran al cliente como un paso del recorrido. */
 const HIDDEN_STEPS = new Set<JobStatus>(["PENDING_SIGNUP", "FILE_ERROR", "CANCELLED"]);
+/**
+ * Hasta cuándo el cliente puede cancelar su pedido desde la app (D-074): mientras está en cotización
+ * o antes. Con la seña pagada o ya impreso, no: tiene que hablar con un asesor.
+ */
+export const CUSTOMER_CANCELLABLE: JobStatus[] = ["PENDING_SIGNUP", "RECEIVED", "FILE_ERROR", "QUOTED"];
 /** Cuántos pedidos entregados se listan (los más nuevos). */
 const DELIVERED_LIMIT = 50;
 
@@ -50,6 +56,7 @@ export class AppJobsService {
       depositAmount: job.depositAmount?.toString() ?? null,
       depositPaid: job.depositPaidAt !== null,
       readyAt: job.estimatedReadyAt,
+      canCancel: CUSTOMER_CANCELLABLE.includes(job.status),
       error: status === "FILE_ERROR" ? (lastError?.reason?.label ?? "Hay que corregir el archivo.") : null,
       files: job.files.map((f) => ({ name: f.filename, size: formatBytes(Number(f.sizeBytes)), available: f.purgedAt === null })),
       history: [...history].map(([s, at]) => ({ status: s, at })),
@@ -58,20 +65,56 @@ export class AppJobsService {
     };
   }
 
+  /** Por defecto el cliente no ve sus pedidos cancelados; el dueño lo cambia en Configuración (D-073). */
+  private async showCancelled(): Promise<boolean> {
+    const row = await this.prisma.appSetting.findUnique({ where: { key: "alerts" } });
+    const parsed = alertSettingsSchema.safeParse(row?.value);
+    return parsed.success && parsed.data.showCancelledToCustomer;
+  }
+
   async list(customerId: string) {
     const base = { customerId, deletedAt: null } as const;
-    const [active, delivered] = await Promise.all([
+    const closed: JobStatus[] = (await this.showCancelled()) ? ["DELIVERED", "CANCELLED"] : ["DELIVERED"];
+    const [active, finished] = await Promise.all([
       this.prisma.jobOrder.findMany({ where: { ...base, status: { notIn: ["DELIVERED", "CANCELLED"] } }, orderBy: { createdAt: "desc" }, include: jobInclude }),
-      this.prisma.jobOrder.findMany({ where: { ...base, status: "DELIVERED" }, orderBy: { deliveredAt: "desc" }, take: DELIVERED_LIMIT, include: jobInclude }),
+      this.prisma.jobOrder.findMany({ where: { ...base, status: { in: closed } }, orderBy: { updatedAt: "desc" }, take: DELIVERED_LIMIT, include: jobInclude }),
     ]);
-    return { orders: [...active, ...delivered].map((j) => this.shape(j)) };
+    return { orders: [...active, ...finished].map((j) => this.shape(j)) };
   }
 
   async one(customerId: string, number: number) {
-    const job = await this.prisma.jobOrder.findFirst({ where: { number, customerId, deletedAt: null, status: { not: "CANCELLED" } }, include: jobInclude });
+    const hidden: JobStatus[] = (await this.showCancelled()) ? [] : ["CANCELLED"];
+    const job = await this.prisma.jobOrder.findFirst({ where: { number, customerId, deletedAt: null, status: { notIn: hidden } }, include: jobInclude });
     // Mismo error si no existe o si es de otro cliente: no se revela cuál.
     if (!job) throw new NotFoundException("No encontramos ese pedido");
     return this.shape(job);
+  }
+
+  /**
+   * El cliente cancela su propio pedido (D-074). Solo si todavía no pasó de "Cotizado". Queda en el
+   * historial del pedido y en la auditoría, y el equipo se entera por Conversaciones.
+   */
+  async cancel(customerId: string, number: number) {
+    const job = await this.prisma.jobOrder.findFirst({ where: { number, customerId, deletedAt: null }, select: { id: true, status: true, number: true } });
+    if (!job) throw new NotFoundException("No encontramos ese pedido");
+    const tooLate = () => new ConflictException("Este pedido ya está en producción: para cancelarlo escribinos por el chat.");
+    if (job.status === "CANCELLED") return { ok: true };
+    if (!CUSTOMER_CANCELLABLE.includes(job.status)) throw tooLate();
+
+    await this.prisma.$transaction(async (tx) => {
+      // Solo si sigue en un estado cancelable: si justo lo imprimieron, no se pisa.
+      const { count } = await tx.jobOrder.updateMany({ where: { id: job.id, status: { in: CUSTOMER_CANCELLABLE } }, data: { status: "CANCELLED" } });
+      if (count === 0) throw tooLate();
+      await tx.jobEvent.create({ data: { jobId: job.id, fromStatus: job.status, toStatus: "CANCELLED", note: "Cancelado por el cliente desde la app" } });
+      await tx.auditLog.create({ data: { entity: "JobOrder", entityId: job.id, action: "customer_cancel", before: { status: job.status }, after: { status: "CANCELLED", customerId } } });
+      // Aviso al equipo en Conversaciones, como un mensaje del cliente.
+      const text = `Cancelé el pedido ${formatJobNumber(job.number)} desde la app.`;
+      const conv =
+        (await tx.conversation.findUnique({ where: { customerId }, select: { id: true } })) ?? (await tx.conversation.create({ data: { customerId }, select: { id: true } }));
+      const msg = await tx.message.create({ data: { conversationId: conv.id, direction: "IN", channel: "APP", body: text, jobId: job.id } });
+      await tx.conversation.update({ where: { id: conv.id }, data: { lastMessageAt: msg.createdAt, lastMessagePreview: text, staffUnread: { increment: 1 } } });
+    });
+    return { ok: true };
   }
 }
 
@@ -88,5 +131,13 @@ export class AppJobsController {
   @Get(":number")
   one(@Param("number", ParseIntPipe) number: number, @CurrentCustomer() customer: AuthCustomer) {
     return this.jobs.one(customer.id, number);
+  }
+
+  @Post(":number/cancel")
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  cancel(@Param("number", ParseIntPipe) number: number, @CurrentCustomer() customer: AuthCustomer) {
+    return this.jobs.cancel(customer.id, number);
   }
 }

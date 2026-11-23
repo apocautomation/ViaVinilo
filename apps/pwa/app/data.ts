@@ -2,7 +2,7 @@
  * Estados de los pedidos de la app de clientes y su forma de mostrarse (D-034).
  * Los estados y su orden salen de la actualización §2.4 y de D-013 (seña).
  */
-export type Status = "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED" | "PRINTED" | "CALENDERING" | "READY" | "DELIVERED";
+export type Status = "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED" | "PRINTED" | "CALENDERING" | "READY" | "DELIVERED" | "CANCELLED";
 
 /** Cómo ve el cliente cada estado. "Impreso", nunca "Imprimiendo" (actualización §2.4). */
 export const STATUS_LABEL: Record<Status, string> = {
@@ -14,6 +14,7 @@ export const STATUS_LABEL: Record<Status, string> = {
   CALENDERING: "En calandra",
   READY: "Listo para retirar",
   DELIVERED: "Entregado",
+  CANCELLED: "Cancelado",
 };
 
 export const STATUS_CLASS: Record<Status, string> = {
@@ -25,6 +26,7 @@ export const STATUS_CLASS: Record<Status, string> = {
   CALENDERING: "st-printed",
   READY: "st-ready",
   DELIVERED: "",
+  CANCELLED: "",
 };
 
 /** Un pedido como lo manda la API (`GET /app/jobs`): sale directo del tablero de producción. */
@@ -42,6 +44,8 @@ export interface Order {
   depositAmount: string | null;
   depositPaid: boolean;
   readyAt: string | null;
+  /** El cliente todavía puede cancelarlo desde la app (hasta "Cotizado"). */
+  canCancel: boolean;
   error: string | null;
   files: { name: string; size: string; available: boolean }[];
   history: { status: Status; at: string }[];

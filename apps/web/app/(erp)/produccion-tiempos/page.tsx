@@ -14,6 +14,7 @@ import { Badge, Kpi, PageHead } from "../ui";
 interface Times {
   days: number;
   delayedHours: number;
+  businessHoursOnly: boolean;
   totals: { created: number; open: number; delayed: number };
   sectors: string[];
   perDay: { date: string; total: number; bySector: Record<string, number> }[];
@@ -63,7 +64,7 @@ export default function TiemposPage() {
     <div className="page">
       <PageHead
         title="Panel de tiempos"
-        help="Cuántos trabajos entran por día, cuánto tarda cada paso y qué pedidos están trabados. Se calcula con los movimientos reales del tablero, en horas corridas."
+        help="Cuántos trabajos entran por día, cuánto tarda cada paso y qué pedidos están trabados. Se calcula con los movimientos reales del tablero. En Configuración → Avisos se elige si se cuentan horas corridas o solo el horario de atención."
         actions={
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <select value={sector} onChange={(e) => setSector(e.target.value)} aria-label="Tablero">
@@ -232,7 +233,7 @@ export default function TiemposPage() {
               </p>
             )}
             <p className="muted" style={{ margin: 0, padding: "10px 16px" }}>
-              El límite de horas lo cambia el dueño en Configuración → Avisos.
+              Se cuentan {data.businessHoursOnly ? "solo las horas del horario de atención" : "horas corridas"}. El límite y la forma de contar los cambia el dueño en Configuración → Avisos.
             </p>
           </section>
         </>

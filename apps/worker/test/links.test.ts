@@ -193,4 +193,13 @@ describe("links de Drive y OneDrive: el archivo queda en el pedido (D-072)", () 
     await job([]);
     expect(await processLinkDownloads(prisma, storage, okWith(png(10, 10)))).toEqual({ jobs: 0, files: 0, failed: 0 });
   });
+
+  it("D-073: baja todos los links del pedido, sin tope", async () => {
+    const links = Array.from({ length: 8 }, (_, i) => `https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz01234${i}/view`);
+    const j = await job(links);
+    let n = 0;
+    const each = async (): Promise<DownloadResult> => ({ ok: true, file: { filename: `hoja-${++n}.png`, mime: "image/png", content: png(10, 10) } });
+    expect(await processLinkDownloads(prisma, storage, each)).toEqual({ jobs: 1, files: 8, failed: 0 });
+    expect(await prisma.jobFile.count({ where: { jobId: j.id } })).toBe(8);
+  });
 });

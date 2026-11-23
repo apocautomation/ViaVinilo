@@ -1,6 +1,6 @@
 import { Controller, Get, Injectable } from "@nestjs/common";
 import type { JobStatus, Prisma } from "@prisma/client";
-import { alertSettingsSchema, DEFAULT_ALERT_SETTINGS, formatJobNumber } from "@viavinilo/contracts";
+import { alertSettingsSchema, DEFAULT_ALERT_SETTINGS, elapsedMs, formatJobNumber, type AlertSettings } from "@viavinilo/contracts";
 import { z } from "zod";
 import { CurrentUser, type AuthUser } from "../auth/decorators";
 import { ZodQuery } from "../common/zod";
@@ -22,7 +22,8 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 /**
  * Panel de tiempos (SPEC E1.6): trabajos por día, por sector y por máquina; tiempo promedio en cada
  * estado; y órdenes demoradas (más de X horas en el mismo estado, configurable). Todo sale de los
- * cambios de estado reales del tablero (JobEvent). Las horas son corridas, no hábiles.
+ * cambios de estado reales del tablero (JobEvent). Las horas son corridas o, si el dueño lo elige,
+ * solo las del horario de atención (D-073).
  */
 @Injectable()
 export class TimesService {
@@ -31,17 +32,17 @@ export class TimesService {
     private readonly access: SectorAccess,
   ) {}
 
-  async delayedHours(): Promise<number> {
+  async settings(): Promise<AlertSettings> {
     const row = await this.prisma.appSetting.findUnique({ where: { key: "alerts" } });
     const parsed = alertSettingsSchema.safeParse(row?.value);
-    return (parsed.success ? parsed.data : DEFAULT_ALERT_SETTINGS).delayedHours;
+    return parsed.success ? parsed.data : DEFAULT_ALERT_SETTINGS;
   }
 
   async panel(user: AuthUser, days: number, now = new Date()) {
     const allowed = await this.access.allowedSectorIds(user);
     const scope: Prisma.JobOrderWhereInput = { deletedAt: null, ...(allowed === "all" ? {} : { sectorId: { in: allowed } }) };
     const since = new Date(now.getTime() - days * 24 * HOUR);
-    const delayedHours = await this.delayedHours();
+    const { delayedHours, businessHoursOnly } = await this.settings();
 
     const [created, events, open, sectors] = await Promise.all([
       // Trabajos que entraron en el período.
@@ -93,7 +94,7 @@ export class TimesService {
       if (a.jobId !== b.jobId || b.createdAt < since || CLOSED.includes(a.toStatus)) continue;
       const key = `${a.job.sector.name}|${a.toStatus}`;
       const row = stage.get(key) ?? { sector: a.job.sector.name, status: a.toStatus, totalMs: 0, count: 0 };
-      row.totalMs += b.createdAt.getTime() - a.createdAt.getTime();
+      row.totalMs += elapsedMs(a.createdAt, b.createdAt, businessHoursOnly);
       row.count++;
       stage.set(key, row);
     }
@@ -101,13 +102,17 @@ export class TimesService {
     // ── Demorados ──
     const limitMs = delayedHours * HOUR;
     const delayed = open
-      .map((j) => ({ j, since: j.events[0]?.createdAt ?? j.createdAt }))
-      .filter((x) => now.getTime() - x.since.getTime() > limitMs)
-      .sort((a, b) => a.since.getTime() - b.since.getTime());
+      .map((j) => {
+        const since = j.events[0]?.createdAt ?? j.createdAt;
+        return { j, since, waitedMs: elapsedMs(since, now, businessHoursOnly) };
+      })
+      .filter((x) => x.waitedMs > limitMs)
+      .sort((a, b) => b.waitedMs - a.waitedMs || a.since.getTime() - b.since.getTime());
 
     return {
       days,
       delayedHours,
+      businessHoursOnly,
       totals: { created: created.length, open: open.length, delayed: delayed.length },
       sectors: sectors.map((s) => s.name),
       perDay: dayList.map((date) => ({ date, total: [...perDay.get(date)!.values()].reduce((n, v) => n + v, 0), bySector: Object.fromEntries(perDay.get(date)!) })),
@@ -115,7 +120,7 @@ export class TimesService {
       stageAverages: [...stage.values()]
         .map((r) => ({ sector: r.sector, status: r.status, avgHours: round1(r.totalMs / r.count / HOUR), count: r.count }))
         .sort((a, b) => a.sector.localeCompare(b.sector) || b.avgHours - a.avgHours),
-      delayed: delayed.slice(0, DELAYED_LIMIT).map(({ j, since: at }) => ({
+      delayed: delayed.slice(0, DELAYED_LIMIT).map(({ j, since: at, waitedMs }) => ({
         id: j.id,
         number: formatJobNumber(j.number),
         sectorCode: j.sector.code,
@@ -124,7 +129,7 @@ export class TimesService {
         status: j.status,
         customer: j.customer.businessName || [j.customer.firstName, j.customer.lastName].filter(Boolean).join(" ") || "Sin nombre",
         since: at,
-        hours: round1((now.getTime() - at.getTime()) / HOUR),
+        hours: round1(waitedMs / HOUR),
       })),
     };
   }
@@ -142,6 +147,7 @@ export class TimesController {
   /** Desde cuántas horas en el mismo paso un pedido cuenta como demorado (lo usa también Inicio). */
   @Get("threshold")
   async threshold() {
-    return { delayedHours: await this.times.delayedHours() };
+    const { delayedHours, businessHoursOnly } = await this.times.settings();
+    return { delayedHours, businessHoursOnly };
   }
 }
