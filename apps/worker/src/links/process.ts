@@ -23,9 +23,6 @@ const WHY: Record<DownloadFailure, string> = {
   error: "no se pudo conectar",
 };
 
-/** Máximo de links que se bajan por pedido. */
-const MAX_LINKS_PER_JOB = 5;
-
 export async function processLinkDownloads(
   prisma: PrismaClient,
   storage: Pick<FileStorage, "put">,
@@ -47,7 +44,7 @@ export async function processLinkDownloads(
     const { count } = await prisma.jobOrder.updateMany({ where: { id: job.id, linksFetchedAt: null }, data: { linksFetchedAt: now } });
     if (count === 0) continue;
 
-    const targets = job.externalLinks.map((link) => ({ link, target: linkTarget(link) })).slice(0, MAX_LINKS_PER_JOB);
+    const targets = job.externalLinks.map((link) => ({ link, target: linkTarget(link) }));
     const notes: string[] = [];
     const created: Prisma.JobFileCreateManyInput[] = [];
     for (const { link, target } of targets) {

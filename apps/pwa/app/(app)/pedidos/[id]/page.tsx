@@ -1,18 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, FileText, MessageCircle, PackageCheck, Upload, X } from "lucide-react";
 import { AppBar, StatusPill } from "../../../components";
 import { STATUS_LABEL, ars, formatWhen, type Order, type Status } from "../../../data";
-import { api } from "../../../session";
+import { api, ApiError } from "../../../session";
 
 /** Detalle de un pedido: estado, precio, cuándo está listo, historial y archivos (SPEC E1.5). */
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>();
   const [o, setOrder] = useState<Order | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "missing">("loading");
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+
+  async function cancelOrder() {
+    setCancelling(true);
+    setCancelError("");
+    try {
+      await api(`/app/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+      router.replace("/");
+    } catch (e) {
+      setCancelError(e instanceof ApiError ? e.message : "No pudimos cancelar el pedido. Probá de nuevo.");
+      setCancelling(false);
+      setConfirming(false);
+    }
+  }
   useEffect(() => {
     const load = () =>
       api<Order>(`/app/jobs/${encodeURIComponent(id)}`)
@@ -82,6 +99,15 @@ export default function PedidoPage() {
           </section>
         )}
 
+        {o.status === "CANCELLED" && (
+          <div className="alert alert-bad">
+            <X size={18} />
+            <span>
+              <strong>Este pedido fue cancelado.</strong> Si tenés dudas, consultanos por el chat.
+            </span>
+          </div>
+        )}
+
         {o.status === "READY" && (
           <div className="alert alert-ok">
             <PackageCheck size={18} />
@@ -144,6 +170,7 @@ export default function PedidoPage() {
             </>
           )}
           {!error &&
+            o.status !== "CANCELLED" &&
             o.steps.map((s, i) => {
               const state = i < pos || o.status === "DELIVERED" ? "done" : i === pos ? "current" : "todo";
               return (
@@ -177,6 +204,26 @@ export default function PedidoPage() {
         <Link href={`/chat?pedido=${o.num}`} className="btn btn-ghost btn-block">
           <MessageCircle size={18} /> Consultar por este pedido
         </Link>
+
+        {/* D-074: el cliente cancela solo mientras el pedido no pasó de "Cotizado". */}
+        {o.canCancel && !confirming && (
+          <button className="btn btn-ghost btn-block" style={{ color: "var(--color-danger)" }} onClick={() => setConfirming(true)}>
+            <X size={18} /> Cancelar este pedido
+          </button>
+        )}
+        {o.canCancel && confirming && (
+          <section className="card card-pad" style={{ display: "grid", gap: 12 }}>
+            <strong>¿Cancelás el pedido {o.num}?</strong>
+            <span className="muted">No se puede deshacer. Si después lo querés, tenés que mandarlo de nuevo.</span>
+            <button className="btn btn-danger btn-block" disabled={cancelling} onClick={() => void cancelOrder()}>
+              {cancelling ? "Cancelando…" : "Sí, cancelar el pedido"}
+            </button>
+            <button className="btn btn-ghost btn-block" disabled={cancelling} onClick={() => setConfirming(false)}>
+              No, lo dejo
+            </button>
+          </section>
+        )}
+        {cancelError && <p className="muted center" style={{ color: "var(--color-danger)" }}>{cancelError}</p>}
       </main>
     </>
   );

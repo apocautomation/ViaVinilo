@@ -28,8 +28,9 @@ export default function PedidosPage() {
     };
   }, []);
   const all = orders ?? [];
-  const active = all.filter((o) => o.status !== "DELIVERED");
-  const list = tab === "curso" ? active : all.filter((o) => o.status === "DELIVERED");
+  const finished = (o: Order) => o.status === "DELIVERED" || o.status === "CANCELLED";
+  const active = all.filter((o) => !finished(o));
+  const list = tab === "curso" ? active : all.filter(finished);
   const ready = active.filter((o) => o.status === "READY").length;
   const errors = active.filter((o) => o.status === "FILE_ERROR").length;
 
@@ -116,7 +117,7 @@ export default function PedidosPage() {
               <StatusPill status={o.status} />
               {o.amount ? <b>{ars.format(Number(o.amount))}</b> : <span>Sin cotizar</span>}
             </div>
-            {o.readyAt && o.status !== "READY" && o.status !== "DELIVERED" && (
+            {o.readyAt && o.status !== "READY" && !finished(o) && (
               <div className="order-foot" style={{ justifyContent: "flex-start", gap: 6 }}>
                 <Clock size={14} /> Listo {formatWhen(o.readyAt).toLowerCase()}
               </div>

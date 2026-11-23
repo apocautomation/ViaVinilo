@@ -414,7 +414,7 @@ export default function ConfiguracionPage() {
             className="panel-body form-grid"
             onSubmit={(e) => {
               e.preventDefault();
-              void run(() => api("/admin/alerts", { method: "PUT", body: JSON.stringify(alerts) }), "Tiempos guardados.");
+              void run(() => api("/admin/alerts", { method: "PUT", body: JSON.stringify(alerts) }), "Cambios guardados.");
             }}
           >
             <label className="field">
@@ -433,11 +433,19 @@ export default function ConfiguracionPage() {
               Pedido demorado: más de (horas) en el mismo paso
               <input type="number" min={1} max={720} value={alerts.delayedHours} onChange={(e) => setAlerts({ ...alerts, delayedHours: Number(e.target.value) })} required />
             </label>
+            <label className="check field-wide">
+              <input type="checkbox" checked={alerts.businessHoursOnly} onChange={(e) => setAlerts({ ...alerts, businessHoursOnly: e.target.checked })} />
+              Contar los tiempos del taller solo en horario de atención (lunes a viernes de 8 a 19 y sábados de 8 a 13). Apagado, se cuentan las horas corridas.
+            </label>
+            <label className="check field-wide">
+              <input type="checkbox" checked={alerts.showCancelledToCustomer} onChange={(e) => setAlerts({ ...alerts, showCancelledToCustomer: e.target.checked })} />
+              Mostrarle al cliente, en la app, sus pedidos cancelados.
+            </label>
             <p className="muted field-wide" style={{ margin: 0 }}>
               El tiempo de "demorado" se usa en Inicio y en el Panel de tiempos. La campanita también avisa siempre los chats que piden un asesor, los mensajes nuevos y los archivos con problema.
             </p>
             <div className="field-wide form-actions">
-              <button className="btn btn-primary">Guardar tiempos</button>
+              <button className="btn btn-primary">Guardar</button>
             </div>
           </form>
         </Panel>

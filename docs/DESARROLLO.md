@@ -1200,6 +1200,22 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **OneDrive**: la API pública de OneDrive hoy pide iniciar sesión; se usa la descarga directa del link compartido, probada con links reales el 23/11. Si Microsoft la cambia, esos pedidos van a mostrar "no se pudo bajar" y el operador abre el link del mail como hasta ahora.
 - **Retención**: estos archivos se borran igual que los demás, a los 30 días de entregado el pedido (D-015).
 
+### D-073 · 23/11/2026 · Ezequiel · lo que estaba "a confirmar" queda configurable; links sin tope
+- **Criterio**: en vez de dejar fijo lo que había que confirmar con Verónica, el dueño lo elige en Configuración → Avisos. Ya eran configurables los tiempos de los avisos y el límite de "demorado" (D-067, D-070). Se suman:
+  - **Horas hábiles o corridas**: "Contar los tiempos del taller solo en horario de atención". Apagado (como arranca) se cuentan horas corridas. Prendido, el Panel de tiempos e Inicio cuentan solo lunes a viernes de 8 a 19 y sábados de 8 a 13, hora de Salta. El horario en sí está fijo en el código y es el mismo que usa el bot para decir "fuera de horario"; TODO(spec): confirmar ese horario con Verónica.
+  - **Pedidos cancelados en la app**: "Mostrarle al cliente sus pedidos cancelados". Apagado (como arranca) no los ve. Prendido, aparecen en la pestaña de entregados con el estado "Cancelado" y un cartel en el detalle.
+- **Inicio** deja de calcular los demorados por su cuenta: usa el mismo cálculo que el Panel de tiempos (mismo límite, misma forma de contar y desde el último cambio de estado, no desde la última edición).
+- **Links sin tope por pedido** (cambia D-072): se bajan todos los links de Drive y OneDrive del pedido, no solo los primeros 5. Sigue el tope de 150 MB por archivo. Después de subirlo se vuelven a procesar los pedidos que tenían más de 5 links.
+- **Por qué**: Ezequiel: "no pongas tope" y "dejalo configurable".
+
+### D-074 · 23/11/2026 · Ezequiel · el cliente puede cancelar su pedido desde la app hasta "Cotizado"
+- **Qué**: en el detalle del pedido de la app aparece "Cancelar este pedido", con una confirmación. Solo mientras el pedido está en "Archivo recibido", "Archivo con error" o "Cotizado" (o con el alta pendiente).
+- **Cuándo ya no**: con la seña recibida, impreso, en calandra, listo o entregado. Ahí la app no muestra el botón y, si lo intenta igual, le dice que escriba por el chat. La seña quedó del lado de "ya no" porque hay plata de por medio; TODO(spec): confirmarlo con Verónica.
+- **Rastro**: queda en el historial del pedido ("Cancelado por el cliente desde la app") y en la auditoría. El equipo se entera por Conversaciones, con un mensaje del cliente ligado al pedido. Cancelar dos veces no hace nada ni avisa de nuevo.
+- **Si justo lo movieron**: la cancelación solo se aplica si el pedido sigue en un estado cancelable en ese instante; si un operador lo pasó a impreso un segundo antes, gana el operador.
+- **Relación con D-073**: que el cliente vea después sus pedidos cancelados sigue dependiendo del tilde de Configuración (arranca apagado: al cancelar, el pedido desaparece de su lista).
+- **Por qué**: Ezequiel: "lo pueden cancelar si no está en la etapa de impresión o impreso, solo si está en cotización o anteriores".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

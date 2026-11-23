@@ -119,7 +119,7 @@ describe("panel de tiempos (SPEC E1.6, D-070)", () => {
     expect(res.delayedHours).toBe(3);
     // Ahora también el que está en "Impreso" hace 4 h. El de Gran Formato (1 h) no.
     expect(res.delayed.map((d: { status: string }) => d.status)).toEqual(["QUOTED", "PRINTED"]);
-    expect((await get("production", "/jobs/times/threshold")).body).toEqual({ delayedHours: 3 });
+    expect((await get("production", "/jobs/times/threshold")).body).toEqual({ delayedHours: 3, businessHoursOnly: false });
   });
 
   it("E1.6: producción ve solo los tiempos de sus tableros", async () => {
@@ -132,5 +132,27 @@ describe("panel de tiempos (SPEC E1.6, D-070)", () => {
   it("E1.6: el período se puede acotar y no acepta valores fuera de rango", async () => {
     expect((await get("owner", "/jobs/times?days=1")).body.totals.created).toBe(2);
     expect((await get("owner", "/jobs/times?days=500")).status).toBe(400);
+  });
+
+  it("D-073: contando solo el horario de atención, los tiempos nunca dan más que las horas corridas", async () => {
+    const put = (businessHoursOnly: boolean) =>
+      request(app.getHttpServer())
+        .put("/admin/alerts")
+        .set("Authorization", `Bearer ${tokens.owner}`)
+        .send({ unansweredMinutes: 30, unquotedHours: 4, pendingSignupHours: 24, delayedHours: 24, businessHoursOnly });
+    await put(false);
+    const calendar = (await get("owner", "/jobs/times")).body;
+    await put(true);
+    const business = (await get("owner", "/jobs/times")).body;
+    expect(business.businessHoursOnly).toBe(true);
+    // El pedido parado hace 30 h corridas: en horario de atención son como mucho 22 h (dos jornadas de 11 h).
+    const waited = (r: { delayed: { status: string; hours: number }[] }) => r.delayed.find((d) => d.status === "QUOTED")?.hours ?? 0;
+    expect(waited(calendar)).toBe(30);
+    expect(waited(business)).toBeLessThanOrEqual(22);
+    for (const b of business.stageAverages) {
+      const c = calendar.stageAverages.find((x: { sector: string; status: string }) => x.sector === b.sector && x.status === b.status);
+      expect(b.avgHours).toBeLessThanOrEqual(c.avgHours);
+    }
+    await put(false);
   });
 });

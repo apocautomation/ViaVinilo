@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AlertTriangle, ClipboardList, Factory, PackageCheck } from "lucide-react";
-import { formatJobNumber, JOB_STATUS_LABELS, type JobStatus } from "@viavinilo/contracts";
+import { JOB_STATUS_LABELS, type JobStatus } from "@viavinilo/contracts";
 import { api } from "../../lib/api";
 import { Badge, Kpi, PageHead } from "../ui";
 
@@ -38,24 +38,37 @@ const BAND: Partial<Record<JobStatus, "received" | "quoted" | "printing" | "read
 
 const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
 
-function elapsed(iso: string): string {
-  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
+interface LateJob {
+  id: string;
+  number: string;
+  customer: string;
+  sector: string;
+  status: JobStatus;
+  hours: number;
+}
+
+/** 3,5 → "3 h 30 min"; 30 → "1 d 6 h". */
+function hoursText(hours: number): string {
+  const min = Math.round(hours * 60);
+  if (min < 24 * 60) return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
+  return `${Math.floor(min / (24 * 60))} d ${Math.floor((min % (24 * 60)) / 60)} h`;
 }
 
 /** Inicio con los datos reales de los tableros (D-045): sin datos de ejemplo. */
 export default function InicioPage() {
   const [boards, setBoards] = useState<Board[] | null>(null);
   const [lateHours, setLateHours] = useState(DEFAULT_LATE_HOURS);
-  const LATE_MS = lateHours * 60 * 60 * 1000;
+  const [late, setLate] = useState<LateJob[]>([]);
+  const [lateTotal, setLateTotal] = useState(0);
 
   useEffect(() => {
     api<{ code: string }[]>("/sectors")
       .then((sectors) => Promise.all(sectors.map((s) => api<Board>(`/jobs/board?sector=${s.code}`))))
       .then(setBoards)
       .catch(() => setBoards([]));
-    api<{ delayedHours: number }>("/jobs/times/threshold")
-      .then((r) => setLateHours(r.delayedHours))
+    // Mismo cálculo que el Panel de tiempos: mismo límite y misma forma de contar las horas (D-073).
+    api<{ delayedHours: number; totals: { delayed: number }; delayed: LateJob[] }>("/jobs/times?days=1")
+      .then((r) => (setLateHours(r.delayedHours), setLate(r.delayed), setLateTotal(r.totals.delayed)))
       .catch(() => undefined);
   }, []);
 
@@ -63,9 +76,6 @@ export default function InicioPage() {
     b.columns.flatMap((c) => c.cards.map((card) => ({ ...card, sector: b.sector.name }))),
   );
   const active = cards.filter((c) => BAND[c.status]);
-  const late = active
-    .filter((c) => c.status !== "READY" && Date.now() - new Date(c.updatedAt).getTime() > LATE_MS)
-    .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
   const perSector = (boards ?? []).map((b) => {
     const counts = { received: 0, quoted: 0, printing: 0, ready: 0 };
     for (const col of b.columns) {
@@ -89,7 +99,7 @@ export default function InicioPage() {
         <Kpi label="Pedidos de hoy" value={n(cards.filter((c) => isToday(c.createdAt)).length)} icon={ClipboardList} />
         <Kpi label="En producción" value={n(active.filter((c) => c.status !== "READY").length)} icon={Factory} />
         <Kpi label="Listos para retirar" value={n(active.filter((c) => c.status === "READY").length)} icon={PackageCheck} />
-        <Kpi label="Demorados" value={n(late.length)} icon={AlertTriangle} foot={`más de ${lateHours} h en el mismo paso`} />
+        <Kpi label="Demorados" value={n(lateTotal)} icon={AlertTriangle} foot={`más de ${lateHours} h en el mismo paso`} />
       </div>
 
       <div className="grid-2">
@@ -138,7 +148,7 @@ export default function InicioPage() {
       <section className="panel">
         <div className="panel-head">
           <h2>Trabajos demorados</h2>
-          {late.length > 0 && <Badge tone="warn">{late.length} superan las {lateHours} h en el mismo paso</Badge>}
+          {lateTotal > 0 && <Badge tone="warn">{lateTotal} superan las {lateHours} h en el mismo paso</Badge>}
         </div>
         <div className="table-wrap">
           <table className="data">
@@ -154,11 +164,11 @@ export default function InicioPage() {
             <tbody>
               {late.slice(0, 10).map((l) => (
                 <tr key={l.id}>
-                  <td className="mono">{formatJobNumber(l.number)}</td>
-                  <td>{l.customer.name ?? "Sin alta"}</td>
+                  <td className="mono">{l.number}</td>
+                  <td>{l.customer}</td>
                   <td>{l.sector}</td>
                   <td><Badge tone="info">{JOB_STATUS_LABELS[l.status]}</Badge></td>
-                  <td className="num"><Badge tone="warn">{elapsed(l.updatedAt)}</Badge></td>
+                  <td className="num"><Badge tone="warn">{hoursText(l.hours)}</Badge></td>
                 </tr>
               ))}
               {!loading && late.length === 0 && (

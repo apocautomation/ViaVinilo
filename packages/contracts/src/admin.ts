@@ -77,6 +77,10 @@ export const alertSettingsSchema = z.object({
   pendingSignupHours: z.coerce.number().int().min(1).max(24 * 30),
   /** Un pedido que lleva más de estas horas en el mismo paso cuenta como demorado (SPEC E1.6). */
   delayedHours: z.coerce.number().int().min(1).max(24 * 30).default(24),
+  /** Los tiempos del taller se cuentan solo dentro del horario de atención (D-073). Apagado = horas corridas. */
+  businessHoursOnly: z.boolean().default(false),
+  /** El cliente ve en la app sus pedidos cancelados (D-073). */
+  showCancelledToCustomer: z.boolean().default(false),
 });
 export type AlertSettings = z.infer<typeof alertSettingsSchema>;
-export const DEFAULT_ALERT_SETTINGS: AlertSettings = { unansweredMinutes: 30, unquotedHours: 4, pendingSignupHours: 24, delayedHours: 24 };
+export const DEFAULT_ALERT_SETTINGS: AlertSettings = { unansweredMinutes: 30, unquotedHours: 4, pendingSignupHours: 24, delayedHours: 24, businessHoursOnly: false, showCancelledToCustomer: false };
