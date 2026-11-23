@@ -294,4 +294,13 @@ describe("links: el archivo queda en el pedido (D-072, D-076)", () => {
     await job([]);
     expect(await processLinkDownloads(prisma, storage, clientWith(async () => opened(png(10, 10))), NO_MIN)).toEqual({ jobs: 0, files: 0, failed: 0 });
   });
+
+  it("D-076: un link que llegó con '&amp;' del HTML del mail se baja igual", async () => {
+    const j = await job(["https://docs.google.com/uc?export=download&amp;id=1AbCdEfGhIjKlMnOpQrStUvWxYz012345&amp;revid=0B1x"]);
+    const seen: string[] = [];
+    const client = clientWith(async (t) => (seen.push(t.url), opened(png(10, 10))));
+    expect(await processLinkDownloads(prisma, storage, client, NO_MIN)).toEqual({ jobs: 1, files: 1, failed: 0 });
+    expect(seen).toEqual([DRIVE_DIRECT]);
+    expect((await prisma.jobOrder.findUniqueOrThrow({ where: { id: j.id } })).linksNote).toBeNull();
+  });
 });

@@ -24,7 +24,8 @@ export function extractTransferLinks(...texts: (string | undefined)[]): string[]
   for (const text of texts) {
     if (!text) continue;
     for (const match of text.matchAll(URL_RE)) {
-      const url = match[0].replace(/[.,;:]+$/, "");
+      // En el HTML del mail los "&" vienen escritos "&amp;".
+      const url = match[0].replace(/&amp;/g, "&").replace(/[.,;:]+$/, "");
       try {
         const host = new URL(url).hostname.toLowerCase();
         if (TRANSFER_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) links.add(url);

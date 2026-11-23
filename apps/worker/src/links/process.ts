@@ -65,7 +65,9 @@ export async function processLinkDownloads(
       notes.push(`No se pudo bajar el archivo de ${PROVIDER_NAME[provider]}: ${WHY[reason]}.`);
     };
 
-    for (const link of job.externalLinks.filter((l) => !isNoiseLink(l))) {
+    // Un link copiado de un mail en HTML puede traer "&amp;" en vez de "&": se corrige antes de usarlo.
+    const links = [...new Set(job.externalLinks.map((l) => l.replace(/&amp;/g, "&")))];
+    for (const link of links.filter((l) => !isNoiseLink(l))) {
       const resolved = await client.resolve(link);
       if (!resolved) {
         notes.push("Hay un link de un servicio que no se baja solo: abrilo desde el mail.");
