@@ -429,8 +429,12 @@ model JobOrder {
   source            JobSource
   /// Message-ID del mail. Único por sector: el mismo mail con copia a dos casillas crea una orden en cada una.
   sourceMessageId   String?
-  /// Links de WeTransfer o Drive del mail; no se descargan en la E1.
+  /// Links de WeTransfer, Drive u OneDrive del mail.
   externalLinks     String[]
+  /// Cuándo se intentó bajar los archivos de esos links (D-072). Null = todavía no. Se intenta una vez.
+  linksFetchedAt    DateTime?
+  /// Qué pasó con los links que no se pudieron bajar; lo lee el operador en la tarjeta.
+  linksNote         String?
   files             JobFile[]
   events            JobEvent[]
   createdAt         DateTime      @default(now())

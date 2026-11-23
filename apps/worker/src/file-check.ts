@@ -69,7 +69,10 @@ export async function processFileChecks(
     const file = job.files.find((f) => IMAGE.test(f.filename)) ?? job.files.find((f) => PDF.test(f.filename));
     let check: FileCheck;
     if (!file) {
-      check = { verdict: "unknown", detail: job.files.length ? "El archivo no es PNG, JPG ni PDF: no se puede controlar solo." : "El pedido no tiene archivos guardados (llegó por un link)." };
+      const noFile = job.linksNote ?? (job.externalLinks.length && !job.linksFetchedAt ? "El archivo llegó por un link: se está bajando." : "El pedido no tiene archivos guardados.");
+      check = job.files.length
+        ? { verdict: "unknown", detail: "El archivo no es PNG, JPG ni PDF: no se puede controlar solo." }
+        : { verdict: "unknown", detail: noFile, ...(job.linksNote ? { hint: job.linksNote } : {}) };
     } else {
       const head = await storage.getHead(file.storageKey, 2 * 1024 * 1024).catch(() => null);
       const isPdf = PDF.test(file.filename);

@@ -7,6 +7,7 @@ import { buildSystemPrompt } from "./bot/prompt";
 import { processBotReplies } from "./bot/reply";
 import { processFileChecks } from "./file-check";
 import { createSmtpNotifier } from "./mail/invite";
+import { processLinkDownloads } from "./links/process";
 import { processNotices } from "./notices";
 import { processPush, webPushSender } from "./push";
 import { purgeOldFiles } from "./retention";
@@ -165,6 +166,19 @@ async function main() {
     console.log("[worker] notificaciones push: sin claves (VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY), no se mandan");
   }
 
+  // Archivos mandados por link (D-072): cada minuto baja los de hasta 3 pedidos.
+  const linksQueue = new Queue(QUEUES.links, { connection });
+  const linksWorker = new Worker(
+    QUEUES.links,
+    async () => {
+      const r = await processLinkDownloads(prisma, deps.storage);
+      if (r.jobs) console.log(`[links] ${r.files} archivos bajados de ${r.jobs} pedidos, ${r.failed} links que no se pudieron bajar`);
+    },
+    { connection, concurrency: 1 },
+  );
+  linksWorker.on("failed", (_job, err) => console.error("[links] falló", err.message));
+  await linksQueue.upsertJobScheduler("link-downloads", { every: 60_000 }, { name: "links" });
+
   const shutdown = async () => {
     console.log("[worker] cerrando…");
     await mailWorker.close();
@@ -175,6 +189,8 @@ async function main() {
     await noticesWorker.close();
     await fileCheckWorker.close();
     await fileCheckQueue.close();
+    await linksWorker.close();
+    await linksQueue.close();
     await pushWorker.close();
     await pushQueue.close();
     await retentionWorker.close();
