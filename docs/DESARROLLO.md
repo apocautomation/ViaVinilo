@@ -1216,6 +1216,18 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Relación con D-073**: que el cliente vea después sus pedidos cancelados sigue dependiendo del tilde de Configuración (arranca apagado: al cancelar, el pedido desaparece de su lista).
 - **Por qué**: Ezequiel: "lo pueden cancelar si no está en la etapa de impresión o impreso, solo si está en cotización o anteriores".
 
+### D-075 · 23/11/2026 · Ezequiel · el cliente ve sus pedidos cancelados y puede volver a pedirlos, tal cual o con cambios
+- **Se ven por defecto** (cambia D-073): el tilde "Mostrarle al cliente sus pedidos cancelados" ahora arranca prendido. Aparecen en la pestaña de entregados con el estado "Cancelado".
+- **Volver a pedirlo**: en el detalle de un pedido cancelado hay un botón "Volver a pedirlo". Abre un formulario corto con la medida (ya cargada, se puede cambiar) y "¿Qué cambiás?" (opcional).
+  - Es **el mismo pedido**: conserva el número, los archivos y el historial. Vuelve a "Archivo recibido" para que el equipo lo revise y lo cotice de nuevo; no se saltea ningún paso.
+  - El precio anterior queda cargado como referencia, pero el pedido no está cotizado hasta que alguien del equipo lo confirme.
+  - Si cambia la medida, el control automático del archivo se hace de nuevo con la medida nueva.
+  - Para cambiar el archivo, el cliente manda el nuevo por el chat (flujo que ya existe).
+- **Rastro**: queda en el historial ("Vuelto a pedir por el cliente desde la app", con los cambios), en la auditoría y como mensaje del cliente en Conversaciones.
+- **Límites**: solo se vuelve a pedir un pedido cancelado y propio; un cliente bloqueado no puede. Si después de cancelar el dueño apagó el tilde, el cliente no ve el pedido y tampoco el botón.
+- **Fuera de alcance**: "repetir" un pedido ya entregado. Queda en el backlog si lo piden.
+- **Por qué**: Ezequiel: "mostralo y que pueda volver a pedirlo o modificarlo y volver a pedirlo".
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
