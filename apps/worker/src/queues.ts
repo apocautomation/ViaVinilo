@@ -18,6 +18,8 @@ export const QUEUES = {
   fileCheck: "file-check",
   /** Notificaciones push de la app (D-068). */
   push: "app-push",
+  /** Descarga de archivos mandados por link de Drive u OneDrive (D-072). */
+  links: "link-downloads",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

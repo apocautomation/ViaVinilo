@@ -1190,6 +1190,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Pendiente** (PR siguiente): bajar el archivo de los links de Google Drive (son casi todos los links). TODO(spec): I-24 sigue abierto por el límite del error automático.
 - **Por qué**: Ezequiel: "bien, mejorá en todos esos casos".
 
+### D-072 · 23/11/2026 · Ezequiel · los archivos mandados por link de Drive y OneDrive se bajan solos
+- **Qué**: cuando un pedido llega con un link de Google Drive o de OneDrive, el servidor baja el archivo y lo guarda en el pedido, como si hubiera venido adjunto. El operador lo descarga desde la tarjeta (con el mismo bloqueo hasta que esté liberado para imprimir) y pasa por el control automático. Cambia lo que decía el SPEC E1.1 ("los links no se descargan en la E1").
+- **Por qué ahora**: en producción, 92 de los 195 pedidos que el control no podía decidir no tenían archivo guardado: de los links, 121 son de Drive, 25 de OneDrive y 2 de WeTransfer.
+- **Cómo**: el worker revisa cada minuto hasta 3 pedidos abiertos con links sin procesar (los más nuevos primero), así también se van bajando los que ya estaban cargados. Cada pedido se intenta una sola vez. Hasta 5 links por pedido y 150 MB por archivo (el mismo tope que la app).
+- **Si no se puede bajar**, la tarjeta lo explica: el link no es público ("pedile al cliente que lo comparta con cualquier persona que tenga el enlace"), ya no existe, pesa más de 150 MB, o es de un servicio que no se baja solo.
+- **Qué links**: archivos de Drive (`/file/d/…`, `open?id=`, `uc?id=`) y links compartidos de OneDrive personal (`1drv.ms/<tipo>/c/<cuenta>/<clave>`). No se bajan carpetas ni documentos de Google, WeTransfer (son 2 pedidos y su descarga cambia seguido) ni otros servicios.
+- **Seguridad**: el servidor solo se conecta a direcciones de Google Drive y de OneDrive. Cada redirección de la descarga se revisa contra esa lista antes de seguirla; solo https. El nombre del archivo se limpia (sin rutas). El archivo se guarda, nunca se abre ni se ejecuta.
+- **OneDrive**: la API pública de OneDrive hoy pide iniciar sesión; se usa la descarga directa del link compartido, probada con links reales el 23/11. Si Microsoft la cambia, esos pedidos van a mostrar "no se pudo bajar" y el operador abre el link del mail como hasta ahora.
+- **Retención**: estos archivos se borran igual que los demás, a los 30 días de entregado el pedido (D-015).
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
