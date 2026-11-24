@@ -1,8 +1,8 @@
-import { Controller, Get, HttpCode, MessageEvent, Param, Patch, Post, Sse } from "@nestjs/common";
+import { Controller, Delete, Get, HttpCode, MessageEvent, Param, Patch, Post, Sse } from "@nestjs/common";
 import { listJobsSchema, pickupBranchSchema, sectorCodeSchema, transitionSchema, type PickupBranch } from "@viavinilo/contracts";
 import { Observable, distinctUntilChanged, from, interval, map, merge, startWith, switchMap } from "rxjs";
 import { z } from "zod";
-import { CurrentUser, type AuthUser } from "../auth/decorators";
+import { CurrentUser, Roles, type AuthUser } from "../auth/decorators";
 import { ZodBody, ZodQuery } from "../common/zod";
 import { JobsService, type BoardQuery, type TransitionBody } from "./jobs.service";
 
@@ -36,6 +36,7 @@ const byCustomerSchema = z.object({
 const machineSchema = z.object({ machineId: z.string().min(1).nullable() });
 const serviceSchema = z.object({ sector: sectorCodeSchema });
 const pickupSchema = z.object({ branch: pickupBranchSchema.nullable() });
+const removeSchema = z.object({ reason: z.string().trim().min(3, "Indicá por qué se elimina").max(300) });
 const measureSchema = z.object({ measure: z.string().trim().max(80).transform((v) => v || null) });
 
 /** Cada cuánto se revisa si cambió el tablero. Cubre también las órdenes que crea el worker de mails. */
@@ -104,6 +105,13 @@ export class JobsController {
   @Patch(":id/service")
   moveService(@Param("id") id: string, @ZodBody(serviceSchema) body: { sector: string }, @CurrentUser() user: AuthUser) {
     return this.jobs.moveService(user, id, body.sector);
+  }
+
+  /** Elimina un pedido (D-088). Solo el dueño; no se borra de la base y queda auditado. */
+  @Delete(":id")
+  @Roles("OWNER")
+  remove(@Param("id") id: string, @ZodBody(removeSchema) body: { reason: string }, @CurrentUser() user: AuthUser) {
+    return this.jobs.remove(user, id, body.reason);
   }
 
   /** Medida pedida, corregida por el taller (D-086). */

@@ -1369,6 +1369,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: sin migración. Resuelve I-19 en lo que hace a subir archivos desde la app.
 - **Abierto**: no hay tope de envíos por cliente ni aviso de archivo repetido (la otra mitad de I-19). Un trabajo con varias medidas distintas se manda de a uno o se aclara en el texto.
 
+### D-088 · 24/11/2026 · Ezequiel · botón para eliminar pedidos
+- **Decisión**: el panel del pedido tiene un botón **Eliminar pedido**, visible solo para el **dueño**. Pide el motivo y avisa qué pasa antes de confirmar.
+  - Es un **borrado lógico** (`deletedAt`): el pedido deja de verse en el tablero, en los listados, en "Trabajos por cliente" y en la app del cliente, pero queda en la base con su historial. Queda en el log de auditoría (`delete`) con quién, cuándo, el estado, el importe y el motivo.
+  - No avisa al cliente, y los avisos que el pedido tuviera pendientes no se mandan.
+  - No hay "deshacer" en pantalla: recuperarlo es una operación de soporte sobre la base.
+- **Por qué**: Ezequiel lo pidió al terminar de probar ("habilitame un botón para eliminar pedidos"): hacen falta para sacar pedidos de prueba, duplicados o cargados por error. Solo el dueño, porque un pedido eliminado desaparece también para el cliente; para una baja real del cliente sigue estando "Cancelar", que queda a la vista.
+- **Impacto**: `DELETE /jobs/:id` con `reason`. Sin migración. El mail que originó el pedido no lo vuelve a crear: la idempotencia por Message-ID sigue valiendo porque el registro no se borra.
+- **Abierto**: si atención también tiene que poder eliminar, se agrega el rol.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Download, ExternalLink, Pencil, X } from "lucide-react";
+import { Download, ExternalLink, Pencil, Trash2, X } from "lucide-react";
 import { parseAmount, parseSaltaDateTime, PICKUP_BRANCHES, PICKUP_LABELS } from "@viavinilo/contracts";
 import { api, downloadFile } from "../../../lib/api";
 import { ars, MoneyInput } from "../../ui";
@@ -12,7 +12,7 @@ import { ars, MoneyInput } from "../../ui";
  * la ventana emergente que solo pedía el precio y a la tarjeta que se abría dentro de la columna.
  */
 
-export type PanelMode = "view" | "quote" | "error" | "cancel" | "force";
+export type PanelMode = "view" | "quote" | "error" | "cancel" | "force" | "delete";
 
 interface Detail {
   id: string;
@@ -146,6 +146,19 @@ export function OrderPanel(props: {
       void move({ to: "CANCELLED", note: text("note") });
     } else if (mode === "force") {
       void move({ to: job.next === "DEPOSIT_RECEIVED" ? "PRINTED" : job.next, force: true, note: text("note") || undefined });
+    } else if (mode === "delete") {
+      // D-088: al eliminar no queda pedido que mostrar: se avisa al tablero y se cierra el panel.
+      setBusy(true);
+      setError(null);
+      api(`/jobs/${jobId}`, { method: "DELETE", body: JSON.stringify({ reason: text("note") }) })
+        .then(() => {
+          onChanged();
+          onClose();
+        })
+        .catch((err: unknown) => {
+          setError((err as Error).message);
+          setBusy(false);
+        });
     }
   }
 
@@ -414,6 +427,18 @@ export function OrderPanel(props: {
                     </label>
                   </>
                 )}
+                {mode === "delete" && (
+                  <>
+                    <h3>Eliminar el pedido</h3>
+                    <p className="file-check error">
+                      <b>{job.label} deja de verse</b> en el tablero, en los listados y en la app del cliente. No se le avisa al cliente y no se puede deshacer desde el sistema. Si el cliente lo dio de baja, usá «Cancelar».
+                    </p>
+                    <label className="field">
+                      ¿Por qué se elimina?
+                      <textarea name="note" rows={2} minLength={3} maxLength={300} required autoFocus placeholder="Ej.: pedido de prueba, duplicado, cargado por error" />
+                    </label>
+                  </>
+                )}
                 {mode === "force" && (
                   <>
                     <h3>Imprimir sin seña</h3>
@@ -428,8 +453,8 @@ export function OrderPanel(props: {
                   <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => (setMode("view"), setError(null))}>
                     Volver
                   </button>
-                  <button className="btn btn-primary" disabled={busy}>
-                    Confirmar
+                  <button className={mode === "delete" ? "btn btn-danger" : "btn btn-primary"} disabled={busy}>
+                    {mode === "delete" ? "Eliminar el pedido" : "Confirmar"}
                   </button>
                 </div>
               </form>
@@ -460,6 +485,12 @@ export function OrderPanel(props: {
                   )}
                 </div>
               </section>
+            )}
+
+            {mode === "view" && props.isOwner && (
+              <button type="button" className="btn btn-ghost order-delete" disabled={busy} onClick={() => setMode("delete")}>
+                <Trash2 size={14} aria-hidden /> Eliminar pedido
+              </button>
             )}
 
             {job.events.length > 0 && (

@@ -576,6 +576,26 @@ export class JobsService {
   }
 
   /**
+   * Eliminar un pedido (D-088): para pedidos de prueba, duplicados o cargados por error. Es un borrado
+   * lógico: el pedido deja de verse en el tablero, en los listados y en la app del cliente, pero queda
+   * en la base con su historial y el log de auditoría. No avisa al cliente. Si el pedido es real y el
+   * cliente lo dio de baja, corresponde "Cancelar", que sí queda a la vista.
+   */
+  async remove(user: AuthUser, id: string, reason: string) {
+    const job = await this.prisma.jobOrder.findFirst({ where: { id, deletedAt: null } });
+    if (!job) throw new NotFoundException("No encontramos esa orden");
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.jobOrder.updateMany({ where: { id, deletedAt: null }, data: { deletedAt: new Date() } });
+      if (count === 0) return;
+      await this.audit.log(
+        { entity: "JobOrder", entityId: id, action: "delete", userId: user.id, before: { number: job.number, status: job.status, quotedAmount: job.quotedAmount?.toString() ?? null }, after: { deleted: true, reason } },
+        tx,
+      );
+    });
+    return { ok: true, label: formatJobNumber(job.number) };
+  }
+
+  /**
    * Medida pedida (D-086): la corrige el taller cuando el cliente la escribió mal o no la escribió.
    * El control del archivo se vuelve a hacer con la medida nueva. Queda auditado.
    */

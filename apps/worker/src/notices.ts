@@ -99,6 +99,8 @@ export async function processNotices(prisma: PrismaClient, opts: { limit?: numbe
     const { count } = await prisma.jobEvent.updateMany({ where: { id: ev.id, notifiedCustomer: false }, data: { notifiedCustomer: true } });
     if (count === 0) continue;
     const customer = ev.job.customer;
+    // D-088: un pedido eliminado no avisa nada.
+    if (ev.job.deletedAt) continue;
     if (!customer || customer.deletedAt || customer.status === "BLOCKED") continue;
 
     const { subject, text } = noticeText(

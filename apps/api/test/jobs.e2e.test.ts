@@ -19,6 +19,8 @@ const http = (role: keyof typeof tokens) => ({
   get: (url: string) => request(app.getHttpServer()).get(url).set("Authorization", `Bearer ${tokens[role]}`),
   post: (url: string, body?: object) =>
     request(app.getHttpServer()).post(url).set("Authorization", `Bearer ${tokens[role]}`).send(body),
+  delete: (url: string, body: object) =>
+    request(app.getHttpServer()).delete(url).set("Authorization", `Bearer ${tokens[role]}`).send(body),
   patch: (url: string, body: object) =>
     request(app.getHttpServer()).patch(url).set("Authorization", `Bearer ${tokens[role]}`).send(body),
 });
@@ -310,6 +312,35 @@ describe("medida corregida por el taller (D-086)", () => {
     expect(audit).toMatchObject({ before: { measure: "28x50 mts" }, after: { measure: "28 x 50 cm" } });
     expect((await http("production").patch(`/jobs/${job.id}/measure`, { measure: "x".repeat(81) })).status).toBe(400);
     expect((await http("latex").patch(`/jobs/${job.id}/measure`, { measure: "1 x 1 cm" })).status).toBe(403);
+  });
+});
+
+describe("eliminar un pedido (D-088)", () => {
+  it("D-088: solo el dueño elimina un pedido; pide el motivo, deja de verse y queda en la base con su auditoría", async () => {
+    const job = await newJob();
+    await http("owner").post(`/jobs/${job.id}/transition`, { to: "QUOTED", quotedAmount: "20.000" });
+    expect((await http("production").delete(`/jobs/${job.id}`, { reason: "prueba" })).status).toBe(403);
+    expect((await http("attention").delete(`/jobs/${job.id}`, { reason: "prueba" })).status).toBe(403);
+    expect((await http("owner").delete(`/jobs/${job.id}`, { reason: "" })).status).toBe(400);
+
+    const res = await http("owner").delete(`/jobs/${job.id}`, { reason: "Pedido de prueba" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, label: `VV-${String(job.number).padStart(6, "0")}` });
+
+    const board = await http("owner").get("/jobs/board?sector=DTF");
+    const ids = board.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards.map((x) => x.id));
+    expect(ids).not.toContain(job.id);
+    expect((await http("owner").get(`/jobs/${job.id}`)).status).toBe(404);
+    const list = await http("owner").get("/jobs?tab=ALL&pageSize=100");
+    expect(list.body.items.map((j: { id: string }) => j.id)).not.toContain(job.id);
+    // Borrado lógico: sigue en la base, con el historial y el motivo en la auditoría.
+    const row = await prisma.jobOrder.findUniqueOrThrow({ where: { id: job.id }, include: { events: true } });
+    expect(row.deletedAt).not.toBeNull();
+    expect(row.events.length).toBeGreaterThan(0);
+    const audit = await prisma.auditLog.findFirst({ where: { entityId: job.id, action: "delete" } });
+    expect(audit).toMatchObject({ before: { status: "QUOTED", quotedAmount: "20000" }, after: { deleted: true, reason: "Pedido de prueba" } });
+    // Eliminarlo dos veces no rompe nada.
+    expect((await http("owner").delete(`/jobs/${job.id}`, { reason: "otra vez" })).status).toBe(404);
   });
 });
 
