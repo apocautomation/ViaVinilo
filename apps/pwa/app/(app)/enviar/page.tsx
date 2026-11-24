@@ -6,6 +6,7 @@ import { BookOpen, CheckCircle2, Mail, Paperclip, Send } from "lucide-react";
 import { ACCEPT_ATTRIBUTE, defaultPickupBranch, formatBytes, help, MAX_UPLOAD_BYTES, PICKUP_BRANCHES, PICKUP_LABELS, type PickupBranch } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
 import { SECTOR_OF } from "../../services";
+import { VariantPicker, type Variant } from "../../variant-picker";
 import { api, upload, useSession } from "../../session";
 
 /**
@@ -22,6 +23,10 @@ export default function EnviarPage() {
   const [unit, setUnit] = useState<"cm" | "m">("cm");
   const [copies, setCopies] = useState("1");
   const [pickup, setPickup] = useState<PickupBranch | null>(null);
+  /** D-095: material u opción de impresión; obligatorio si el servicio tiene opciones cargadas. */
+  const [variant, setVariant] = useState<string | null>(null);
+  const [variants, setVariants] = useState<Variant[]>([]);
+  const variantOk = variants.length === 0 || variant !== null;
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -51,8 +56,9 @@ export default function EnviarPage() {
   const measureOk = Number.isFinite(widthCm) && Number.isFinite(heightCm) && widthCm > 0 && heightCm > 0;
   const copiesOk = /^\d+$/.test(copies) && Number(copies) >= 1;
   /** El asunto se arma solo, como el nombre de archivo que pide Via Vinilo. */
-  const subject = [name || "Pedido", serviceName ? [serviceName, measureOk ? `${width} x ${height} ${unit}` : "", measureOk && copiesOk ? `x ${copies} u.` : ""].filter(Boolean).join(" ") : ""].filter(Boolean).join(", ");
-  const ready = !!sectorCode && measureOk && copiesOk && !!branch && !!file && progress === null;
+  const variantName = variants.find((v) => v.id === variant)?.name;
+  const subject = [name || "Pedido", serviceName ? [serviceName, variantName ?? "", measureOk ? `${width} x ${height} ${unit}` : "", measureOk && copiesOk ? `x ${copies} u.` : ""].filter(Boolean).join(" ") : ""].filter(Boolean).join(", ");
+  const ready = !!sectorCode && variantOk && measureOk && copiesOk && !!branch && !!file && progress === null;
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -61,6 +67,7 @@ export default function EnviarPage() {
     const form = new FormData();
     form.append("sector", sectorCode);
     form.append("pickupBranch", branch);
+    if (variant) form.append("variant", variant);
     form.append("widthCm", String(widthCm));
     form.append("heightCm", String(heightCm));
     form.append("copies", copies);
@@ -150,6 +157,8 @@ export default function EnviarPage() {
             </div>
           )}
 
+          <VariantPicker sectorCode={sectorCode} value={variant} onChange={setVariant} onList={setVariants} title="¿Qué material o terminación?" />
+
           <h2 className="section-title">2 · Medidas y cantidad</h2>
           <div className="compose-measure">
             <label className="field">
@@ -209,7 +218,7 @@ export default function EnviarPage() {
           <button className="btn btn-primary btn-block" disabled={!ready}>
             <Send size={18} /> {progress !== null ? `Enviando… ${Math.round(progress * 100)}%` : "Enviar el trabajo"}
           </button>
-          {!ready && progress === null && <p className="muted compose-missing">Para enviar falta: {[!sectorCode && "el servicio", !measureOk && "las medidas", !copiesOk && "las copias", !file && "el archivo"].filter(Boolean).join(", ")}.</p>}
+          {!ready && progress === null && <p className="muted compose-missing">Para enviar falta: {[!sectorCode && "el servicio", !variantOk && "el material", !measureOk && "las medidas", !copiesOk && "las copias", !file && "el archivo"].filter(Boolean).join(", ")}.</p>}
         </form>
 
         <Link href="/ayuda#archivos" className="btn btn-ghost btn-block">

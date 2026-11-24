@@ -584,6 +584,43 @@ describe("cambios de estado", () => {
   });
 });
 
+describe("materiales por tablero (D-095)", () => {
+  it("D-095: la tarjeta muestra el código del material; se filtra y se agrupa por material; el taller lo corrige y queda auditado", async () => {
+    const glitter = await prisma.sectorVariant.create({ data: { sectorId: sectors.DTF!.id, code: "T-GLI", name: "Glitter" } });
+    const reflectivo = await prisma.sectorVariant.create({ data: { sectorId: sectors.DTF!.id, code: "T-REF", name: "Reflectivo" } });
+    const otroTablero = await prisma.sectorVariant.create({ data: { sectorId: sectors.CALANDRADO!.id, code: "T-JER", name: "Jersey Set" } });
+    const a = await newJob();
+    const b = await newJob();
+    await prisma.jobOrder.update({ where: { id: a.id }, data: { variantId: glitter.id } });
+
+    const board = await http("production").get("/jobs/board?sector=DTF");
+    expect(board.body.variants.map((v: { code: string }) => v.code)).toEqual(expect.arrayContaining(["T-GLI", "T-REF"]));
+    expect(board.body.variants.map((v: { code: string }) => v.code)).not.toContain("T-JER");
+    const card = board.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards).find((c: { id: string }) => c.id === a.id);
+    expect(card.variant).toMatchObject({ code: "T-GLI", name: "Glitter" });
+    const filtered = await http("production").get(`/jobs/board?sector=DTF&variant=${glitter.id}`);
+    expect(filtered.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards.map((x) => x.id))).toEqual([a.id]);
+    const byCode = await http("production").get("/jobs/board?sector=DTF&q=t-gli");
+    expect(byCode.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards.map((x) => x.id))).toEqual([a.id]);
+
+    const set = await http("production").patch(`/jobs/${b.id}/variant`, { variantId: reflectivo.id });
+    expect(set.body.variant).toMatchObject({ code: "T-REF" });
+    expect(set.body.variants.map((v: { code: string }) => v.code)).toContain("T-GLI");
+    const audit = await prisma.auditLog.findFirst({ where: { entityId: b.id, action: "variant" } });
+    expect(audit).toMatchObject({ before: { variant: null }, after: { variant: "T-REF" } });
+    expect((await http("production").patch(`/jobs/${b.id}/variant`, { variantId: otroTablero.id })).status).toBe(400);
+    expect((await http("production").patch(`/jobs/${b.id}/variant`, { variantId: null })).body.variant).toBeNull();
+  });
+
+  it("D-095: al pasar un pedido a otro sub-servicio se le quita el material del anterior", async () => {
+    const lona = await prisma.sectorVariant.create({ data: { sectorId: sectors.GRAN_FORMATO!.id, code: "T-LONA", name: "Lona front" } });
+    const job = await newJob("GRAN_FORMATO");
+    await prisma.jobOrder.update({ where: { id: job.id }, data: { variantId: lona.id } });
+    const moved = await http("owner").patch(`/jobs/${job.id}/service`, { sector: "ECOSOLVENTE" });
+    expect(moved.body.variant).toBeNull();
+  });
+});
+
 describe("asignación de máquina", () => {
   it("solo acepta máquinas que trabajan en el sector de la orden", async () => {
     const job = await newJob();

@@ -34,6 +34,8 @@ interface Card {
   linkCount: number;
   machine: { id: string; name: string } | null;
   material: { id: string; name: string } | null;
+  /** Material u opción de impresión con su código (D-095). */
+  variant: { id: string; code: string; name: string } | null;
   /** Sub-servicio del pedido (D-082): Látex, Ecosolvente… */
   service: { code: string; name: string } | null;
   sameMaterialCount: number;
@@ -47,6 +49,8 @@ interface Board {
   machines: { id: string; name: string }[];
   /** Sub-servicios del tablero (D-082). */
   services: { code: string; name: string }[];
+  /** Materiales de los tableros que se ven (D-095). */
+  variants: { id: string; code: string; name: string }[];
   /** `key` distingue "Cotizado" de "Esperando seña" (D-081): las dos son del estado QUOTED. */
   columns: { key: string; status: Status; label: string; cards: Card[] }[];
 }
@@ -124,8 +128,12 @@ export default function BoardPage() {
   const [q, setQ] = useState("");
   const [machineId, setMachineId] = useState("");
   const [service, setService] = useState("");
-  // Al cambiar de tablero, el filtro de sub-servicio del anterior ya no sirve.
-  useEffect(() => setService(""), [sector]);
+  const [variant, setVariant] = useState("");
+  // Al cambiar de tablero, los filtros de sub-servicio y material del anterior ya no sirven.
+  useEffect(() => {
+    setService("");
+    setVariant("");
+  }, [sector]);
   const [groupByMaterial, setGroupByMaterial] = useState(false);
   /**
    * Vista compacta (D-066): cada tarjeta ocupa 3 renglones, para que un tablero con muchos pedidos no
@@ -162,9 +170,10 @@ export default function BoardPage() {
     if (q.trim()) p.set("q", q.trim());
     if (machineId) p.set("machineId", machineId);
     if (service) p.set("service", service);
+    if (variant) p.set("variant", variant);
     if (groupByMaterial) p.set("groupByMaterial", "true");
     return p.toString();
-  }, [sector, q, machineId, service, groupByMaterial]);
+  }, [sector, q, machineId, service, variant, groupByMaterial]);
 
   const load = useCallback(async () => {
     try {
@@ -326,6 +335,16 @@ export default function BoardPage() {
             ))}
           </select>
         )}
+        {(board?.variants.length ?? 0) > 0 && (
+          <select value={variant} onChange={(e) => setVariant(e.target.value)} aria-label="Filtrar por material">
+            <option value="">Todos los materiales</option>
+            {board?.variants.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.code} · {v.name}
+              </option>
+            ))}
+          </select>
+        )}
         <select value={machineId} onChange={(e) => setMachineId(e.target.value)} aria-label="Filtrar por máquina">
           <option value="">Todas las máquinas</option>
           {board?.machines.map((m) => (
@@ -402,6 +421,7 @@ export default function BoardPage() {
                         </span>
                         {card.description && (
                           <span className="desc-line">
+                            {card.variant && <b className="service-tag" title={card.variant.name}>{card.variant.code}</b>}
                             {card.service && <b className="service-tag">{card.service.name}</b>}
                             {isPickupBranch(card.pickupBranch) && <b className="service-tag">→ {PICKUP_LABELS[card.pickupBranch]}</b>}
                             {card.description}
@@ -450,7 +470,13 @@ export default function BoardPage() {
                     {card.quotedAmount && <span className="chip chip-brand">{money.format(Number(card.quotedAmount))}</span>}
                     {waitingDeposit && <span className="chip chip-warn">{depositLabel}</span>}
                     {isPickupBranch(card.pickupBranch) && <span className="chip">Retira en {PICKUP_LABELS[card.pickupBranch]}</span>}
-                    {card.material && <span className="chip">{card.material.name}</span>}
+                    {card.variant ? (
+                      <span className="chip chip-brand" title={card.variant.name}>
+                        {card.variant.code} · {card.variant.name}
+                      </span>
+                    ) : (
+                      card.material && <span className="chip">{card.material.name}</span>
+                    )}
                     {card.sameMaterialCount > 0 && (
                       <span className="chip chip-brand">+{card.sameMaterialCount} con el mismo material</span>
                     )}

@@ -37,6 +37,8 @@ export interface Order {
   sector: string;
   desc: string;
   measure: string;
+  /** Material u opción de impresión (D-095). */
+  material?: string | null;
   status: Status;
   steps: Status[];
   amount: string | null;

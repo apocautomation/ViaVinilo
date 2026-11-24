@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, type MailIngestResult, type PrismaClient, type Sector } from "@prisma/client";
 import type { FileStorage } from "../storage";
-import { customerSearchText, detectPickupBranch, detectSubService, SECTOR_SHARED_INBOX, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
+import { customerSearchText, detectPickupBranch, detectSubService, detectVariant, SECTOR_SHARED_INBOX, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
 import { extractContact } from "./contact";
 import { recordInboundMail } from "./conversation";
 import { parseMail, type ParsedMail } from "./parse";
@@ -242,6 +242,9 @@ async function decide(
   // D-092: si el mail nombra un solo sub-servicio de esta casilla, el pedido entra directo ahí.
   const subCode = related.length ? detectSubService(`${mail.subject}\n${mail.text}`, related.map((r) => r.code)) : null;
   const target = related.find((r) => r.code === subCode) ?? null;
+  // D-095: si el mail nombra un material de ese tablero ("glitter", "DTF-GLI"), queda cargado.
+  const variants = await prisma.sectorVariant.findMany({ where: { sectorId: target?.id ?? sector.id, active: true }, select: { id: true, code: true, name: true } });
+  const variantId = variants.length ? detectVariant(`${mail.subject}\n${mail.text}`, variants) : null;
 
   let jobId: string;
   try {
@@ -249,6 +252,7 @@ async function decide(
       data: {
         customerId: customer.id,
         sectorId: target?.id ?? sector.id,
+        variantId,
         status,
         source: "EMAIL",
         sourceMessageId: mail.messageId,

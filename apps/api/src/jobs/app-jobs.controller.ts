@@ -19,6 +19,7 @@ const DELIVERED_LIMIT = 50;
 const jobInclude = {
   sector: { select: { name: true, code: true, stages: { orderBy: { position: "asc" }, select: { status: true } } } },
   files: { where: { deletedAt: null }, orderBy: { createdAt: "asc" }, select: { filename: true, sizeBytes: true, purgedAt: true } },
+  variant: { select: { name: true } },
   events: { orderBy: { createdAt: "asc" }, select: { toStatus: true, createdAt: true, reason: { select: { label: true } } } },
 } satisfies Prisma.JobOrderInclude;
 
@@ -50,6 +51,8 @@ export class AppJobsService {
       sector: job.sector.name,
       desc: job.description ?? "",
       measure: job.measure ?? "",
+      /** Material u opción de impresión (D-095). */
+      material: job.variant?.name ?? null,
       status,
       steps,
       amount: job.quotedAmount?.toString() ?? null,

@@ -4,6 +4,7 @@ import {
   SECTOR_INBOX_LOCAL_PART,
   SECTOR_NAMES,
   SECTOR_PARENT,
+  DEFAULT_SECTOR_VARIANTS,
   type JobStatus,
   type SectorCode,
 } from "@viavinilo/contracts";
@@ -62,3 +63,8 @@ export const FILE_ERROR_REASONS: FileErrorReasonSeed[] = [
   { code: "CORRUPT_FILE", label: "Archivo dañado o no se puede abrir" },
   { code: "MISSING_BLEED", label: "Falta sangrado" },
 ].map((r, i) => ({ ...r, sortOrder: i + 1 }));
+
+/** Materiales u opciones de impresión por tablero (D-095). */
+export const SECTOR_VARIANTS = Object.entries(DEFAULT_SECTOR_VARIANTS).flatMap(([sector, list]) =>
+  (list ?? []).map((v, i) => ({ sector: sector as SectorCode, code: v.code, name: v.name, sortOrder: i + 1 })),
+);

@@ -8,6 +8,7 @@ import { ACCEPT_ATTRIBUTE, attachmentsOf, defaultPickupBranch, formatBytes, help
 import { AppBar } from "../../components";
 import type { Order } from "../../data";
 import { SECTOR_OF } from "../../services";
+import { VariantPicker, type Variant } from "../../variant-picker";
 import { api, downloadFile, upload } from "../../session";
 
 /** Texto del mensaje con los links tocables (D-066): el bot manda mapas y la tienda. */
@@ -47,6 +48,9 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
   const [note, setNote] = useState("");
   /** D-083: dónde lo retira. Se propone la sucursal del servicio y el cliente la puede cambiar. */
   const [pickup, setPickup] = useState<PickupBranch | null>(null);
+  /** D-095: material u opción de impresión del servicio elegido. */
+  const [variant, setVariant] = useState<string | null>(null);
+  const [variants, setVariants] = useState<Variant[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -71,6 +75,7 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
       const sectorCode = extraBoard ? extraBoard.code : SECTOR_OF[serviceId!]!;
       form.append("sector", sectorCode);
       form.append("pickupBranch", pickup ?? defaultPickupBranch(sectorCode));
+      if (variant) form.append("variant", variant);
     }
     // D-091: el servicio ya va en el tablero del pedido; repetirlo en la nota ensuciaba la descripción.
     if (note.trim()) form.append("note", note.trim());
@@ -140,6 +145,13 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
           ))}
         </div>
         {service && <p className="muted sheet-hint">Formato: {service.formats}.</p>}
+        <VariantPicker
+          sectorCode={serviceId ? (extraBoard ? extraBoard.code : SECTOR_OF[serviceId]) : undefined}
+          value={variant}
+          onChange={setVariant}
+          onList={setVariants}
+          title="¿Qué material o terminación?"
+        />
         <p className="sheet-label">2 · Medidas y cantidad</p>
         <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: 58 × 100 cm, 2 copias" />
         <p className="sheet-label">3 · ¿Dónde lo retirás?</p>
@@ -169,7 +181,7 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
             <span style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
         )}
-        <button className="btn btn-primary btn-block" disabled={!file || (!serviceId && jobId === null) || progress !== null}>
+        <button className="btn btn-primary btn-block" disabled={!file || (!serviceId && jobId === null) || (jobId === null && variants.length > 0 && !variant) || progress !== null}>
           {progress !== null ? `Subiendo… ${Math.round(progress * 100)}%` : "Mandar el archivo"}
         </button>
       </form>

@@ -41,6 +41,8 @@ export const appUploadSchema = z
   .object({
   /** Servicio del trabajo nuevo. No hace falta si el archivo es para un pedido que ya existe (`job`). */
   sector: sectorCodeSchema.optional(),
+  /** Material u opción de impresión elegida (D-095). */
+  variant: z.string().min(1).max(40).optional(),
   /** Número de un pedido del cliente al que se le suma este archivo (D-094). */
   job: z.coerce.number().int().positive().optional(),
   note: z.string().trim().max(1000).optional(),
