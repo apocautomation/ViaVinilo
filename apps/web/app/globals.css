@@ -1391,6 +1391,11 @@ table.data tfoot td {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+.service-tag {
+  margin-right: 6px;
+  font-weight: 700;
+  color: var(--color-brand-600, var(--color-text));
+}
 .order-two {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 110px;

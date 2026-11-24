@@ -3,6 +3,7 @@ import {
   SECTOR_CODES,
   SECTOR_INBOX_LOCAL_PART,
   SECTOR_NAMES,
+  SECTOR_PARENT,
   type JobStatus,
   type SectorCode,
 } from "@viavinilo/contracts";
@@ -10,7 +11,10 @@ import {
 export interface SectorSeed {
   code: SectorCode;
   name: string;
-  inboxEmail: string;
+  /** Los sub-servicios y TPU nacen sin casilla (D-082). */
+  inboxEmail: string | null;
+  /** Tablero del que es sub-servicio (D-082). */
+  parent: SectorCode | null;
   stages: { status: JobStatus; position: number }[];
 }
 
@@ -29,7 +33,8 @@ export function buildSectors(mailDomain: string): SectorSeed[] {
   return SECTOR_CODES.map((code) => ({
     code,
     name: SECTOR_NAMES[code],
-    inboxEmail: `${SECTOR_INBOX_LOCAL_PART[code]}@${mailDomain}`.toLowerCase(),
+    inboxEmail: SECTOR_INBOX_LOCAL_PART[code] ? `${SECTOR_INBOX_LOCAL_PART[code]}@${mailDomain}`.toLowerCase() : null,
+    parent: SECTOR_PARENT[code] ?? null,
     stages: DEFAULT_SECTOR_SEQUENCES[code].map((status, i) => ({ status, position: i + 1 })),
   }));
 }
@@ -44,8 +49,8 @@ function numbered(prefix: string, count: number, sectors: SectorCode[]): Machine
  */
 export const MACHINES: MachineSeed[] = [
   ...numbered("Plotter Sublimación", 4, ["SUBLIMACION", "CALANDRADO"]),
-  ...numbered("Gran Formato", 7, ["GRAN_FORMATO", "LATEX"]),
-  ...numbered("DTF", 5, ["DTF", "DTF_UV"]),
+  ...numbered("Gran Formato", 7, ["GRAN_FORMATO", "LATEX", "ECOSOLVENTE", "UV_ROLLO", "UV_RIGIDOS", "CORTES"]),
+  ...numbered("DTF", 5, ["DTF", "DTF_UV", "TPU"]),
 ];
 
 /** Motivos de error del SPEC §4 (FileErrorReason). Editables desde el sistema. */

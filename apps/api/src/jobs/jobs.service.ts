@@ -27,6 +27,8 @@ const BUSINESS_TZ = "America/Argentina/Salta";
 
 export interface BoardQuery {
   sector: SectorCode;
+  /** Sub-servicio del tablero (D-082). */
+  service?: SectorCode;
   machineId?: string;
   materialId?: string;
   q?: string;
@@ -59,6 +61,8 @@ const cardInclude = {
   customer: { select: { id: true, customerNumber: true, firstName: true, lastName: true, status: true } },
   machine: { select: { id: true, name: true } },
   material: { select: { id: true, name: true } },
+  /** D-082: para decir de qué sub-servicio es el pedido en el tablero del padre. */
+  sector: { select: { id: true, code: true, name: true, parentId: true } },
   _count: { select: { files: true } },
 } satisfies Prisma.JobOrderInclude;
 
@@ -138,6 +142,8 @@ export class JobsService {
       linkCount: row.externalLinks.length,
       machine: row.machine,
       material: row.material,
+      /** Sub-servicio del pedido (D-082): Látex, Ecosolvente… null si entró al tablero general. */
+      service: row.sector.parentId ? { code: row.sector.code, name: row.sector.name } : null,
       /** Otras órdenes pendientes del mismo material: candidatas a imprimir juntas (E1.4). */
       sameMaterialCount: row.materialProductId ? (sameMaterial.get(row.materialProductId) ?? 1) - 1 : 0,
       createdAt: row.createdAt,
@@ -159,7 +165,8 @@ export class JobsService {
     const allowed = await this.access.allowedSectorIds(user);
     const where: Prisma.JobOrderWhereInput = { deletedAt: null };
     if (allowed !== "all") where.sectorId = { in: allowed };
-    if (q.sector) where.sector = { code: q.sector as SectorCode };
+    // D-082: filtrar por un tablero trae también sus sub-servicios.
+    if (q.sector) where.sector = { OR: [{ code: q.sector as SectorCode }, { parent: { code: q.sector as SectorCode } }] };
     if (q.source) where.source = q.source;
     if (q.tab === "ACTIVE") where.status = { notIn: ["READY", "DELIVERED", "CANCELLED"] };
     if (q.tab === "READY") where.status = "READY";
@@ -212,11 +219,13 @@ export class JobsService {
 
   async board(user: AuthUser, query: BoardQuery) {
     const sector = await this.sectorWithStages(query.sector);
-    await this.access.assert(user, sector.id);
+    const family = await this.family(user, sector.id);
     const sequence = sector.stages.map((s) => s.status);
+    const only = query.service ? family.find((f) => f.code === query.service) : undefined;
+    if (query.service && !only) throw new NotFoundException("Ese servicio no es de este tablero");
 
     const where: Prisma.JobOrderWhereInput = {
-      sectorId: sector.id,
+      sectorId: only ? only.id : { in: family.map((f) => f.id) },
       deletedAt: null,
       OR: [
         { status: { notIn: ["PENDING_SIGNUP", "CANCELLED", "DELIVERED"] } },
@@ -268,6 +277,8 @@ export class JobsService {
 
     return {
       sector: { id: sector.id, code: sector.code, name: sector.name },
+      /** Sub-servicios del tablero que ve este usuario (D-082). Vacío si el tablero no tiene. */
+      services: family.filter((f) => f.id !== sector.id).map((f) => ({ code: f.code, name: f.name })),
       machines: sector.machines.map((m) => ({ id: m.machine.id, name: m.machine.name })).sort((a, b) => a.name.localeCompare(b.name)),
       columns: columns.flatMap((status) => {
         const own = cards.filter((c) => c.status === status);
@@ -290,7 +301,8 @@ export class JobsService {
   /** Huella del estado del tablero de un sector: cambia cuando entra o se mueve una orden. */
   async version(sectorId: string): Promise<string> {
     const agg = await this.prisma.jobOrder.aggregate({
-      where: { sectorId },
+      // D-082: también cuentan los pedidos de los sub-servicios del tablero.
+      where: { OR: [{ sectorId }, { sector: { parentId: sectorId } }] },
       _max: { updatedAt: true },
       _count: true,
     });
@@ -300,8 +312,53 @@ export class JobsService {
   async sectorIdForStream(user: AuthUser, code: SectorCode) {
     const sector = await this.prisma.sector.findUnique({ where: { code }, select: { id: true } });
     if (!sector) throw new NotFoundException("Ese sector no existe");
-    await this.access.assert(user, sector.id);
+    await this.family(user, sector.id);
     return sector.id;
+  }
+
+  /**
+   * El tablero y sus sub-servicios activos que puede ver el usuario (D-082). Producción con un solo
+   * sub-servicio (por ejemplo Látex) entra al tablero de Gran Formato y ve solo lo suyo.
+   */
+  private async family(user: AuthUser, sectorId: string) {
+    const rows = await this.prisma.sector.findMany({
+      where: { OR: [{ id: sectorId }, { parentId: sectorId, active: true }] },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    const allowed = await this.access.allowedSectorIds(user);
+    const visible = allowed === "all" ? rows : rows.filter((r) => allowed.includes(r.id));
+    if (!visible.length) throw new ForbiddenException("No tenés acceso a este sector");
+    return visible;
+  }
+
+  /**
+   * Cambia el sub-servicio de un pedido (D-082): por ejemplo, un mail que entró a la casilla general de
+   * Gran Formato y era de Látex. Solo dentro del mismo tablero; queda auditado.
+   */
+  async moveService(user: AuthUser, id: string, code: string) {
+    const job = await this.prisma.jobOrder.findFirst({ where: { id, deletedAt: null }, include: { sector: true } });
+    if (!job) throw new NotFoundException("No encontramos esa orden");
+    await this.access.assert(user, job.sectorId);
+    const target = await this.prisma.sector.findFirst({ where: { code, active: true }, include: { stages: true, machines: true } });
+    const root = (s: { id: string; parentId: string | null }) => s.parentId ?? s.id;
+    if (!target || root(target) !== root(job.sector)) throw new BadRequestException("Ese servicio no es de este tablero");
+    await this.access.assert(user, target.id);
+    if (target.id === job.sectorId) return this.detail(user, id);
+    if (job.status !== "PENDING_SIGNUP" && job.status !== "FILE_ERROR" && job.status !== "CANCELLED" && !target.stages.some((s) => s.status === job.status)) {
+      throw new UnprocessableEntityException("Ese servicio no tiene el paso en el que está el pedido");
+    }
+    // La máquina se conserva solo si también trabaja en el servicio nuevo.
+    const keepsMachine = !job.machineId || target.machines.some((m) => m.machineId === job.machineId);
+    await this.prisma.$transaction(async (tx) => {
+      // fileCheck en null: el mínimo de resolución puede ser otro, se vuelve a controlar.
+      await tx.jobOrder.update({
+        where: { id },
+        data: { sectorId: target.id, ...(keepsMachine ? {} : { machineId: null }), ...(job.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}) },
+      });
+      await this.audit.log({ entity: "JobOrder", entityId: id, action: "service", userId: user.id, before: { sector: job.sector.code }, after: { sector: target.code } }, tx);
+    });
+    return this.detail(user, id);
   }
 
   async detail(user: AuthUser, id: string) {
@@ -320,9 +377,13 @@ export class JobsService {
     if (!job) throw new NotFoundException("No encontramos esa orden");
     await this.access.assert(user, job.sectorId);
     const sequence = job.sector.stages.map((s) => s.status);
+    const rootId = job.sector.parentId ?? job.sector.id;
+    const family = await this.family(user, rootId).catch(() => []);
     return {
       ...this.toCard(job, sequence, new Map()),
       sector: { id: job.sector.id, code: job.sector.code, name: job.sector.name },
+      /** Tablero y sub-servicios entre los que se puede mover el pedido (D-082). */
+      services: family.length > 1 ? family.map((f) => ({ code: f.code, name: f.id === rootId ? `${f.name} (sin sub-servicio)` : f.name })) : [],
       requestedSpecs: job.requestedSpecs,
       externalLinks: job.externalLinks,
       files: job.files.map((f) => ({ ...f, sizeBytes: Number(f.sizeBytes) })),

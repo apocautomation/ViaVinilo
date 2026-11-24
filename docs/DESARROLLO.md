@@ -133,7 +133,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-23 | Migración de clientes sin DNI ni email (D-048) — **Resuelto en D-049** | El alta exige DNI, email y teléfono (actualización §2.1, D-025), y el ingreso a la app necesita email (D-039). En el CSV de Runamatic solo 9 de 1790 tienen DNI y 380 tienen email. | E1 | Abierto. Propuesta: importar como **activos** a los "Cliente Registrado", y también a los que tengan email; marcar "datos a completar" a los que no tienen DNI y pedírselo en el primer ingreso o en el próximo pedido. Los contactos que no tienen email ni son "Cliente Registrado" no se importan como clientes: quedan para Conversaciones cuando escriban. Confirmar con Ezequiel. |
 | I-24 | ¿El error de archivo es automático o lo confirma el operador? (D-050) | El contrato (E1.3) dice que la IA sugiere "Archivo con error" y el operador confirma. Ezequiel le dijo a Verónica que se mueve solo. | E1 | Parcial (D-065): automático solo con resolución menor a la mitad del mínimo, apagado por defecto; el resto es sugerencia. Falta confirmar ese límite. Propuesta: automático solo cuando el control es seguro (formato equivocado, resolución efectiva muy por debajo del mínimo); en los casos dudosos (por ejemplo, sospecha de imagen agrandada) se marca para revisar y confirma el operador. Confirmar con Ezequiel. |
 | I-25 | Cómo se reconoce la seña (D-050) | "Cuando el cliente pase el comprobante, pasa a Seña recibida": falta definir si alcanza con que mande una imagen o si alguien la verifica. | E1 | Abierto. Propuesta: el asesor ve el comprobante en Conversaciones y toca "Seña recibida" (un clic, queda auditado). La lectura automática del monto queda para después. |
-| I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | **Definido el 24/11 (D-079)**, falta implementarlo: Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; sin Embroidery. |
+| I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | **Resuelto en D-082** (definido el 24/11): Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; sin Embroidery. |
 | I-27 | Seña por servicio en la Ayuda de la app (D-053) | Los agentes de Runamatic no coinciden: los de sector piden 50% siempre; el agente "SISTEMA NUEVO" la pide según metros (DTF Textil, Sublimación y Calandra desde 10 m; DTF UV desde 3 m; TPU siempre). La Ayuda muestra la del agente más nuevo. | E1 | Abierto. Confirmar con Verónica y corregir `apps/pwa/app/(app)/ayuda/content.ts`. |
 
 ## 4. Bitácora de decisiones
@@ -1274,7 +1274,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Fecha en día/mes/año y 24 h**: el campo "Listo para retirar" usaba el selector del navegador, que en la PC de la demo mostraba mes/día y AM/PM. Ahora se escribe `24/11/2026` y `18:00`; siempre es hora de Salta.
 - **Definiciones de la reunión que quedan para los PR siguientes** (en este orden):
   1. **Columna "Esperando seña"** en el tablero, entre Cotizado y Seña recibida. **Hecho en D-081.**
-  2. **Sectores reales (resuelve I-26)**: Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; Sublimación y Calandrado aparte. Sin Embroidery ("vamos a tener solo TPU"). Látex deja de ser un tablero propio.
+  2. **Sectores reales (resuelve I-26)** — **hecho en D-082**: Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; Sublimación y Calandrado aparte. Sin Embroidery ("vamos a tener solo TPU"). Látex deja de ser un tablero propio.
   3. **Sucursal de retiro** (Av. Chile o San Juan) elegida al hacer el pedido, visible en la tarjeta. Hay una camioneta que cruza pedidos dos veces por día; el asistente no decide el lugar.
   4. **Trabajos por cliente**: ver todos los pedidos de un cliente en todos los sectores, para que caja los junte.
   5. **Número de cliente de Tango** visible y buscable; Ezequiel lo exporta cuando Ricardo le dé acceso por TeamViewer.
@@ -1296,6 +1296,24 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Cómo**: no es un estado nuevo. El pedido sigue "Cotizado" hasta que se registra la seña; la API separa la columna según `depositRequired` y `depositPaidAt` (cada columna trae un `key`). Así no cambian las reglas de pasos (R-JOB-3), los avisos al cliente ni la app, y no hace falta migración.
 - **Por qué**: en la reunión del 24/11 se acordó "una columnita más: cotizado, esperando seña y seña recibida", para ver de un vistazo qué pedidos están frenados por la seña (D-079).
 - **Impacto**: `GET /jobs/board` devuelve una columna más en los sectores cuya secuencia tiene seña. El resumen de Inicio no cambia: sigue contando esos pedidos como cotizados.
+
+### D-082 · 24/11/2026 · Reunión con Verónica y Ricardo + WhatsApp del 24/11 · sectores reales: sub-servicios de Gran Formato, DTF Textil y TPU (resuelve I-26)
+- **Definición del cliente** (WhatsApp de Ricardo y Verónica, 24/11): "GRAN FORMATO: 1- Látex, 2- Ecosolvente, 3- UV rollo a rollo, 4- UV rígidos, 5- Cortes" y "DTF Textil, DTF UV, TPU". Sublimación y Calandrado van aparte. Embroidery no va ("vamos a tener solo TPU").
+- **Decisión**:
+  - **Tableros**: Calandrado, DTF Textil (antes "DTF"; el código sigue siendo `DTF`), DTF UV, Gran Formato, Sublimación y **TPU** (nuevo).
+  - **Sub-servicios**: Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes son tableros hijos de Gran Formato (`Sector.parentId`). No tienen pestaña propia: sus pedidos se ven juntos en el tablero de Gran Formato, cada tarjeta dice de cuál es y se puede filtrar por sub-servicio.
+  - **Látex deja de ser un tablero aparte**. Conserva su casilla: lo que llega a `latex@` entra a Gran Formato marcado como Látex.
+  - Un pedido se puede pasar de un sub-servicio a otro desde el panel del pedido (por ejemplo, un mail que llegó a `granformato@` y era de Ecosolvente). Solo dentro del mismo tablero; queda auditado (`service`).
+  - **Permisos (D-017)**: quien tiene Gran Formato ve todos sus sub-servicios; quien tiene solo un sub-servicio entra al tablero de Gran Formato y ve solo lo suyo.
+  - **App de clientes**: al mandar un archivo, UV rígidos, Ecosolvente, UV rollo a rollo, Corte y Látex entran con su sub-servicio. TPU aparece como servicio para elegir.
+  - **Avisos**: TPU se retira y se paga en la sucursal Centro, como DTF Textil y DTF UV (así lo dice la Ayuda cargada en D-053).
+- **Por qué sub-servicios como tableros hijos y no un campo suelto**: cada uno puede tener su casilla, sus máquinas, sus pasos y sus operadores con lo que ya existe (D-064), sin duplicar reglas.
+- **Impacto**: migración `20261124200000_sector_parent` (agrega `parentId`, renombra DTF, cuelga Látex de Gran Formato y crea Ecosolvente, UV rollo a rollo, UV rígidos, Cortes y TPU con los pasos y máquinas del tablero del que salen). `GET /sectors` devuelve solo tableros, con sus `services`; `GET /jobs/board` acepta `service`; nuevo `PATCH /jobs/:id/service`.
+- **Abierto**:
+  - **Casillas `cortes@` y `tpu@`**: los tableros nuevos nacen **sin casilla**, a propósito. Prenderlas hace que el sistema lea esas casillas y cree pedidos y avisos a clientes reales; se cargan desde Producción → Tableros cuando Ezequiel lo decida.
+  - `TODO(spec): I-10` — máquinas reales por sector: los nuevos heredan las de Gran Formato o DTF hasta tener el listado de Ricardo.
+  - Resolución mínima de TPU: queda en 100 dpi (el valor general) hasta confirmarla; DTF Textil y DTF UV siguen en 250.
+  - Crear sub-servicios desde el ERP: hoy solo por migración.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

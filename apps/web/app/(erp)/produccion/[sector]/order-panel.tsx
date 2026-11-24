@@ -20,6 +20,8 @@ interface Detail {
   status: string;
   statusLabel: string;
   sector: { code: string; name: string };
+  /** Tablero y sub-servicios entre los que se puede mover el pedido (D-082). */
+  services: { code: string; name: string }[];
   customer: { id: string; number: number; name: string | null };
   description: string | null;
   measure: string | null;
@@ -270,6 +272,24 @@ export function OrderPanel(props: {
                 </p>
               )}
             </section>
+
+            {job.services.length > 0 && job.status !== "DELIVERED" && job.status !== "CANCELLED" && (
+              <section className="order-block">
+                <h3>Servicio</h3>
+                <select
+                  value={job.sector.code}
+                  disabled={busy}
+                  aria-label="Servicio del pedido"
+                  onChange={(e) => void run(() => api(`/jobs/${jobId}/service`, { method: "PATCH", body: JSON.stringify({ sector: e.target.value }) }))}
+                >
+                  {job.services.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            )}
 
             {job.status !== "DELIVERED" && job.status !== "CANCELLED" && props.machines.length > 0 && (
               <section className="order-block">

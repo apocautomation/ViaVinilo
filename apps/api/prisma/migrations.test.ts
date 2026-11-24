@@ -21,9 +21,9 @@ describe("schema de Prisma", () => {
     expect(prismaEnum("JobStatus")).toEqual([...JOB_STATUSES]);
   });
 
-  it("D-064: el código de tablero es texto (se crean tableros desde el ERP); los 6 de base siguen en contracts", () => {
+  it("D-064: el código de tablero es texto (se crean tableros desde el ERP); los de base siguen en contracts (D-082: 11 con los sub-servicios y TPU)", () => {
     expect(schema).not.toMatch(/enum SectorCode/);
-    expect(SECTOR_CODES).toHaveLength(6);
+    expect(SECTOR_CODES).toHaveLength(11);
   });
 });
 

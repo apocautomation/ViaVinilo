@@ -49,10 +49,13 @@ export class CatalogController {
   @Roles("OWNER")
   async allSectors() {
     const sectors = await this.prisma.sector.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { jobs: true } }, stages: { orderBy: { position: "asc" } } } });
+    const names = new Map(sectors.map((s) => [s.id, s.name]));
     return sectors.map((s) => ({
       id: s.id,
       code: s.code,
       name: s.name,
+      /** Tablero del que es sub-servicio (D-082), o null. */
+      parent: s.parentId ? (names.get(s.parentId) ?? null) : null,
       inboxEmail: s.inboxEmail,
       active: s.active,
       jobs: s._count.jobs,
@@ -126,21 +129,33 @@ export class CatalogController {
   @Get("app/sectors")
   @CustomerAuth()
   appSectors() {
-    return this.prisma.sector.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { code: true, name: true, inboxEmail: true } });
+    // D-082: de un tablero con sub-servicios se ofrecen los sub-servicios, no el tablero general.
+    return this.prisma.sector.findMany({
+      where: { active: true, children: { none: { active: true } } },
+      orderBy: { name: "asc" },
+      select: { code: true, name: true, inboxEmail: true },
+    });
   }
 
   @Get("sectors")
   async sectors(@CurrentUser() user: AuthUser) {
     const allowed = await this.access.allowedSectorIds(user);
     const sectors = await this.prisma.sector.findMany({
-      where: { active: true, ...(allowed === "all" ? {} : { id: { in: allowed } }) },
-      include: { stages: { orderBy: { position: "asc" } } },
+      // D-082: se listan los tableros; los sub-servicios se ven dentro del suyo. Quien solo tiene un
+      // sub-servicio (por ejemplo Látex) entra por el tablero que lo contiene.
+      where: {
+        active: true,
+        parentId: null,
+        ...(allowed === "all" ? {} : { OR: [{ id: { in: allowed } }, { children: { some: { id: { in: allowed }, active: true } } }] }),
+      },
+      include: { stages: { orderBy: { position: "asc" } }, children: { where: { active: true }, orderBy: { name: "asc" }, select: { id: true, code: true, name: true } } },
       orderBy: { name: "asc" },
     });
     return sectors.map((s) => ({
       id: s.id,
       code: s.code,
       name: s.name,
+      services: s.children.filter((c) => allowed === "all" || allowed.includes(c.id)).map((c) => ({ code: c.code, name: c.name })),
       stages: s.stages.map((st) => ({ status: st.status, label: JOB_STATUS_LABELS[st.status] })),
     }));
   }

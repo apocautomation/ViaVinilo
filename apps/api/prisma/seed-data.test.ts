@@ -5,10 +5,20 @@ import { FILE_ERROR_REASONS, MACHINES, buildSectors } from "./seed-data";
 describe("seed", () => {
   const sectors = buildSectors("ViaVinilo.Test");
 
-  it("siembra los 6 sectores con su casilla en minúsculas", () => {
+  it("siembra los sectores de base; los 6 con casilla la tienen en minúsculas", () => {
     expect(sectors.map((s) => s.code)).toEqual([...SECTOR_CODES]);
     expect(sectors.find((s) => s.code === "DTF")?.inboxEmail).toBe("dtf@viavinilo.test");
-    expect(new Set(sectors.map((s) => s.inboxEmail)).size).toBe(6);
+    const inboxes = sectors.map((s) => s.inboxEmail).filter(Boolean);
+    expect(inboxes).toHaveLength(6);
+    expect(new Set(inboxes).size).toBe(6);
+  });
+
+  it("D-082: los cinco sistemas de Gran Formato son sub-servicios; TPU es un tablero aparte y nace sin casilla", () => {
+    const children = sectors.filter((s) => s.parent === "GRAN_FORMATO").map((s) => s.code);
+    expect(children.sort()).toEqual(["CORTES", "ECOSOLVENTE", "LATEX", "UV_RIGIDOS", "UV_ROLLO"]);
+    expect(sectors.find((s) => s.code === "TPU")).toMatchObject({ parent: null, inboxEmail: null, name: "TPU" });
+    expect(sectors.find((s) => s.code === "DTF")?.name).toBe("DTF Textil");
+    expect(sectors.find((s) => s.code === "LATEX")?.inboxEmail).toBe("latex@viavinilo.test");
   });
 
   it("las posiciones de cada secuencia son 1..n sin huecos", () => {
