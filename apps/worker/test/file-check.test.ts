@@ -128,4 +128,21 @@ describe("control automático del archivo en el pedido (D-065)", () => {
     const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: r.jobId! } });
     expect(job.fileCheck).toMatchObject({ verdict: "ok", detail: "El PDF mide 58 × 100 cm, lo pedido.", file: "remeras.pdf" });
   });
+
+  it("D-086: si el taller corrigió la medida, el control usa esa y no la que escribió el cliente", async () => {
+    // El cliente puso mal la unidad: se lee como 28 m × 50 m y queda para revisar (D-080).
+    const r = await ingestMail(deps(), sector as never, await mail("Medida: 28x50 mts", png(3500, 6250)));
+    await processFileChecks(prisma, storage);
+    const before = await prisma.jobOrder.findUniqueOrThrow({ where: { id: r.jobId! } });
+    expect(before.fileCheck).toMatchObject({ verdict: "review" });
+    // El taller la corrige a 28 × 50 cm: 3500 px en 28 cm sobra resolución.
+    await prisma.jobOrder.update({
+      where: { id: r.jobId! },
+      data: { measure: "28 x 50 cm", fileCheck: undefined, requestedSpecs: { ...(before.requestedSpecs as object), measureEdited: true } },
+    });
+    await prisma.$executeRaw`UPDATE "JobOrder" SET "fileCheck" = NULL WHERE id = ${r.jobId!}`;
+    expect(await processFileChecks(prisma, storage)).toEqual({ checked: 1, errors: 0 });
+    const after = await prisma.jobOrder.findUniqueOrThrow({ where: { id: r.jobId! } });
+    expect(after.fileCheck).toMatchObject({ verdict: "ok" });
+  });
 });

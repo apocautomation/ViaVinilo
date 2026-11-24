@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Download, ExternalLink, Lock, X } from "lucide-react";
+import { Download, ExternalLink, Pencil, X } from "lucide-react";
 import { parseAmount, parseSaltaDateTime, PICKUP_BRANCHES, PICKUP_LABELS } from "@viavinilo/contracts";
 import { api, downloadFile } from "../../../lib/api";
 import { ars, MoneyInput } from "../../ui";
@@ -83,6 +83,8 @@ export function OrderPanel(props: {
   const [mode, setMode] = useState<PanelMode>(props.initialMode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** D-086: la medida se corrige acá; null = no se está editando. */
+  const [measureDraft, setMeasureDraft] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -162,9 +164,11 @@ export function OrderPanel(props: {
   }
 
   const waitingDeposit = !!job && job.depositRequired && !job.depositPaidAt && job.status === "QUOTED";
-  // Misma regla que la API (D-062): el archivo se libera cuando el pedido puede pasar a "Impreso".
-  const unlocked = !!job && (job.next === "PRINTED" || ["PRINTED", "CALENDERING", "READY", "DELIVERED"].includes(job.status));
-  const lockReason = job?.status === "QUOTED" ? "Se libera al registrar la seña" : "Se libera al cotizar";
+  const saveMeasure = () =>
+    run(async () => {
+      await api(`/jobs/${jobId}/measure`, { method: "PATCH", body: JSON.stringify({ measure: (measureDraft ?? "").trim() }) });
+      setMeasureDraft(null);
+    });
   const message = job?.requestedSpecs?.body || job?.requestedSpecs?.note || "";
 
   return (
@@ -205,7 +209,34 @@ export function OrderPanel(props: {
               {message && <p className="order-message">{message}</p>}
               <dl className="kv order-kv">
                 <dt>Medida</dt>
-                <dd>{job.measure || "No la escribió"}</dd>
+                <dd>
+                  {measureDraft === null ? (
+                    <>
+                      {job.measure || "No la escribió"}{" "}
+                      <button type="button" className="btn btn-ghost btn-sm icon-only" aria-label="Corregir la medida" title="Corregir la medida" disabled={busy} onClick={() => setMeasureDraft(job.measure ?? "")}>
+                        <Pencil size={13} aria-hidden />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="order-measure-edit">
+                      <input
+                        value={measureDraft}
+                        onChange={(e) => setMeasureDraft(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && void saveMeasure()}
+                        maxLength={80}
+                        placeholder="Ej.: 58 x 100 cm"
+                        aria-label="Medida pedida"
+                        autoFocus
+                      />
+                      <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void saveMeasure()}>
+                        Guardar
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setMeasureDraft(null)}>
+                        Volver
+                      </button>
+                    </span>
+                  )}
+                </dd>
                 {job.material && (
                   <>
                     <dt>Material</dt>
@@ -243,14 +274,10 @@ export function OrderPanel(props: {
                     </span>
                     {f.purgedAt ? (
                       <span className="muted">Ya no está disponible</span>
-                    ) : unlocked ? (
+                    ) : (
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => void download(f)}>
                         <Download size={14} aria-hidden /> Descargar
                       </button>
-                    ) : (
-                      <span className="muted order-lock">
-                        <Lock size={13} aria-hidden /> {lockReason}
-                      </span>
                     )}
                   </li>
                 ))}

@@ -30,8 +30,10 @@ type CheckMeasure = DeclaredMeasure & { assumed?: boolean };
  * asunto, el cuerpo, la nota o la descripción. Si el cliente escribió un par sin unidad ("58x30"),
  * se supone la unidad por el número (D-071).
  */
-export function measuresOf(specs: unknown, description: string | null): CheckMeasure[] {
-  const s = (specs ?? {}) as { measures?: unknown; note?: unknown; subject?: unknown; body?: unknown };
+export function measuresOf(specs: unknown, description: string | null, measure?: string | null): CheckMeasure[] {
+  const s = (specs ?? {}) as { measures?: unknown; note?: unknown; subject?: unknown; body?: unknown; measureEdited?: unknown };
+  // D-086: si el taller corrigió la medida, vale esa y no lo que escribió el cliente.
+  if (s.measureEdited === true && measure) return measuresOf({ note: measure }, null);
   const stored = Array.isArray(s.measures) ? (s.measures as DeclaredMeasure[]) : [];
   const text = [s.note, s.subject, s.body, description].filter((x): x is string => typeof x === "string").join("\n");
   const found: CheckMeasure[] = stored.some((m) => m.widthCm && m.heightCm) ? stored : [...stored, ...extractMeasures(text)];
@@ -82,7 +84,7 @@ export async function processFileChecks(
         filename: file.filename,
         image: head && !isPdf ? readImageInfo(head) : null,
         pdf: head && isPdf ? readPdfPageSize(head) : null,
-        measures: measuresOf(job.requestedSpecs, job.description),
+        measures: measuresOf(job.requestedSpecs, job.description, job.measure),
       });
     }
     // D-077: si un link no se pudo bajar, el operador lo tiene que ver aunque el pedido tenga otro archivo.

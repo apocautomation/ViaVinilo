@@ -78,27 +78,18 @@ export class JobsService {
   ) {}
 
   /**
-   * Descarga del archivo para imprimir (D-062). Se libera cuando el pedido puede pasar a "Impreso"
-   * (cotizado y, si corresponde, con la seña: R-JOB-3), o si ya se imprimió. Es la misma regla que
-   * muestra el tablero.
+   * Descarga del archivo del pedido (D-062). Desde D-086 se puede bajar en cualquier paso: el operador
+   * lo tiene que abrir para cotizar. Sigue valiendo el permiso por sector (D-017).
    */
   async downloadFile(user: AuthUser, jobId: string, fileId: string) {
     const job = await this.prisma.jobOrder.findFirst({
       where: { id: jobId, deletedAt: null },
-      include: { sector: { include: { stages: { orderBy: { position: "asc" } } } }, files: { where: { id: fileId, deletedAt: null } } },
+      include: { files: { where: { id: fileId, deletedAt: null } } },
     });
     if (!job) throw new NotFoundException("No encontramos esa orden");
     await this.access.assert(user, job.sectorId);
     const file = job.files[0];
     if (!file || file.purgedAt) throw new NotFoundException("Ese archivo ya no está disponible");
-    const sequence = job.sector.stages.map((s) => s.status);
-    const printed = ["PRINTED", "CALENDERING", "READY", "DELIVERED"].includes(job.status);
-    const canPrint = checkTransition({ sequence, status: job.status, depositRequired: job.depositRequired }, "PRINTED").ok;
-    if (!printed && !canPrint) {
-      throw new ForbiddenException(
-        job.status === "QUOTED" && job.depositRequired ? "El archivo se libera cuando se registra la seña" : "El archivo se libera cuando la orden está cotizada",
-      );
-    }
     const { stream, size } = await this.storage.open(file.storageKey);
     return new StreamableFile(stream, {
       type: file.mime || "application/octet-stream",
@@ -581,6 +572,27 @@ export class JobsService {
       }
     });
 
+    return this.detail(user, id);
+  }
+
+  /**
+   * Medida pedida (D-086): la corrige el taller cuando el cliente la escribió mal o no la escribió.
+   * El control del archivo se vuelve a hacer con la medida nueva. Queda auditado.
+   */
+  async setMeasure(user: AuthUser, id: string, measure: string | null) {
+    const job = await this.prisma.jobOrder.findFirst({ where: { id, deletedAt: null } });
+    if (!job) throw new NotFoundException("No encontramos esa orden");
+    await this.access.assert(user, job.sectorId);
+    if ((job.measure ?? null) !== measure) {
+      const specs = { ...((job.requestedSpecs as Record<string, unknown> | null) ?? {}), measureEdited: true };
+      await this.prisma.$transaction(async (tx) => {
+        await tx.jobOrder.update({
+          where: { id },
+          data: { measure, requestedSpecs: specs as Prisma.InputJsonValue, ...(job.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}) },
+        });
+        await this.audit.log({ entity: "JobOrder", entityId: id, action: "measure", userId: user.id, before: { measure: job.measure }, after: { measure } }, tx);
+      });
+    }
     return this.detail(user, id);
   }
 
