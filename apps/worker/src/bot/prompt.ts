@@ -17,6 +17,10 @@ export interface BotJob {
   depositPaid: boolean;
   estimatedReadyAt: Date | null;
   createdAt: Date;
+  /** Por qué está en "Archivo con error" (D-092): motivo y detalle del control. */
+  fileIssue?: string | null;
+  /** Resultado del control automático del archivo mientras está en "Archivo recibido" (D-092). */
+  fileCheck?: "ok" | "review" | "error" | "unknown" | null;
 }
 
 export interface BotContext {
@@ -87,6 +91,7 @@ function customerBlock(c: BotContext): string {
           [
             `- ${j.label} · ${j.sector} · estado: ${j.status}`,
             j.description ? ` · "${j.description}"` : "",
+            j.fileIssue ? ` · problema del archivo: ${j.fileIssue}` : "",
             j.quotedAmount ? ` · precio ${ars.format(Number(j.quotedAmount))}` : " · sin cotizar",
             j.depositRequired ? (j.depositPaid ? " · seña pagada" : " · seña pendiente") : "",
             j.estimatedReadyAt ? ` · listo para ${when(j.estimatedReadyAt)}` : "",

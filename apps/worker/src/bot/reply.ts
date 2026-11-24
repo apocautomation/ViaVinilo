@@ -49,6 +49,12 @@ export async function decideAnswer(input: {
   if (flow) return { reply: flow, handoff: false, reason: null, source: "flow" };
   const answer = await input.llm(input.turns);
   let reply = fixMailboxes(toVoseo(answer.reply));
+  // D-092: si la IA va a repetir lo mismo que ya dijo, no está entendiendo: lo ve un asesor.
+  const same = (t: string) => t.toLowerCase().replace(/[^\p{L}\d]+/gu, " ").trim();
+  const said = input.turns.filter((t) => t.role === "assistant").slice(-4).map((t) => same(t.content));
+  if (!answer.handoff && said.includes(same(reply))) {
+    return { reply: handoffReply(input.now), handoff: true, reason: "El bot iba a repetir la misma respuesta", source: "handoff" };
+  }
   if (!input.noticesOn) reply = dropNoticePromises(reply);
   // D-061: si el cliente no dijo el material, la IA no elige casilla (tendía a mandar todo a dtf@).
   if (/@viavinilo\.com/i.test(reply) && !serviceFor(input.text) && !boardFor(input.text, input.boards)) {
@@ -116,7 +122,11 @@ export async function processBotReplies(
       where: { customerId: customer.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 10,
-      include: { sector: { select: { name: true } } },
+      include: {
+        sector: { select: { name: true } },
+        // D-092: el motivo del último error de archivo, para decírselo al cliente.
+        events: { where: { toStatus: "FILE_ERROR" }, orderBy: { createdAt: "desc" }, take: 1, select: { note: true, reason: { select: { label: true } } } },
+      },
     });
     const history = await prisma.message.findMany({
       // D-061: después de un "/reset", el bot solo lee desde ahí.
@@ -137,6 +147,15 @@ export async function processBotReplies(
       depositPaid: j.depositPaidAt !== null,
       estimatedReadyAt: j.estimatedReadyAt,
       createdAt: j.createdAt,
+      fileIssue:
+        j.status === "FILE_ERROR"
+          ? [j.events[0]?.reason?.label, j.events[0]?.note?.replace(/^Control automático: /, "")]
+              .filter(Boolean)
+              .join(". ")
+              .replace(/[.\s]+$/, "")
+              .slice(0, 260) || null
+          : null,
+      fileCheck: j.status === "RECEIVED" ? ((j.fileCheck as { verdict?: BotJob["fileCheck"] } | null)?.verdict ?? null) : null,
     }));
     const system = buildSystemPrompt({
       customerName: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.businessName || "Cliente",

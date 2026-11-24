@@ -36,6 +36,14 @@ const GREETING = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|ho
 /** Cierre corto: "gracias", "ok", "dale", "listo"… No es un pedido ni una pregunta. */
 const THANKS = /^\s*(much[ií]simas |muchas |mil )?(gracias|ok(ey)?|oka|dale|listo|perfecto|genial|buen[ií]simo|b[aá]rbaro|joya|de una)\b[^?]{0,25}$/i;
 const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo retiro|retiro)|estado de mi|mi pedido|c[oó]mo va|lo puedo retirar)\b/i;
+/**
+ * Pregunta por su archivo (D-092): "¿tenés mi archivo?", "¿llegó?", "¿está correcto?", "¿tiene algún
+ * error?". Se contesta con el estado real del pedido; la IA inventaba "apenas llegue lo veo".
+ */
+/** Se prueba sobre el texto sin tildes: "\\b" no corta bien después de una vocal acentuada. */
+const FILE_QUESTION =
+  /\b(archivos?|disenos?|mail|correo)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archivos?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b/i;
+const plain = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 /** Un trabajo nuevo: pide imprimir, manda medidas o un archivo, o avisa que adjunta (D-060, D-061). */
 const NEW_JOB =
   /\b(imprimir|impresi[oó]n|quiero (hacer|mandar|imprimir)|te paso|necesito|adjunto|adjunta|ah[ií] va|te mando|les? (env[ií]o|mando|paso)|env[ií]o (el|un|los|unos|este)? ?archivos?|archivos? para)\b|\d+([.,]\d+)?\s*(m|cm|mts?)?\s*[x×]\s*\d|\.(png|jpe?g|pdf|tiff?|eps|ai|cdr|psd)\b/i;
@@ -120,6 +128,20 @@ function howToPay(serviceId: string | null): string {
   return `${blocks.join("\n\n")}\n\nMandá el comprobante por este chat. En el mostrador se paga en efectivo o débito.`;
 }
 
+/** Un pedido en una línea, con lo que el cliente necesita saber del archivo (D-092). */
+function jobLine(j: BotJob): string {
+  const base = `${j.label} (${j.sector}${j.description ? `, ${j.description}` : ""})`;
+  if (j.status === "Archivo con error") {
+    return `${base}: el archivo tiene un problema${j.fileIssue ? `: ${j.fileIssue}` : ""}. Mandalo corregido con el clip 📎 de este chat`;
+  }
+  if (j.status === "Archivo recibido") {
+    if (j.fileCheck === "ok") return `${base}: recibimos el archivo y el control automático dio bien. Falta que lo coticemos`;
+    if (j.fileCheck === "review") return `${base}: recibimos el archivo y lo está revisando el equipo antes de cotizar`;
+    return `${base}: recibimos el archivo. Lo revisamos y te pasamos el precio`;
+  }
+  return `${base}: ${j.status}`;
+}
+
 /** Devuelve la respuesta fija, o null si el mensaje no es de estos flujos (lo responde la IA). */
 export function fixedFlow(text: string, c: FlowContext): string | null {
   const name = c.firstName ? ` ${c.firstName}` : "";
@@ -129,12 +151,12 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
   }
   if (THANKS.test(text)) return /gracias/i.test(text) ? "¡De nada! Cualquier cosa, escribime por acá." : "¡Dale! Cualquier cosa, escribime por acá.";
 
-  if (STATUS.test(text) && !NEW_JOB.test(text)) {
+  if ((STATUS.test(text) || FILE_QUESTION.test(plain(text))) && !NEW_JOB.test(text)) {
     const active = c.jobs.filter((j) => j.status !== "Entregado" && j.status !== "Cancelado");
     if (active.length === 0) {
       return "Todavía no veo pedidos tuyos en curso. Si mandaste el archivo recién, puede tardar unos minutos en aparecer. Si todavía no lo mandaste, usá el clip 📎 de este chat y te pasamos el precio.";
     }
-    const lines = active.slice(0, 3).map((j) => `${j.label} (${j.sector}${j.description ? `, ${j.description}` : ""}): ${j.status}`);
+    const lines = active.slice(0, 3).map(jobLine);
     const after = c.noticesOn ? " Cuando cambie, te llega un aviso por acá y por mail." : "";
     return `${active.length === 1 ? "Tu pedido" : "Tus pedidos"}: ${lines.join("; ")}.${after}`;
   }
