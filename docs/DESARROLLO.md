@@ -1359,6 +1359,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Pedido de prueba**: a pedido de Ezequiel se cargó un pedido de prueba (VV-000564, DTF Textil) en su cuenta de cliente N.º 1, para ver el seguimiento en la app. Es el único dato no real del sistema; borrarlo cuando termine de probar.
 - **Impacto**: `GET /jobs/:id/files/:fileId` ya no devuelve 403 por el estado; nuevo `PATCH /jobs/:id/measure`. Sin migración.
 
+### D-087 · 24/11/2026 · Ezequiel · "Enviar" de la app como formulario tipo mail (resuelve I-19)
+- **Decisión**: el apartado **Enviar** de la app de clientes deja de ser una explicación con un link al correo y pasa a ser un formulario que arma el mismo mail que el cliente mandaba a la casilla: De (su nombre), Asunto (se arma solo: nombre, servicio, medida y copias), servicio, **ancho × alto con unidad**, copias, sucursal de retiro (D-083), aclaraciones y el archivo adjunto. Al enviar, el pedido se crea en el tablero del servicio y la app muestra el número.
+- **Por qué**: Ezequiel: "que sea como armar el mail, así es mucho más fácil para el sistema pasarlo a pedido con esa info". Con cada dato en su campo el pedido nace con la medida exacta y no hay que interpretar texto libre, que es de donde salen las medidas mal leídas (D-080).
+- **Cómo**:
+  - Usa la subida que ya existía para el clip del chat (`POST /app/chat/files`), con tres campos nuevos y opcionales: `widthCm`, `heightCm` y `copies`. El pedido guarda la medida en `measure` y en `requestedSpecs.measures`, así el control del archivo no tiene que adivinarla.
+  - El pedido queda también en el chat del cliente, como hasta ahora, con "Medida y cantidad".
+  - Siguen funcionando el mail a la casilla y el clip del chat. El formulario ofrece abajo el mail como alternativa.
+- **Impacto**: sin migración. Resuelve I-19 en lo que hace a subir archivos desde la app.
+- **Abierto**: no hay tope de envíos por cliente ni aviso de archivo repetido (la otra mitad de I-19). Un trabajo con varias medidas distintas se manda de a uno o se aclara en el texto.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

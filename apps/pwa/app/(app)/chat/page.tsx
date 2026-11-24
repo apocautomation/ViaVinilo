@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { CircleHelp, Download, Mail, Paperclip, Send, X } from "lucide-react";
-import { ACCEPT_ATTRIBUTE, attachmentsOf, defaultPickupBranch, formatBytes, help, MAX_UPLOAD_BYTES, PICKUP_BRANCHES, PICKUP_LABELS, type PickupBranch, type SectorCode } from "@viavinilo/contracts";
+import { ACCEPT_ATTRIBUTE, attachmentsOf, defaultPickupBranch, formatBytes, help, MAX_UPLOAD_BYTES, PICKUP_BRANCHES, PICKUP_LABELS, type PickupBranch } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
+import { SECTOR_OF } from "../../services";
 import { api, downloadFile, upload } from "../../session";
 
 /** Texto del mensaje con los links tocables (D-066): el bot manda mapas y la tienda. */
@@ -26,19 +27,6 @@ function Linkified({ text }: { text: string }) {
   );
 }
 
-/** Servicio de la Ayuda → tablero donde entra el pedido (D-062). */
-const SECTOR_OF: Record<string, SectorCode> = {
-  "dtf-textil": "DTF",
-  "dtf-uv": "DTF_UV",
-  sublimacion: "SUBLIMACION",
-  calandra: "CALANDRADO",
-  // D-082: cada sub-servicio de Gran Formato entra con su nombre (se ven juntos en ese tablero).
-  "uv-rigidos": "UV_RIGIDOS",
-  ecosolvente: "ECOSOLVENTE",
-  "uv-rollo": "UV_ROLLO",
-  corte: "CORTES",
-  latex: "LATEX",
-};
 
 /**
  * Mandar un archivo por el chat (D-062): el cliente elige el servicio, escribe medidas y cantidad, y

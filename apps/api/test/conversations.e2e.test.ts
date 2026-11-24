@@ -282,6 +282,29 @@ describe("archivos en Conversaciones (D-062)", () => {
     expect((await as("customer").get(`/app/jobs/${job.number}`)).body.pickup).toBe("San Juan");
   });
 
+  it("D-087: el formulario de Enviar manda medida y copias en campos propios y el pedido nace con la medida exacta", async () => {
+    const res = await http()
+      .post("/app/chat/files")
+      .set("Authorization", `Bearer ${tokens.customer}`)
+      .field("sector", "DTF")
+      .field("widthCm", "58")
+      .field("heightCm", "150.5")
+      .field("copies", "3")
+      .field("pickupBranch", "san-juan")
+      .field("note", "Servicio: DTF Textil\nLo necesito para el viernes")
+      .attach("file", pdf, "Remera formulario.pdf");
+    expect(res.status).toBe(201);
+    const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: res.body.job.id } });
+    expect(job).toMatchObject({ status: "RECEIVED", source: "API", measure: "58 x 150,5 cm", pickupBranch: "san-juan" });
+    expect(job.description).toBe("58 x 150,5 cm · 3 copias · Servicio: DTF Textil · Lo necesito para el viernes");
+    expect(job.requestedSpecs).toMatchObject({ channel: "app", copies: 3, measures: [{ raw: "58 x 150,5 cm", widthCm: 58, heightCm: 150.5 }] });
+    const thread = await as("customer").get("/app/chat");
+    expect(thread.body.messages.at(-1).body).toContain("Medida y cantidad: 58 x 150,5 cm · 3 copias");
+    // Medidas imposibles no pasan.
+    const bad = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").field("widthCm", "-5").field("heightCm", "10").attach("file", pdf, "x.pdf");
+    expect(bad.status).toBe(400);
+  });
+
   it("D-062: no acepta archivos que no son de impresión", async () => {
     const res = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").attach("file", Buffer.from("x"), "virus.exe");
     expect(res.status).toBe(422);

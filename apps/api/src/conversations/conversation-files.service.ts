@@ -88,7 +88,7 @@ export class ConversationFilesService {
 
   // ───────────── Cliente (app) ─────────────
 
-  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch }) {
+  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number }) {
     this.check(file);
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId }, select: { status: true, deletedAt: true } });
     if (!customer || customer.deletedAt) throw new NotFoundException("No encontramos tu cuenta");
@@ -100,6 +100,17 @@ export class ConversationFilesService {
     const stored = await this.store(`app/${customerId}`, file);
     const { checksum, ...attachment } = stored;
     const note = input.note?.trim() || null;
+    // D-087: el formulario de "Enviar" manda la medida y las copias en campos propios.
+    const cm = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+    const measure = input.widthCm && input.heightCm ? `${cm(input.widthCm)} x ${cm(input.heightCm)} cm` : null;
+    const copies = input.copies ? `${input.copies} ${input.copies === 1 ? "copia" : "copias"}` : null;
+    const summary = [measure, copies].filter(Boolean).join(" · ");
+    const specs = {
+      channel: "app",
+      note,
+      ...(measure ? { measures: [{ raw: measure, widthCm: input.widthCm, heightCm: input.heightCm }] } : {}),
+      ...(input.copies ? { copies: input.copies } : {}),
+    };
 
     // D-065: con un solo pedido en "Archivo con error" en este tablero, es el archivo corregido.
     const errored = await this.prisma.jobOrder.findMany({
@@ -136,8 +147,9 @@ export class ConversationFilesService {
           source: "API",
           pickupBranch: input.pickupBranch ?? null,
           sourceMessageId: `app:${attachment.key}`,
-          description: (note ?? attachment.name).slice(0, 200),
-          requestedSpecs: { channel: "app", note },
+          description: ([summary, note].filter(Boolean).join(" · ") || attachment.name).replace(/\s*\n\s*/g, " · ").slice(0, 200),
+          measure,
+          requestedSpecs: specs,
           files: {
             create: { filename: attachment.name, storageKey: attachment.key!, sizeBytes: BigInt(attachment.size!), mime: attachment.mime!, checksum },
           },
@@ -145,7 +157,7 @@ export class ConversationFilesService {
         },
         select: { id: true, number: true },
       });
-      const body = note ?? `Te mando el archivo para ${sector.name}.`;
+      const body = [summary ? `Medida y cantidad: ${summary}` : "", note ?? (summary ? "" : `Te mando el archivo para ${sector.name}.`)].filter(Boolean).join("\n");
       const msg = await tx.message.create({
         data: { conversationId, direction: "IN", channel: "APP", body, attachments: [attachment] as unknown as Prisma.InputJsonValue, jobId: job.id },
         select: { id: true, direction: true, channel: true, subject: true, body: true, attachments: true, createdAt: true, fromBot: true, jobId: true },
