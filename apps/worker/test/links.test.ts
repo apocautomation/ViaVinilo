@@ -273,7 +273,25 @@ describe("links: el archivo queda en el pedido (D-072, D-076)", () => {
     await processFileChecks(prisma, storage);
     const after = await prisma.jobOrder.findUniqueOrThrow({ where: { id: j.id } });
     expect(after.linksNote).toContain("Google Drive: el link no es público");
-    expect(after.fileCheck).toMatchObject({ verdict: "unknown", hint: after.linksNote });
+    expect(after.fileCheck).toMatchObject({ verdict: "unknown", linkNote: after.linksNote });
+  });
+
+  it("D-077: si el pedido ya tiene un archivo adjunto, la tarjeta igual avisa del link que no se pudo bajar", async () => {
+    const j = await job([DRIVE]);
+    await storage.put("mail/adjunto.png", png(6850, 11811));
+    await prisma.jobFile.create({ data: { jobId: j.id, filename: "adjunto.png", storageKey: "mail/adjunto.png", sizeBytes: 64n, mime: "image/png", checksum: "a".repeat(64) } });
+    await processLinkDownloads(prisma, storage, clientWith(async () => ({ ok: false, reason: "not_found" })), NO_MIN);
+    await processFileChecks(prisma, storage);
+    const after = await prisma.jobOrder.findUniqueOrThrow({ where: { id: j.id } });
+    expect(after.fileCheck).toMatchObject({ verdict: "ok", file: "adjunto.png", linkNote: after.linksNote });
+    expect(after.linksNote).toContain("solo lo puede abrir quien recibió el mail");
+  });
+
+  it("D-077: un pedido sin links fallidos no lleva aviso de link", async () => {
+    const j = await job([DRIVE]);
+    await processLinkDownloads(prisma, storage, clientWith(async () => opened(png(6850, 11811))), NO_MIN);
+    await processFileChecks(prisma, storage);
+    expect((await prisma.jobOrder.findUniqueOrThrow({ where: { id: j.id } })).fileCheck).not.toHaveProperty("linkNote");
   });
 
   it("D-076: un servicio que no se baja solo se avisa; los links del pie de Google no", async () => {
