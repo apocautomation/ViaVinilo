@@ -1467,6 +1467,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: migración `20261125030000_sector_variants` (tabla nueva y `JobOrder.variantId`; carga las opciones de DTF Textil). Endpoints: `GET /app/sectors/:code/variants`, `POST /sectors/:id/variants`, `PATCH /variants/:id`, `PATCH /jobs/:id/variant`; `GET /jobs/board` acepta `variant`.
 - **Abierto**: `TODO(spec): I-28`.
 
+### D-096 · 24/11/2026 · Ezequiel · la prueba del bot (bot-dry-run) pasa todos los datos del pedido
+- **Qué pasaba**: al probar el bot en el servidor después de D-094, la herramienta de prueba no le pasaba los archivos de cada pedido ni el monto de la seña. Copiaba los datos campo por campo y los que se agregaron después se perdían sin aviso, así que la prueba respondía distinto que el worker real (por ejemplo, decía "recibimos el archivo" en un pedido sin archivos).
+- **Arreglo**: los pedidos de ejemplo se arman completando solo lo que falta y pasando todo lo demás tal cual, así un dato nuevo del bot llega a la prueba sin tocarla. También acepta `alreadyTalking` y `noticesOn` por caso, y fechas como texto.
+- **Impacto**: solo la herramienta de prueba (`apps/worker/src/bot-dry-run.ts` y `bot/dry-run-jobs.ts`). No cambia cómo responde el bot.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
