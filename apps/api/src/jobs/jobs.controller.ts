@@ -36,6 +36,7 @@ const byCustomerSchema = z.object({
 const machineSchema = z.object({ machineId: z.string().min(1).nullable() });
 const serviceSchema = z.object({ sector: sectorCodeSchema });
 const pickupSchema = z.object({ branch: pickupBranchSchema.nullable() });
+const measureSchema = z.object({ measure: z.string().trim().max(80).transform((v) => v || null) });
 
 /** Cada cuánto se revisa si cambió el tablero. Cubre también las órdenes que crea el worker de mails. */
 const POLL_MS = Number(process.env.BOARD_POLL_MS ?? 2000);
@@ -103,6 +104,12 @@ export class JobsController {
   @Patch(":id/service")
   moveService(@Param("id") id: string, @ZodBody(serviceSchema) body: { sector: string }, @CurrentUser() user: AuthUser) {
     return this.jobs.moveService(user, id, body.sector);
+  }
+
+  /** Medida pedida, corregida por el taller (D-086). */
+  @Patch(":id/measure")
+  setMeasure(@Param("id") id: string, @ZodBody(measureSchema) body: { measure: string | null }, @CurrentUser() user: AuthUser) {
+    return this.jobs.setMeasure(user, id, body.measure);
   }
 
   /** Sucursal donde retira el cliente (D-083). */

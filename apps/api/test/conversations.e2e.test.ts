@@ -304,18 +304,9 @@ describe("archivos en Conversaciones (D-062)", () => {
     expect((await http().get(`/conversations/${conv.id}/files/${sent.id}/0`).set("Authorization", `Bearer ${tokens.attention}`)).status).toBe(200);
   });
 
-  it("D-062: producción no descarga el archivo hasta que el pedido está cotizado", async () => {
-    const job = await prisma.jobOrder.findFirstOrThrow({ where: { source: "API" }, include: { files: true } });
-    const dl = () => http().get(`/jobs/${job.id}/files/${job.files[0]!.id}`).set("Authorization", `Bearer ${tokens.attention}`);
-    const locked = await dl();
-    expect(locked.status).toBe(403);
-    expect(locked.body.message).toMatch(/cotizada/);
-    await prisma.sectorStage.createMany({
-      data: ["RECEIVED", "QUOTED", "PRINTED", "READY", "DELIVERED"].map((status, position) => ({ sectorId: dtfId, status: status as never, position })),
-      skipDuplicates: true,
-    });
-    await prisma.jobOrder.update({ where: { id: job.id }, data: { status: "QUOTED", quotedAmount: "1000", depositRequired: false } });
-    const ok = await dl().buffer(true);
+  it("D-086: el archivo del pedido se puede descargar antes de cotizar, para poder cotizarlo", async () => {
+    const job = await prisma.jobOrder.findFirstOrThrow({ where: { source: "API", status: "RECEIVED" }, include: { files: true } });
+    const ok = await http().get(`/jobs/${job.id}/files/${job.files[0]!.id}`).set("Authorization", `Bearer ${tokens.attention}`).buffer(true);
     expect(ok.status).toBe(200);
     expect(ok.headers["content-disposition"]).toContain("attachment");
   });

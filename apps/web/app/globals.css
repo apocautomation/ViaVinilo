@@ -1418,6 +1418,34 @@ table.data tfoot td {
   align-items: center;
   gap: 8px;
 }
+/* D-086: arrastrar tarjetas y corregir la medida */
+.card[draggable="true"] {
+  cursor: grab;
+}
+.card[data-dragging="true"] {
+  opacity: 0.45;
+}
+.column[data-drop="ok"] {
+  outline: 2px dashed var(--color-success-500, #16a34a);
+  outline-offset: -4px;
+}
+.column[data-drop="no"] {
+  outline: 2px dashed var(--color-neutral-400);
+  outline-offset: -4px;
+}
+.order-measure-edit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.order-measure-edit input {
+  width: 170px;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
 .service-tag {
   margin-right: 6px;
   font-weight: 700;

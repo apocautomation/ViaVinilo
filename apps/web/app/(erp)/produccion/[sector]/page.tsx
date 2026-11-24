@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock, Download, FileText, Lock, Paperclip } from "lucide-react";
+import { Clock, Download, FileText, Paperclip } from "lucide-react";
 import { isPickupBranch, PICKUP_LABELS } from "@viavinilo/contracts";
 import { api, downloadFile, getUser, watchBoard, type SessionUser } from "../../../lib/api";
 import { Help } from "../../help";
@@ -85,14 +85,6 @@ const STATUS_COLOR: Partial<Record<Status, string>> = {
   DELIVERED: "var(--color-success-700)",
 };
 
-/**
- * Propuesta D-032 / I-17: el archivo de impresión se descarga desde la tarjeta y solo se libera cuando la
- * orden está lista para imprimir. Así el operador tiene que mover la tarjeta para poder trabajar.
- * TODO(spec): I-17 — falta confirmarlo con el cliente y conectar la descarga real de JobFile.
- */
-function printUnlocked(card: Card): boolean {
-  return card.next === "PRINTED";
-}
 
 /** Más de 2 h en el mismo paso: se marca en amarillo. TODO(spec): I-11 — umbral por sector. */
 const LATE_MIN = 120;
@@ -160,6 +152,9 @@ export default function BoardPage() {
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /** D-086: arrastrar una tarjeta a la columna siguiente la hace avanzar. */
+  const [dragging, setDragging] = useState<Card | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const query = useMemo(() => {
@@ -247,6 +242,36 @@ export default function BoardPage() {
     }
   }
 
+  /**
+   * Soltar una tarjeta en una columna (D-086). Vale lo mismo que el botón: solo al paso que sigue, a
+   * "Archivo con error" (pide el motivo) o, para el dueño, a "Impreso" sin seña. No se saltean pasos.
+   */
+  function dropOn(col: { key: string; status: Status }) {
+    const card = dragging;
+    setDragging(null);
+    setOver(null);
+    if (!card || card.status === col.status) return;
+    if (col.status === card.next) {
+      if (col.status === "QUOTED" && card.quotedAmount) void move(card, { to: "QUOTED" });
+      else clickNext(card);
+    } else if (col.status === "FILE_ERROR" && card.other.includes("FILE_ERROR")) setPanel({ id: card.id, mode: "error" });
+    else if (col.status === "PRINTED" && card.next === "DEPOSIT_RECEIVED" && isOwner) setPanel({ id: card.id, mode: "force" });
+    else if (col.status === "PRINTED" && card.next === "DEPOSIT_RECEIVED") setToast("Primero hay que registrar la seña.");
+    else setToast("Los pasos no se pueden saltear: el pedido avanza de a un paso.");
+  }
+  const dragProps = (card: Card) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", card.label);
+      setDragging(card);
+    },
+    onDragEnd: () => {
+      setDragging(null);
+      setOver(null);
+    },
+  });
+
   const isOwner = user?.roles.includes("OWNER") ?? false;
   const total = board?.columns.reduce((n, c) => n + c.cards.length, 0) ?? 0;
 
@@ -262,7 +287,7 @@ export default function BoardPage() {
             <Help label="Cómo funciona el tablero">
               <strong>Pasos obligatorios:</strong> cada trabajo avanza de a un paso y no se puede saltear ninguno.
               <br />
-              El archivo para imprimir se libera recién cuando la orden está lista (cotizada y, si corresponde, con seña).
+              Para avanzar un pedido, tocá su botón o arrastrá la tarjeta a la columna siguiente. El archivo se puede descargar en cualquier paso.
               <br />
               El cliente ve cada cambio en su app al instante. En amarillo: más de 2 h en el mismo paso.
             </Help>
@@ -324,6 +349,16 @@ export default function BoardPage() {
           <section
             key={col.key}
             className="column"
+            data-drop={dragging && over === col.key ? (col.status === dragging.next || (col.status === "FILE_ERROR" && dragging.other.includes("FILE_ERROR")) ? "ok" : "no") : undefined}
+            onDragOver={(e) => {
+              if (!dragging) return;
+              e.preventDefault();
+              if (over !== col.key) setOver(col.key);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              dropOn(col);
+            }}
             aria-label={col.label}
             style={{ ["--col" as string]: col.key === "AWAITING_DEPOSIT" ? "var(--color-warning)" : STATUS_COLOR[col.status] }}
           >
@@ -348,8 +383,9 @@ export default function BoardPage() {
                 if (compact) {
                   const check = card.status === "RECEIVED" ? card.fileCheck?.verdict : undefined;
                   return (
-                    <article key={card.id} className="card card-compact" aria-busy={busy === card.id}>
-                      <button type="button" className="card-toggle" onClick={() => setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
+                    <article key={card.id} className="card card-compact" aria-busy={busy === card.id} data-dragging={dragging?.id === card.id} {...dragProps(card)}>
+                      {/* Es un div y no un botón para que la tarjeta se pueda arrastrar también en Firefox (D-086). */}
+                      <div role="button" tabIndex={0} className="card-toggle" onClick={() => setPanel({ id: card.id, mode: "view" })} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
                         <span className="row">
                           <span className="num">{card.label}</span>
                           <span className="age" data-late={mins > LATE_MIN}>
@@ -371,7 +407,7 @@ export default function BoardPage() {
                             {card.description}
                           </span>
                         )}
-                      </button>
+                      </div>
                       {card.next && (
                         <button className="btn btn-primary btn-sm" disabled={busy === card.id} onClick={() => clickNext(card)}>
                           {NEXT_ACTION[card.next] ?? "Avanzar"}
@@ -381,7 +417,7 @@ export default function BoardPage() {
                   );
                 }
                 return (
-                <article key={card.id} className="card" aria-busy={busy === card.id}>
+                <article key={card.id} className="card" aria-busy={busy === card.id} data-dragging={dragging?.id === card.id} {...dragProps(card)}>
                   <header>
                     <button type="button" className="num num-btn" onClick={() => setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
                       {card.label}
@@ -457,18 +493,9 @@ export default function BoardPage() {
                   )}
 
                   {card.fileCount > 0 && ["RECEIVED", "QUOTED", "DEPOSIT_RECEIVED"].includes(card.status) && (
-                    printUnlocked(card) ? (
-                      <button
-                        className="btn btn-ghost"
-                        onClick={() => void downloadForPrint(card.id)}
-                      >
-                        <Download size={14} aria-hidden /> Descargar archivo para imprimir
-                      </button>
-                    ) : (
-                      <button className="btn btn-ghost" disabled title="Se libera cuando la orden está lista para imprimir">
-                        <Lock size={14} aria-hidden /> Archivo bloqueado hasta {card.status === "RECEIVED" ? "cotizar" : "registrar la seña"}
-                      </button>
-                    )
+                    <button className="btn btn-ghost" onClick={() => void downloadForPrint(card.id)}>
+                      <Download size={14} aria-hidden /> Descargar archivo
+                    </button>
                   )}
 
                   {card.next && (

@@ -296,6 +296,23 @@ describe("trabajos por cliente (D-084)", () => {
   });
 });
 
+describe("medida corregida por el taller (D-086)", () => {
+  it("D-086: el taller corrige la medida pedida; se vuelve a controlar el archivo y queda auditado", async () => {
+    const job = await newJob();
+    await prisma.jobOrder.update({ where: { id: job.id }, data: { measure: "28x50 mts", fileCheck: { verdict: "review", detail: "x" }, requestedSpecs: { body: "28x50 mts" } } });
+    const res = await http("production").patch(`/jobs/${job.id}/measure`, { measure: " 28 x 50 cm " });
+    expect(res.status).toBe(200);
+    expect(res.body.measure).toBe("28 x 50 cm");
+    const row = await prisma.jobOrder.findUniqueOrThrow({ where: { id: job.id } });
+    expect(row.fileCheck).toBeNull();
+    expect(row.requestedSpecs).toMatchObject({ body: "28x50 mts", measureEdited: true });
+    const audit = await prisma.auditLog.findFirst({ where: { entityId: job.id, action: "measure" } });
+    expect(audit).toMatchObject({ before: { measure: "28x50 mts" }, after: { measure: "28 x 50 cm" } });
+    expect((await http("production").patch(`/jobs/${job.id}/measure`, { measure: "x".repeat(81) })).status).toBe(400);
+    expect((await http("latex").patch(`/jobs/${job.id}/measure`, { measure: "1 x 1 cm" })).status).toBe(403);
+  });
+});
+
 describe("cambios de estado", () => {
   it("actualización §2.4: los pasos no se pueden saltear", async () => {
     const job = await newJob();
