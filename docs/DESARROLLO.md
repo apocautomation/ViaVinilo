@@ -1246,6 +1246,13 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - **Drive que contesta "no existe"**: los links que arma Gmail cuando el cliente inserta un archivo de Drive (`docs.google.com/uc?…&revid=…`) solo los abre el destinatario con su sesión; a nosotros Google nos contesta "no encontrado", igual que con un archivo borrado. La tarjeta ahora dice las dos posibilidades y qué pedirle al cliente (compartirlo con "cualquier persona que tenga el enlace" o mandarlo adjunto). Para WeTransfer el texto sigue siendo "ya no existe o venció".
   - **Escritura a disco**: por cada espera al disco quedaba un aviso de error sin soltar (Node avisaba `MaxListenersExceededWarning`). Se corrigió, y un error del disco en medio de la escritura ya no puede tirar el worker.
 
+### D-077 · 24/11/2026 · Ezequiel · el aviso de "link sin bajar" se ve aunque el pedido tenga otro archivo
+- **Qué pasaba**: la nota de un link que no se pudo bajar (D-072) se mostraba en la tarjeta solo si el pedido no tenía ningún archivo guardado. Muchos mails traen un adjunto y además un link de Drive (Gmail convierte en link los archivos grandes): el operador veía el control del adjunto y no se enteraba de que faltaba otro archivo. En producción eran 5 de los 10 pedidos con nota.
+- **Qué cambia**: el resultado del control lleva un campo aparte, `linkNote`, con la nota del link. La tarjeta lo muestra en "Archivo recibido" como "Link sin bajar: …", sea cual sea el resultado del control (bien, revisar, con problema o sin decidir).
+- No cambia el veredicto ni el paso automático a "Archivo con error": es solo un aviso.
+- **Después de subirlo** se vuelve a pasar el control por los pedidos que tienen una nota de link.
+- **Por qué**: Ezequiel aprobó el cambio el 24/11 al ver el caso en producción ("sí, hacelo").
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

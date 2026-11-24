@@ -72,7 +72,7 @@ export async function processFileChecks(
       const noFile = job.linksNote ?? (job.externalLinks.length && !job.linksFetchedAt ? "El archivo llegó por un link: se está bajando." : "El pedido no tiene archivos guardados.");
       check = job.files.length
         ? { verdict: "unknown", detail: "El archivo no es PNG, JPG ni PDF: no se puede controlar solo." }
-        : { verdict: "unknown", detail: noFile, ...(job.linksNote ? { hint: job.linksNote } : {}) };
+        : { verdict: "unknown", detail: noFile };
     } else {
       const head = await storage.getHead(file.storageKey, 2 * 1024 * 1024).catch(() => null);
       const isPdf = PDF.test(file.filename);
@@ -85,6 +85,8 @@ export async function processFileChecks(
         measures: measuresOf(job.requestedSpecs, job.description),
       });
     }
+    // D-077: si un link no se pudo bajar, el operador lo tiene que ver aunque el pedido tenga otro archivo.
+    if (job.linksNote) check = { ...check, linkNote: job.linksNote };
     await prisma.jobOrder.update({ where: { id: job.id }, data: { fileCheck: check as unknown as Prisma.InputJsonValue } });
 
     // Paso automático: solo si está prendido, el caso es claro y el archivo llegó después de prenderlo.

@@ -83,6 +83,8 @@ export interface FileCheck {
   file?: string;
   /** Dato del archivo que le sirve al operador aunque no se haya podido decidir (D-071). */
   hint?: string;
+  /** Un link del pedido no se pudo bajar: se muestra siempre, aunque haya otro archivo controlado (D-077). */
+  linkNote?: string;
 }
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");

@@ -128,7 +128,7 @@ export class JobsService {
       estimatedReadyAt: row.estimatedReadyAt,
       fileCount: row._count.files,
       /** Resultado del control automático del archivo (D-065). */
-      fileCheck: row.fileCheck as { verdict: string; detail: string; hint?: string } | null,
+      fileCheck: row.fileCheck as { verdict: string; detail: string; hint?: string; linkNote?: string } | null,
       linkCount: row.externalLinks.length,
       machine: row.machine,
       material: row.material,
