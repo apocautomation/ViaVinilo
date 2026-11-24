@@ -76,4 +76,8 @@ describe("medidas pegadas o sin unidad (D-071)", () => {
     expect(assumePair("5 x 7")).toBeNull();
     expect(assumePair("58 x 30 cm")).toBeNull(); // ya tiene unidad: no es este caso
   });
+
+  it("D-076: un link sacado del HTML del mail se guarda con '&' y no con '&amp;'", () => {
+    expect(extractTransferLinks(`<a href="https://docs.google.com/uc?export=download&amp;id=abc123">archivo</a>`)).toEqual(["https://docs.google.com/uc?export=download&id=abc123"]);
+  });
 });
