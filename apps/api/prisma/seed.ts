@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/auth/password";
-import { FILE_ERROR_REASONS, MACHINES, buildSectors } from "./seed-data";
+import { FILE_ERROR_REASONS, MACHINES, SECTOR_VARIANTS, buildSectors } from "./seed-data";
 
 /** Seed idempotente: se puede correr varias veces sin duplicar. */
 async function main() {
@@ -30,6 +30,15 @@ async function main() {
     // D-082: los sub-servicios cuelgan de su tablero (Látex, Ecosolvente… dentro de Gran Formato).
     for (const s of buildSectors(mailDomain)) {
       await prisma.sector.update({ where: { code: s.code }, data: { parentId: s.parent ? sectorIds.get(s.parent)! : null } });
+    }
+
+    // D-095: materiales u opciones de impresión. Si ya existe el código, no se toca (lo edita el dueño).
+    for (const v of SECTOR_VARIANTS) {
+      await prisma.sectorVariant.upsert({
+        where: { code: v.code },
+        update: {},
+        create: { sectorId: sectorIds.get(v.sector)!, code: v.code, name: v.name, sortOrder: v.sortOrder },
+      });
     }
 
     for (const m of MACHINES) {

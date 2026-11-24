@@ -1,6 +1,6 @@
-import { ConflictException, Controller, Get, NotFoundException, Param, Patch, Post, Put } from "@nestjs/common";
+import { BadRequestException, ConflictException, Controller, Get, NotFoundException, Param, Patch, Post, Put } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { botToggleSchema, createSectorSchema, JOB_STATUS_LABELS, sectorCodeFromName, sequenceForNewSector, updateSectorSchema } from "@viavinilo/contracts";
+import { botToggleSchema, createSectorSchema, createVariantSchema, updateVariantSchema, JOB_STATUS_LABELS, sectorCodeFromName, sequenceForNewSector, updateSectorSchema } from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
 import { CurrentUser, CustomerAuth, Roles, type AuthUser } from "../auth/decorators";
 import { ZodBody } from "../common/zod";
@@ -48,7 +48,14 @@ export class CatalogController {
   @Get("sectors/all")
   @Roles("OWNER")
   async allSectors() {
-    const sectors = await this.prisma.sector.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { jobs: true } }, stages: { orderBy: { position: "asc" } } } });
+    const sectors = await this.prisma.sector.findMany({
+      orderBy: { name: "asc" },
+      include: {
+        _count: { select: { jobs: true } },
+        stages: { orderBy: { position: "asc" } },
+        variants: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true, active: true, sortOrder: true } },
+      },
+    });
     const names = new Map(sectors.map((s) => [s.id, s.name]));
     return sectors.map((s) => ({
       id: s.id,
@@ -60,7 +67,67 @@ export class CatalogController {
       active: s.active,
       jobs: s._count.jobs,
       stages: s.stages.map((st) => JOB_STATUS_LABELS[st.status]),
+      /** Materiales u opciones de impresión (D-095), también los desactivados. */
+      variants: s.variants,
     }));
+  }
+
+  /** Agrega un material u opción de impresión a un tablero (D-095). Queda auditado. */
+  @Post("sectors/:id/variants")
+  @Roles("OWNER")
+  async createVariant(@Param("id") sectorId: string, @ZodBody(createVariantSchema) body: { code: string; name: string }, @CurrentUser() user: AuthUser) {
+    const sector = await this.prisma.sector.findUnique({ where: { id: sectorId }, select: { id: true, _count: { select: { variants: true } } } });
+    if (!sector) throw new NotFoundException("Ese tablero no existe");
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const v = await tx.sectorVariant.create({
+          data: { sectorId, code: body.code, name: body.name, sortOrder: sector._count.variants + 1 },
+          select: { id: true, code: true, name: true, active: true, sortOrder: true },
+        });
+        await this.audit.log({ entity: "SectorVariant", entityId: v.id, action: "create", userId: user.id, after: { sectorId, code: v.code, name: v.name } }, tx);
+        return v;
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otro material");
+      throw err;
+    }
+  }
+
+  /** Cambia el nombre, el código, el orden o lo desactiva (D-095). Desactivado deja de ofrecerse, pero los pedidos lo conservan. */
+  @Patch("variants/:id")
+  @Roles("OWNER")
+  async updateVariant(
+    @Param("id") id: string,
+    @ZodBody(updateVariantSchema) body: { code?: string; name?: string; active?: boolean; sortOrder?: number },
+    @CurrentUser() user: AuthUser,
+  ) {
+    const before = await this.prisma.sectorVariant.findUnique({ where: { id } });
+    if (!before) throw new NotFoundException("Ese material no existe");
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const v = await tx.sectorVariant.update({ where: { id }, data: body, select: { id: true, code: true, name: true, active: true, sortOrder: true } });
+        await this.audit.log(
+          { entity: "SectorVariant", entityId: id, action: "update", userId: user.id, before: { code: before.code, name: before.name, active: before.active }, after: { code: v.code, name: v.name, active: v.active } },
+          tx,
+        );
+        return v;
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otro material");
+      throw err;
+    }
+  }
+
+  /** Materiales activos de un tablero, para elegir en la app al mandar un trabajo (D-095). */
+  @Get("app/sectors/:code/variants")
+  @CustomerAuth()
+  async appVariants(@Param("code") code: string) {
+    if (!/^[A-Z][A-Z0-9_]{1,29}$/.test(code)) throw new BadRequestException("Tablero inválido");
+    return this.prisma.sectorVariant.findMany({
+      where: { active: true, sector: { code, active: true } },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, code: true, name: true },
+    });
   }
 
   /**

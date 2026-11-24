@@ -135,6 +135,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-25 | Cómo se reconoce la seña (D-050) | "Cuando el cliente pase el comprobante, pasa a Seña recibida": falta definir si alcanza con que mande una imagen o si alguien la verifica. | E1 | Abierto. Propuesta: el asesor ve el comprobante en Conversaciones y toca "Seña recibida" (un clic, queda auditado). La lectura automática del monto queda para después. |
 | I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | **Resuelto en D-082** (definido el 24/11): Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; sin Embroidery. |
 | I-27 | Seña por servicio en la Ayuda de la app (D-053) | Los agentes de Runamatic no coinciden: los de sector piden 50% siempre; el agente "SISTEMA NUEVO" la pide según metros (DTF Textil, Sublimación y Calandra desde 10 m; DTF UV desde 3 m; TPU siempre). La Ayuda muestra la del agente más nuevo. | E1 | Abierto. Confirmar con Verónica y corregir `apps/pwa/app/(app)/ayuda/content.ts`. |
+| I-28 | Materiales de cada tablero (D-095) | Ricardo manda un Excel con las opciones de cada producto (por ejemplo las telas de Calandra). Los códigos de DTF Textil (`DTF-GLI`, etc.) los puse yo y son provisorios. | E1 | Abierto. Cargar el Excel en Producción → Materiales por tablero (o por importación) y confirmar los códigos con Ricardo. |
 
 ## 4. Bitácora de decisiones
 
@@ -1450,6 +1451,21 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - Si el cliente **nombra un pedido** ("VV-000051", "pedido 51", "orden #51") responde solo por ese; si no es suyo o no existe, lo dice y muestra los que sí tiene.
 - **Límite de subidas**: 10 archivos por minuto por cliente, ahora configurable con `APP_UPLOADS_PER_MINUTE` (los tests suben muchos seguidos).
 - **Impacto**: sin migración.
+
+### D-095 · 24/11/2026 · Ricardo (mensaje del 24/11) + Ezequiel · materiales u opciones de impresión por tablero, con código en el pedido
+- **Pedido del cliente**: "Hay sectores de impresión que necesitan más info para poder estar organizados. En DTF Textil tenemos distintas opciones: Normal, Reflectivo, Fluorescente, Glitter, Dorado, Plateado, Oro, Plata, Color change. Necesitamos que el cliente pueda elegir en qué material y que luego la orden tenga un código que nos permita identificarlo. Lo mismo pasa en los demás sectores (por ejemplo en Calandra, tela Jersey Set). Así podemos agrupar los trabajos según los materiales." Ricardo va a mandar un Excel con todas las alternativas de cada producto. Ezequiel: "andá haciendo esto".
+- **Decisión**:
+  - Cada tablero tiene su lista de **materiales u opciones** (`SectorVariant`), cada uno con un **código único** que identifica al pedido (por ejemplo `DTF-GLI`).
+  - **App**: al mandar un trabajo (formulario de Enviar o clip del chat), si el servicio tiene materiales cargados el cliente **tiene que elegir uno**. El asunto del pedido lo incluye.
+  - **Mail**: si el mail nombra un solo material del tablero ("glitter", "DTF-GLI"), el pedido nace con ese. "Normal" suelto no cuenta ("tamaño normal"). Si nombra varios o ninguno, lo define el taller.
+  - **Tablero**: la tarjeta muestra el código; hay filtro "Todos los materiales"; buscar por código o nombre; "Agrupar por material" junta los pedidos del mismo material y "+N con el mismo material" los cuenta.
+  - **Panel del pedido**: desplegable "Material" para definirlo o corregirlo. Queda auditado. Si el pedido pasa a otro sub-servicio, se le quita el material del anterior.
+  - **Producción → Materiales por tablero** (dueño): agregar, activar y desactivar materiales. Desactivado deja de ofrecerse, pero los pedidos que lo tienen lo conservan.
+  - **App, detalle del pedido**: muestra el material.
+- **Cargado**: las nueve opciones de DTF Textil, con códigos provisorios `DTF-NOR`, `DTF-REF`, `DTF-FLU`, `DTF-GLI`, `DTF-DOR`, `DTF-PLA` (Plateado), `DTF-ORO`, `DTF-PLT` (Plata), `DTF-CCH`.
+- **Por qué un catálogo por tablero y no el `Product` que ya existía**: `Product` es el catálogo de stock de la Etapa 3; las opciones de impresión las define cada tablero y las administra el dueño hoy.
+- **Impacto**: migración `20261125030000_sector_variants` (tabla nueva y `JobOrder.variantId`; carga las opciones de DTF Textil). Endpoints: `GET /app/sectors/:code/variants`, `POST /sectors/:id/variants`, `PATCH /variants/:id`, `PATCH /jobs/:id/variant`; `GET /jobs/board` acepta `variant`.
+- **Abierto**: `TODO(spec): I-28`.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

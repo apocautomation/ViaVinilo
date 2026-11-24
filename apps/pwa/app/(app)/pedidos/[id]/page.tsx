@@ -177,6 +177,12 @@ export default function PedidoPage() {
 
         <section className="card card-pad">
           <dl className="kv">
+            {o.material && (
+              <>
+                <dt>Material</dt>
+                <dd>{o.material}</dd>
+              </>
+            )}
             <dt>Medida</dt>
             <dd>{o.measure || "—"}</dd>
             <dt>Precio</dt>

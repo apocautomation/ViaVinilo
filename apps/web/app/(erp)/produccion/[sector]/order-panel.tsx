@@ -22,6 +22,9 @@ interface Detail {
   sector: { code: string; name: string };
   /** Tablero y sub-servicios entre los que se puede mover el pedido (D-082). */
   services: { code: string; name: string }[];
+  /** Material u opción de impresión (D-095). */
+  variant: { id: string; code: string; name: string } | null;
+  variants: { id: string; code: string; name: string }[];
   customer: { id: string; number: number; name: string | null };
   description: string | null;
   measure: string | null;
@@ -327,6 +330,25 @@ export function OrderPanel(props: {
                   {PICKUP_BRANCHES.map((b) => (
                     <option key={b} value={b}>
                       Retira en {PICKUP_LABELS[b]}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            )}
+
+            {(job.variants.length > 0 || job.variant) && (
+              <section className="order-block">
+                <h3>Material</h3>
+                <select
+                  value={job.variant?.id ?? ""}
+                  disabled={busy || job.status === "DELIVERED" || job.status === "CANCELLED"}
+                  aria-label="Material del pedido"
+                  onChange={(e) => void run(() => api(`/jobs/${jobId}/variant`, { method: "PATCH", body: JSON.stringify({ variantId: e.target.value || null }) }))}
+                >
+                  <option value="">Sin definir</option>
+                  {job.variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.code} · {v.name}
                     </option>
                   ))}
                 </select>

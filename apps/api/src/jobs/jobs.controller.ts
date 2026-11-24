@@ -10,6 +10,8 @@ const boardQuerySchema = z.object({
   sector: sectorCodeSchema,
   /** Sub-servicio del tablero (D-082): solo los pedidos de ese sub-servicio. */
   service: sectorCodeSchema.optional(),
+  /** Material u opción de impresión (D-095). */
+  variant: z.string().min(1).optional(),
   machineId: z.string().min(1).optional(),
   materialId: z.string().min(1).optional(),
   q: z.string().trim().min(1).max(100).optional(),
@@ -43,6 +45,7 @@ const byCustomerSchema = z.object({
 });
 const machineSchema = z.object({ machineId: z.string().min(1).nullable() });
 const serviceSchema = z.object({ sector: sectorCodeSchema });
+const variantSchema = z.object({ variantId: z.string().min(1).nullable() });
 const pickupSchema = z.object({ branch: pickupBranchSchema.nullable() });
 const removeSchema = z.object({ reason: z.string().trim().min(3, "Indicá por qué se elimina").max(300) });
 const measureSchema = z.object({ measure: z.string().trim().max(80).transform((v) => v || null) });
@@ -132,6 +135,12 @@ export class JobsController {
   @Patch(":id/measure")
   setMeasure(@Param("id") id: string, @ZodBody(measureSchema) body: { measure: string | null }, @CurrentUser() user: AuthUser) {
     return this.jobs.setMeasure(user, id, body.measure);
+  }
+
+  /** Material u opción de impresión del pedido (D-095). */
+  @Patch(":id/variant")
+  setVariant(@Param("id") id: string, @ZodBody(variantSchema) body: { variantId: string | null }, @CurrentUser() user: AuthUser) {
+    return this.jobs.setVariant(user, id, body.variantId);
   }
 
   /** Sucursal donde retira el cliente (D-083). */

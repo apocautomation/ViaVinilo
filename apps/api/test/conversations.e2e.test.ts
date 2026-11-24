@@ -347,6 +347,28 @@ describe("archivos en Conversaciones (D-062)", () => {
     await prisma.jobOrder.updateMany({ where: { id: { in: [conError.id, impreso.id] } }, data: { deletedAt: new Date() } });
   });
 
+  it("D-095: la app lista los materiales activos del servicio y el pedido nace con el elegido", async () => {
+    const gli = await prisma.sectorVariant.create({ data: { sectorId: dtfId, code: "C-GLI", name: "Glitter", sortOrder: 2 } });
+    await prisma.sectorVariant.create({ data: { sectorId: dtfId, code: "C-NOR", name: "Normal", sortOrder: 1 } });
+    await prisma.sectorVariant.create({ data: { sectorId: dtfId, code: "C-OFF", name: "Viejo", active: false } });
+    const list = await as("customer").get("/app/sectors/DTF/variants");
+    expect(list.body.map((v: { code: string }) => v.code)).toEqual(["C-NOR", "C-GLI"]);
+
+    const res = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").field("variant", gli.id).field("widthCm", "20").field("heightCm", "30").attach("file", pdf, "Glitter.pdf");
+    expect(res.status).toBe(201);
+    const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: res.body.job.id } });
+    expect(job.variantId).toBe(gli.id);
+    expect((await as("customer").get(`/app/jobs/${job.number}`)).body.material).toBe("Glitter");
+    const thread = await as("customer").get("/app/chat");
+    expect(thread.body.messages.at(-1).body).toContain("Material: Glitter");
+
+    const ajeno = await prisma.sector.create({ data: { code: "OTRO_TAB", name: "Otro" } });
+    const ajenoVar = await prisma.sectorVariant.create({ data: { sectorId: ajeno.id, code: "C-AJE", name: "Ajeno" } });
+    const bad = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").field("variant", ajenoVar.id).attach("file", pdf, "Mal.pdf");
+    expect(bad.status).toBe(400);
+    expect(bad.body.message).toBe("Ese material no es de este servicio");
+  });
+
   it("D-062: no acepta archivos que no son de impresión", async () => {
     const res = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").attach("file", Buffer.from("x"), "virus.exe");
     expect(res.status).toBe(422);

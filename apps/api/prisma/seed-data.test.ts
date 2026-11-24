@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SECTOR_CODES } from "@viavinilo/contracts";
-import { FILE_ERROR_REASONS, MACHINES, buildSectors } from "./seed-data";
+import { FILE_ERROR_REASONS, MACHINES, SECTOR_VARIANTS, buildSectors } from "./seed-data";
 
 describe("seed", () => {
   const sectors = buildSectors("ViaVinilo.Test");
@@ -41,5 +41,12 @@ describe("seed", () => {
 
   it("los motivos de error tienen código único", () => {
     expect(new Set(FILE_ERROR_REASONS.map((r) => r.code)).size).toBe(FILE_ERROR_REASONS.length);
+  });
+
+  it("D-095: siembra los materiales de DTF Textil con código único", () => {
+    const dtf = SECTOR_VARIANTS.filter((v) => v.sector === "DTF");
+    expect(dtf).toHaveLength(9);
+    expect(new Set(SECTOR_VARIANTS.map((v) => v.code)).size).toBe(SECTOR_VARIANTS.length);
+    expect(dtf.find((v) => v.name === "Glitter")?.code).toBe("DTF-GLI");
   });
 });

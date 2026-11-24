@@ -91,7 +91,7 @@ export class ConversationFilesService {
 
   // ───────────── Cliente (app) ─────────────
 
-  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector?: SectorCode; job?: number; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number }) {
+  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector?: SectorCode; job?: number; variant?: string; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number }) {
     this.check(file);
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId }, select: { status: true, deletedAt: true } });
     if (!customer || customer.deletedAt) throw new NotFoundException("No encontramos tu cuenta");
@@ -106,6 +106,9 @@ export class ConversationFilesService {
     }
     const sector = chosen?.sector ?? (input.sector ? await this.prisma.sector.findUnique({ where: { code: input.sector } }) : null);
     if (!sector) throw new BadRequestException("Elegí un servicio");
+    // D-095: el material tiene que ser de ese servicio y estar activo.
+    const variant = !chosen && input.variant ? await this.prisma.sectorVariant.findFirst({ where: { id: input.variant, sectorId: sector.id, active: true }, select: { id: true, name: true } }) : null;
+    if (!chosen && input.variant && !variant) throw new BadRequestException("Ese material no es de este servicio");
 
     const conversationId = await this.conversationOf(customerId);
     const stored = await this.store(`app/${customerId}`, file);
@@ -116,6 +119,7 @@ export class ConversationFilesService {
     const measure = input.widthCm && input.heightCm ? `${cm(input.widthCm)} x ${cm(input.heightCm)} cm` : null;
     const copies = input.copies ? `${input.copies} ${input.copies === 1 ? "copia" : "copias"}` : null;
     const summary = [measure, copies].filter(Boolean).join(" · ");
+    const materialLine = () => (variant ? `Material: ${variant.name}` : "");
     const specs = {
       channel: "app",
       note,
@@ -183,6 +187,7 @@ export class ConversationFilesService {
           status: "RECEIVED",
           source: "API",
           pickupBranch: input.pickupBranch ?? null,
+          variantId: variant?.id ?? null,
           sourceMessageId: `app:${attachment.key}`,
           description: ([summary, note].filter(Boolean).join(" · ") || attachment.name).replace(/\s*\n\s*/g, " · ").slice(0, 200),
           measure,
@@ -194,7 +199,7 @@ export class ConversationFilesService {
         },
         select: { id: true, number: true },
       });
-      const body = [summary ? `Medida y cantidad: ${summary}` : "", note ?? (summary ? "" : `Te mando el archivo para ${sector.name}.`)].filter(Boolean).join("\n");
+      const body = [materialLine(), summary ? `Medida y cantidad: ${summary}` : "", note ?? (summary ? "" : `Te mando el archivo para ${sector.name}.`)].filter(Boolean).join("\n");
       const msg = await tx.message.create({
         data: { conversationId, direction: "IN", channel: "APP", body, attachments: [attachment] as unknown as Prisma.InputJsonValue, jobId: job.id },
         select: { id: true, direction: true, channel: true, subject: true, body: true, attachments: true, createdAt: true, fromBot: true, jobId: true },

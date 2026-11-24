@@ -25,10 +25,16 @@ import { SectorAccess } from "./sector-access";
 
 const BUSINESS_TZ = "America/Argentina/Salta";
 
+/** Con qué se agrupan los pedidos del mismo material (D-095): la opción elegida o, si no, el producto. */
+const materialKey = (r: { variantId: string | null; materialProductId: string | null }) =>
+  r.variantId ? `v:${r.variantId}` : r.materialProductId ? `p:${r.materialProductId}` : null;
+
 export interface BoardQuery {
   sector: SectorCode;
   /** Sub-servicio del tablero (D-082). */
   service?: SectorCode;
+  /** Material u opción de impresión (D-095). */
+  variant?: string;
   machineId?: string;
   materialId?: string;
   q?: string;
@@ -61,6 +67,8 @@ const cardInclude = {
   customer: { select: { id: true, customerNumber: true, firstName: true, lastName: true, status: true } },
   machine: { select: { id: true, name: true } },
   material: { select: { id: true, name: true } },
+  /** Material u opción de impresión con su código (D-095). */
+  variant: { select: { id: true, code: true, name: true } },
   /** D-082: para decir de qué sub-servicio es el pedido en el tablero del padre. */
   sector: { select: { id: true, code: true, name: true, parentId: true } },
   _count: { select: { files: true } },
@@ -134,11 +142,13 @@ export class JobsService {
       fileCheck: row.fileCheck as { verdict: string; detail: string; hint?: string; linkNote?: string } | null,
       linkCount: row.externalLinks.length,
       machine: row.machine,
-      material: row.material,
+      // D-095: el material del pedido es la opción elegida; el producto queda para la E3.
+      material: row.variant ? { id: row.variant.id, name: row.variant.name } : row.material,
+      variant: row.variant,
       /** Sub-servicio del pedido (D-082): Látex, Ecosolvente… null si entró al tablero general. */
       service: row.sector.parentId ? { code: row.sector.code, name: row.sector.name } : null,
       /** Otras órdenes pendientes del mismo material: candidatas a imprimir juntas (E1.4). */
-      sameMaterialCount: row.materialProductId ? (sameMaterial.get(row.materialProductId) ?? 1) - 1 : 0,
+      sameMaterialCount: materialKey(row) ? (sameMaterial.get(materialKey(row)!) ?? 1) - 1 : 0,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       next: allowed.next,
@@ -432,6 +442,7 @@ export class JobsService {
       ],
       ...(query.machineId ? { machineId: query.machineId } : {}),
       ...(query.materialId ? { materialProductId: query.materialId } : {}),
+      ...(query.variant ? { variantId: query.variant } : {}),
     };
     if (query.date) {
       const from = new Date(`${query.date}T00:00:00-03:00`);
@@ -446,6 +457,8 @@ export class JobsService {
             ...(n ? [{ number: n }, { customer: { customerNumber: n } }] : []),
             { customer: { AND: terms.map((t) => ({ searchText: { contains: t } })) } },
             { customer: { emails: { some: { email: { contains: query.q.trim().toLowerCase() } } } } },
+            // D-095: también por el código o el nombre del material ("DTF-GLI", "glitter").
+            { variant: { OR: [{ code: query.q.trim().toUpperCase() }, { name: { contains: query.q.trim(), mode: "insensitive" } }] } },
           ],
         },
       ];
@@ -456,7 +469,7 @@ export class JobsService {
       include: cardInclude,
       // Por defecto, por orden de llegada (E1.4).
       orderBy: query.groupByMaterial
-        ? [{ materialProductId: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }]
+        ? [{ variantId: { sort: "asc", nulls: "last" } }, { materialProductId: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }]
         : { createdAt: "asc" },
       take: 1000,
     });
@@ -464,8 +477,9 @@ export class JobsService {
     const pendingBeforePrint = new Set<JobStatus>(["RECEIVED", "QUOTED", "DEPOSIT_RECEIVED"]);
     const sameMaterial = new Map<string, number>();
     for (const r of rows) {
-      if (r.materialProductId && pendingBeforePrint.has(r.status)) {
-        sameMaterial.set(r.materialProductId, (sameMaterial.get(r.materialProductId) ?? 0) + 1);
+      const key = materialKey(r);
+      if (key && pendingBeforePrint.has(r.status)) {
+        sameMaterial.set(key, (sameMaterial.get(key) ?? 0) + 1);
       }
     }
 
@@ -475,6 +489,12 @@ export class JobsService {
 
     return {
       sector: { id: sector.id, code: sector.code, name: sector.name },
+      /** Materiales de los tableros que se ven, para filtrar (D-095). */
+      variants: await this.prisma.sectorVariant.findMany({
+        where: { active: true, sectorId: { in: family.map((f) => f.id) } },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: { id: true, code: true, name: true },
+      }),
       /** Sub-servicios del tablero que ve este usuario (D-082). Vacío si el tablero no tiene. */
       services: family.filter((f) => f.id !== sector.id).map((f) => ({ code: f.code, name: f.name })),
       machines: sector.machines.map((m) => ({ id: m.machine.id, name: m.machine.name })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -552,7 +572,7 @@ export class JobsService {
       // fileCheck en null: el mínimo de resolución puede ser otro, se vuelve a controlar.
       await tx.jobOrder.update({
         where: { id },
-        data: { sectorId: target.id, ...(keepsMachine ? {} : { machineId: null }), ...(job.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}) },
+        data: { sectorId: target.id, ...(keepsMachine ? {} : { machineId: null }), variantId: null, ...(job.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}) },
       });
       await this.audit.log({ entity: "JobOrder", entityId: id, action: "service", userId: user.id, before: { sector: job.sector.code }, after: { sector: target.code } }, tx);
     });
@@ -580,6 +600,12 @@ export class JobsService {
     return {
       ...this.toCard(job, sequence, new Map()),
       sector: { id: job.sector.id, code: job.sector.code, name: job.sector.name },
+      /** Materiales del tablero del pedido, para elegir o corregir (D-095). */
+      variants: await this.prisma.sectorVariant.findMany({
+        where: { sectorId: job.sectorId, OR: [{ active: true }, { id: job.variantId ?? "" }] },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: { id: true, code: true, name: true },
+      }),
       /** Tablero y sub-servicios entre los que se puede mover el pedido (D-082). */
       services: family.length > 1 ? family.map((f) => ({ code: f.code, name: f.id === rootId ? `${f.name} (sin sub-servicio)` : f.name })) : [],
       requestedSpecs: job.requestedSpecs,
@@ -700,6 +726,22 @@ export class JobsService {
       );
     });
     return { ok: true, label: formatJobNumber(job.number) };
+  }
+
+  /** Material u opción de impresión del pedido (D-095). Tiene que ser del tablero del pedido; queda auditado. */
+  async setVariant(user: AuthUser, id: string, variantId: string | null) {
+    const job = await this.prisma.jobOrder.findFirst({ where: { id, deletedAt: null }, include: { variant: { select: { code: true } } } });
+    if (!job) throw new NotFoundException("No encontramos esa orden");
+    await this.access.assert(user, job.sectorId);
+    const variant = variantId ? await this.prisma.sectorVariant.findFirst({ where: { id: variantId, sectorId: job.sectorId } }) : null;
+    if (variantId && !variant) throw new BadRequestException("Ese material no es de este tablero");
+    if (job.variantId !== (variant?.id ?? null)) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.jobOrder.update({ where: { id }, data: { variantId: variant?.id ?? null } });
+        await this.audit.log({ entity: "JobOrder", entityId: id, action: "variant", userId: user.id, before: { variant: job.variant?.code ?? null }, after: { variant: variant?.code ?? null } }, tx);
+      });
+    }
+    return this.detail(user, id);
   }
 
   /**

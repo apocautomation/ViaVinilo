@@ -629,6 +629,22 @@ describe("criterio de aceptación de la E1 (SPEC §5)", () => {
   }, 300_000);
 });
 
+describe("material elegido en el mail (D-095)", () => {
+  it("D-095: si el mail nombra un material del tablero, el pedido nace con ese material; si nombra varios o ninguno, sin material", async () => {
+    const gli = await prisma.sectorVariant.create({ data: { sectorId: dtf.id, code: "W-GLI", name: "Glitter" } });
+    await prisma.sectorVariant.create({ data: { sectorId: dtf.id, code: "W-REF", name: "Reflectivo" } });
+    const send = async (subject: string, text: string) => {
+      const id = nextId();
+      const raw = await buildMail({ from: "juan@remeras.test", to: "dtf@viavinilo.test", subject, text, messageId: id, attachments: [fakePdf(`v-${id.replace(/\W/g, "")}.pdf`)] });
+      const out = await ingestMail(deps(), dtf, raw);
+      return (await prisma.jobOrder.findUniqueOrThrow({ where: { id: out.jobId! } })).variantId;
+    };
+    expect(await send("Remeras glitter", "58 x 100 cm")).toBe(gli.id);
+    expect(await send("Remeras", "glitter o reflectivo, lo que tengan")).toBeNull();
+    expect(await send("Remeras", "58 x 100 cm")).toBeNull();
+  });
+});
+
 describe("sub-servicios sin casilla (D-092)", () => {
   let eco: Sector;
   let latex: Sector;

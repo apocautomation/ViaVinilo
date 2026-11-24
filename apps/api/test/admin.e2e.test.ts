@@ -110,6 +110,22 @@ describe("Configuración: permiso para ver los totales (D-089)", () => {
   });
 });
 
+describe("materiales por tablero (D-095)", () => {
+  it("D-095: el dueño agrega, renombra y desactiva materiales; el código no se repite; queda auditado", async () => {
+    expect((await as("attention").post(`/sectors/${dtfId}/variants`, { code: "A-GLI", name: "Glitter" })).status).toBe(403);
+    const created = await as("owner").post(`/sectors/${dtfId}/variants`, { code: "a-gli", name: "Glitter" });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ code: "A-GLI", name: "Glitter", active: true });
+    expect((await as("owner").post(`/sectors/${dtfId}/variants`, { code: "A-GLI", name: "Otro" })).status).toBe(409);
+    const off = await as("owner").patch(`/variants/${created.body.id}`, { active: false, name: "Glitter fino" });
+    expect(off.body).toMatchObject({ active: false, name: "Glitter fino" });
+    const all = await as("owner").get("/sectors/all");
+    expect(all.body.find((s: { id: string }) => s.id === dtfId).variants.map((v: { code: string }) => v.code)).toContain("A-GLI");
+    const audit = await prisma.auditLog.findFirst({ where: { entity: "SectorVariant", entityId: created.body.id, action: "update" } });
+    expect(audit).toMatchObject({ before: { active: true }, after: { active: false, name: "Glitter fino" } });
+  });
+});
+
 describe("Configuración: máquinas y motivos de error (D-067)", () => {
   it("D-067: el dueño crea una máquina para un tablero y la desactiva", async () => {
     const created = await as("owner").post("/admin/machines", { name: "DTF 60 nueva", sectorIds: [dtfId] });
