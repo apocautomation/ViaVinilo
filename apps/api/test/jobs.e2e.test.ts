@@ -95,8 +95,8 @@ describe("tablero de producción (E1.4)", () => {
   it("muestra las columnas de la secuencia del sector, con 'Archivo con error' después de 'Archivo recibido'", async () => {
     const res = await http("production").get("/jobs/board?sector=DTF");
     expect(res.status).toBe(200);
-    expect(res.body.columns.map((c: { status: string }) => c.status)).toEqual([
-      "RECEIVED", "FILE_ERROR", "QUOTED", "DEPOSIT_RECEIVED", "PRINTED", "READY", "DELIVERED",
+    expect(res.body.columns.map((c: { key: string }) => c.key)).toEqual([
+      "RECEIVED", "FILE_ERROR", "QUOTED", "AWAITING_DEPOSIT", "DEPOSIT_RECEIVED", "PRINTED", "READY", "DELIVERED",
     ]);
     expect(res.body.columns[0].label).toBe("Archivo recibido");
     expect(res.body.machines).toHaveLength(5);
@@ -202,6 +202,28 @@ describe("cambios de estado", () => {
     const board = await http("production").get("/jobs/board?sector=DTF");
     const card = board.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards).find((c: { id: string }) => c.id === job.id);
     expect(card).toMatchObject({ depositRequired: true, depositAmount: "10000" });
+  });
+
+  it("D-081: el cotizado con seña pendiente va a la columna 'Esperando seña'; sin seña queda en 'Cotizado'", async () => {
+    const conSena = await newJob();
+    const sinSena = await newJob();
+    await http("production").post(`/jobs/${conSena.id}/transition`, { to: "QUOTED", quotedAmount: "20.000", depositAmount: "10.000" });
+    await http("production").post(`/jobs/${sinSena.id}/transition`, { to: "QUOTED", quotedAmount: "20.000" });
+    const ids = async (key: string) => {
+      const board = await http("production").get("/jobs/board?sector=DTF");
+      const col = board.body.columns.find((c: { key: string }) => c.key === key);
+      return { label: col.label as string, status: col.status as string, ids: col.cards.map((c: { id: string }) => c.id) as string[] };
+    };
+    const waiting = await ids("AWAITING_DEPOSIT");
+    expect(waiting).toMatchObject({ label: "Esperando seña", status: "QUOTED" });
+    expect(waiting.ids).toContain(conSena.id);
+    expect(waiting.ids).not.toContain(sinSena.id);
+    expect((await ids("QUOTED")).ids).toContain(sinSena.id);
+    expect((await ids("QUOTED")).ids).not.toContain(conSena.id);
+    // Al registrar la seña sale de la columna.
+    await http("production").post(`/jobs/${conSena.id}/transition`, { to: "DEPOSIT_RECEIVED" });
+    expect((await ids("AWAITING_DEPOSIT")).ids).not.toContain(conSena.id);
+    expect((await ids("DEPOSIT_RECEIVED")).ids).toContain(conSena.id);
   });
 
   it("D-079: cotizar sin seña deja el pedido listo para imprimir, aunque antes la pidiera", async () => {
