@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import { mkdir, open, readFile, rm, statfs, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
@@ -68,6 +69,9 @@ export class LocalDiskStorage implements FileStorage {
     const hash = createHash("sha256");
     const reader = body.getReader();
     let size = 0;
+    // Un solo aviso de error para toda la escritura: sin esto, un error del disco fuera de una espera tira el worker.
+    let failed: Error | null = null;
+    out.on("error", (err) => (failed = err));
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -76,7 +80,9 @@ export class LocalDiskStorage implements FileStorage {
         if (opts.maxBytes !== undefined && size > opts.maxBytes) throw new StorageFullError();
         hash.update(value);
         // Si el disco va más lento que la red, se espera: así no se acumula en memoria.
-        if (!out.write(value)) await new Promise<void>((ok, fail) => (out.once("drain", ok), out.once("error", fail)));
+        // `once` saca sus avisos al terminar: antes quedaba uno colgado por cada espera.
+        if (!out.write(value)) await once(out, "drain");
+        if (failed) throw failed;
       }
       await new Promise<void>((ok, fail) => out.end((err?: Error | null) => (err ? fail(err) : ok())));
       return { size, checksum: hash.digest("hex") };
