@@ -2,42 +2,31 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlertTriangle, ClipboardList, Factory, PackageCheck } from "lucide-react";
-import { JOB_STATUS_LABELS, type JobStatus } from "@viavinilo/contracts";
-import { api } from "../../lib/api";
-import { Badge, Kpi, PageHead } from "../ui";
+import { AlertTriangle, Banknote, ClipboardList, Factory, FileWarning, HandCoins, Hourglass, PackageCheck, Receipt, Truck } from "lucide-react";
+import { JOB_STATUS_LABELS, parseSaltaDateTime, type JobStatus } from "@viavinilo/contracts";
+import { api, ApiError } from "../../lib/api";
+import { Badge, Kpi, PageHead, ars } from "../ui";
 
-/** Igual que el tablero (D-030): más de 2 h en el mismo paso es una demora. */
 /** Límite de "demorado" mientras carga el configurado (Configuración → Avisos). */
 const DEFAULT_LATE_HOURS = 24;
 
-interface Card {
-  id: string;
-  number: number;
-  status: JobStatus;
-  customer: { name: string | null };
-  createdAt: string;
-  updatedAt: string;
+interface Counts {
+  toQuote: number;
+  fileError: number;
+  waitingDeposit: number;
+  inProduction: number;
+  ready: number;
 }
-interface Board {
-  sector: { code: string; name: string };
-  columns: { status: JobStatus; cards: Card[] }[];
+interface Summary {
+  from: string;
+  to: string;
+  period: { entered: number; delivered: number };
+  now: Counts;
+  perBoard: ({ code: string; name: string } & Counts)[];
+  canSeeAmounts: boolean;
+  amounts: { quoted: string; quotedCount: number; delivered: string; deposits: string } | null;
+  conversations: { unread: number; latest: { id: string; name: string; preview: string | null; at: string | null; unread: number }[] } | null;
 }
-
-/** Agrupa los estados en las 4 franjas del gráfico. */
-const BAND: Partial<Record<JobStatus, "received" | "quoted" | "printing" | "ready">> = {
-  PENDING_SIGNUP: "received",
-  RECEIVED: "received",
-  FILE_ERROR: "received",
-  QUOTED: "quoted",
-  DEPOSIT_RECEIVED: "quoted",
-  PRINTED: "printing",
-  CALENDERING: "printing",
-  READY: "ready",
-};
-
-const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
-
 interface LateJob {
   id: string;
   number: string;
@@ -47,6 +36,39 @@ interface LateJob {
   hours: number;
 }
 
+/** Franjas del gráfico, en el orden del proceso. */
+const BANDS: { key: keyof Counts; label: string; color: string }[] = [
+  { key: "toQuote", label: "Para cotizar", color: "var(--color-brand-500)" },
+  { key: "fileError", label: "Con error", color: "var(--color-danger)" },
+  { key: "waitingDeposit", label: "Esperando seña", color: "var(--color-warning)" },
+  { key: "inProduction", label: "En producción", color: "var(--color-navy-500)" },
+  { key: "ready", label: "Listo", color: "var(--color-success-500)" },
+];
+
+const TZ = "America/Argentina/Salta";
+const isoDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
+const showDay = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+const when = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+const PRESETS = [
+  { value: "today", label: "Hoy" },
+  { value: "7", label: "7 días" },
+  { value: "30", label: "30 días" },
+  { value: "month", label: "Este mes" },
+  { value: "custom", label: "Elegir fechas" },
+] as const;
+type Preset = (typeof PRESETS)[number]["value"];
+
+function rangeOf(preset: Preset, custom: { from: string; to: string }): { from: string; to: string } | null {
+  const today = isoDay(new Date());
+  if (preset === "today") return { from: today, to: today };
+  if (preset === "7" || preset === "30") return { from: isoDay(new Date(Date.now() - (Number(preset) - 1) * 864e5)), to: today };
+  if (preset === "month") return { from: `${today.slice(0, 8)}01`, to: today };
+  const from = parseSaltaDateTime(custom.from)?.slice(0, 10);
+  const to = parseSaltaDateTime(custom.to || custom.from)?.slice(0, 10);
+  return from && to && from <= to ? { from, to } : null;
+}
+
 /** 3,5 → "3 h 30 min"; 30 → "1 d 6 h". */
 function hoursText(hours: number): string {
   const min = Math.round(hours * 60);
@@ -54,95 +76,173 @@ function hoursText(hours: number): string {
   return `${Math.floor(min / (24 * 60))} d ${Math.floor((min % (24 * 60)) / 60)} h`;
 }
 
-/** Inicio con los datos reales de los tableros (D-045): sin datos de ejemplo. */
+/**
+ * Inicio (D-089). Separa dos cosas que antes estaban mezcladas: la foto del taller ahora (cuántos
+ * pedidos hay en cada paso) y los números del período elegido (entraron, se entregaron y, para quien
+ * tiene permiso, los totales en pesos). Los cálculos los hace la API.
+ */
 export default function InicioPage() {
-  const [boards, setBoards] = useState<Board[] | null>(null);
+  const [preset, setPreset] = useState<Preset>("today");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+  const [sector, setSector] = useState("");
+  const [sectors, setSectors] = useState<{ code: string; name: string }[]>([]);
+  const [data, setData] = useState<Summary | null>(null);
+  const [error, setError] = useState("");
   const [lateHours, setLateHours] = useState(DEFAULT_LATE_HOURS);
   const [late, setLate] = useState<LateJob[]>([]);
   const [lateTotal, setLateTotal] = useState(0);
 
   useEffect(() => {
-    api<{ code: string }[]>("/sectors")
-      .then((sectors) => Promise.all(sectors.map((s) => api<Board>(`/jobs/board?sector=${s.code}`))))
-      .then(setBoards)
-      .catch(() => setBoards([]));
+    api<{ code: string; name: string }[]>("/sectors").then(setSectors).catch(() => undefined);
     // Mismo cálculo que el Panel de tiempos: mismo límite y misma forma de contar las horas (D-073).
     api<{ delayedHours: number; totals: { delayed: number }; delayed: LateJob[] }>("/jobs/times?days=1")
       .then((r) => (setLateHours(r.delayedHours), setLate(r.delayed), setLateTotal(r.totals.delayed)))
       .catch(() => undefined);
   }, []);
 
-  const cards = (boards ?? []).flatMap((b) =>
-    b.columns.flatMap((c) => c.cards.map((card) => ({ ...card, sector: b.sector.name }))),
-  );
-  const active = cards.filter((c) => BAND[c.status]);
-  const perSector = (boards ?? []).map((b) => {
-    const counts = { received: 0, quoted: 0, printing: 0, ready: 0 };
-    for (const col of b.columns) {
-      const band = BAND[col.status];
-      if (band) counts[band] += col.cards.length;
-    }
-    return { name: b.sector.name, ...counts };
-  });
-  const max = Math.max(1, ...perSector.map((s) => s.received + s.quoted + s.printing + s.ready));
-  const loading = boards === null;
-  const n = (v: number) => (loading ? "…" : String(v));
+  const range = rangeOf(preset, custom);
+  const rangeKey = range ? `${range.from}|${range.to}` : "";
+  useEffect(() => {
+    if (!rangeKey) return;
+    const [from, to] = rangeKey.split("|") as [string, string];
+    const params = new URLSearchParams({ from, to });
+    if (sector) params.set("sector", sector);
+    let cancelled = false;
+    api<Summary>(`/jobs/summary?${params}`)
+      .then((d) => !cancelled && (setData(d), setError("")))
+      .catch((e: unknown) => !cancelled && setError(e instanceof ApiError ? e.message : "No pudimos cargar el resumen"));
+    return () => {
+      cancelled = true;
+    };
+  }, [rangeKey, sector]);
+
+  const n = (v: number | undefined) => (data ? String(v ?? 0) : "…");
+  const money = (v: string | undefined) => (data ? ars.format(Number(v ?? 0)) : "…");
+  const periodLabel = data ? (data.from === data.to ? showDay(data.from) : `${showDay(data.from)} al ${showDay(data.to)}`) : "";
+  const totalOf = (c: Counts) => c.toQuote + c.fileError + c.waitingDeposit + c.inProduction + c.ready;
+  const max = Math.max(1, ...(data?.perBoard.map(totalOf) ?? []));
 
   return (
     <div className="page">
       <PageHead
         title="Inicio"
-        help="Resumen del día con los datos reales de los tableros: pedidos que entraron hoy, en producción, listos para retirar y trabajos demorados (el límite de horas se cambia en Configuración)."
+        help="Arriba, cómo está el taller en este momento: cuántos pedidos hay en cada paso. Abajo, los números del período que elijas: cuántos entraron y cuántos se entregaron. Los totales en pesos los ve el dueño y quien tenga el permiso en Configuración → Usuarios."
       />
 
-      <div className="kpis">
-        <Kpi label="Pedidos de hoy" value={n(cards.filter((c) => isToday(c.createdAt)).length)} icon={ClipboardList} />
-        <Kpi label="En producción" value={n(active.filter((c) => c.status !== "READY").length)} icon={Factory} />
-        <Kpi label="Listos para retirar" value={n(active.filter((c) => c.status === "READY").length)} icon={PackageCheck} />
-        <Kpi label="Demorados" value={n(lateTotal)} icon={AlertTriangle} foot={`más de ${lateHours} h en el mismo paso`} />
+      <div className="filters" style={{ padding: 0 }}>
+        <div className="seg">
+          {PRESETS.map((p) => (
+            <button key={p.value} aria-pressed={preset === p.value} onClick={() => setPreset(p.value)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {preset === "custom" && (
+          <>
+            <input value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} placeholder="Desde · 01/11/2026" maxLength={10} inputMode="numeric" aria-label="Desde" style={{ width: 150 }} />
+            <input value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} placeholder="Hasta · 24/11/2026" maxLength={10} inputMode="numeric" aria-label="Hasta" style={{ width: 150 }} />
+          </>
+        )}
+        <select value={sector} onChange={(e) => setSector(e.target.value)} aria-label="Sector">
+          <option value="">Todos los sectores</option>
+          {sectors.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        {preset === "custom" && !range && <span className="muted" style={{ fontSize: 13 }}>Escribí las fechas como día/mes/año.</span>}
       </div>
+      {error && <p className="error">{error}</p>}
+
+      <h2 className="home-title">En el taller ahora</h2>
+      <div className="kpis">
+        <Kpi label="Para cotizar" value={n(data?.now.toQuote)} icon={ClipboardList} foot="archivo recibido, sin precio" />
+        <Kpi label="Con error de archivo" value={n(data?.now.fileError)} icon={FileWarning} foot="esperando al cliente" />
+        <Kpi label="Esperando seña" value={n(data?.now.waitingDeposit)} icon={Hourglass} foot="cotizados, sin seña" />
+        <Kpi label="En producción" value={n(data?.now.inProduction)} icon={Factory} foot="cotizados o con seña, hasta terminar" />
+        <Kpi label="Listos para retirar" value={n(data?.now.ready)} icon={PackageCheck} />
+        <Kpi label="Demorados" value={String(lateTotal)} icon={AlertTriangle} foot={`más de ${lateHours} h en el mismo paso`} />
+      </div>
+
+      <h2 className="home-title">
+        Período <span className="muted">· {periodLabel}</span>
+      </h2>
+      <div className="kpis">
+        <Kpi label="Pedidos que entraron" value={n(data?.period.entered)} icon={ClipboardList} />
+        <Kpi label="Pedidos entregados" value={n(data?.period.delivered)} icon={Truck} />
+        {data?.canSeeAmounts && (
+          <>
+            <Kpi label="Total entregado" value={money(data.amounts?.delivered)} icon={Receipt} foot="precio de los pedidos entregados" />
+            <Kpi label="Total cotizado" value={money(data.amounts?.quoted)} icon={Banknote} foot={`${data.amounts?.quotedCount ?? 0} pedidos cotizados`} />
+            <Kpi label="Señas registradas" value={money(data.amounts?.deposits)} icon={HandCoins} />
+          </>
+        )}
+      </div>
+      {data?.canSeeAmounts && (
+        <p className="muted" style={{ fontSize: 12.5, margin: "-4px 0 0" }}>
+          Los totales salen de los precios cotizados. Todavía no hay facturación ni registro de cobros (Etapa 3), así que «Total entregado» es lo que corresponde facturar, no lo cobrado.
+        </p>
+      )}
 
       <div className="grid-2">
         <section className="panel">
           <div className="panel-head">
-            <h2>Producción por sector</h2>
+            <h2>Pedidos en curso por sector</h2>
             <div className="chips">
-              <span className="chip"><i style={dot("var(--color-brand-500)")} /> Recibido</span>
-              <span className="chip"><i style={dot("var(--color-accent-500)")} /> Cotizado</span>
-              <span className="chip"><i style={dot("var(--color-navy-500)")} /> Impreso</span>
-              <span className="chip"><i style={dot("var(--color-success-500)")} /> Listo</span>
+              {BANDS.map((b) => (
+                <span key={b.key} className="chip">
+                  <i style={dot(b.color)} /> {b.label}
+                </span>
+              ))}
             </div>
           </div>
           <div className="panel-body" style={{ display: "grid", gap: 14 }}>
-            {perSector.map((s) => {
-              const total = s.received + s.quoted + s.printing + s.ready;
+            {data?.perBoard.map((s) => {
+              const total = totalOf(s);
               return (
-                <div key={s.name} style={{ display: "grid", gridTemplateColumns: "110px 1fr 40px", gap: 12, alignItems: "center" }}>
+                <Link key={s.code} href={`/produccion/${s.code}`} style={{ display: "grid", gridTemplateColumns: "110px 1fr 40px", gap: 12, alignItems: "center", color: "inherit", textDecoration: "none" }}>
                   <strong style={{ fontSize: 13 }}>{s.name}</strong>
-                  <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", background: "var(--color-neutral-100)", width: total ? `${(total / max) * 100}%` : "100%" }}>
-                    <span style={{ flex: s.received, background: "var(--color-brand-500)" }} />
-                    <span style={{ flex: s.quoted, background: "var(--color-accent-500)" }} />
-                    <span style={{ flex: s.printing, background: "var(--color-navy-500)" }} />
-                    <span style={{ flex: s.ready, background: "var(--color-success-500)" }} />
+                  <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", background: "var(--color-neutral-100)", width: total ? `${Math.max(4, (total / max) * 100)}%` : "100%" }}>
+                    {BANDS.map((b) => (
+                      <span key={b.key} title={`${b.label}: ${s[b.key]}`} style={{ flex: s[b.key], background: b.color }} />
+                    ))}
                   </div>
                   <span className="mono" style={{ textAlign: "right", color: "var(--color-text)" }}>{total}</span>
-                </div>
+                </Link>
               );
             })}
-            {!loading && perSector.length === 0 && <div className="empty">No hay sectores para mostrar.</div>}
+            {data && data.perBoard.length === 0 && <div className="empty">No hay sectores para mostrar.</div>}
           </div>
         </section>
 
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Conversaciones</h2>
-            <Link href="/ventas/conversaciones" style={{ fontSize: 12.5, fontWeight: 600 }}>Ver todas</Link>
-          </div>
-          <div className="empty" style={{ padding: 32 }}>
-            Todavía no hay conversaciones. Acá van a aparecer los mensajes del chat de la app y los mails de las casillas
-            de cada sector.
-          </div>
-        </section>
+        {data?.conversations && (
+          <section className="panel">
+            <div className="panel-head">
+              <h2>
+                Conversaciones sin leer {data.conversations.unread > 0 && <Badge tone="warn">{data.conversations.unread}</Badge>}
+              </h2>
+              <Link href="/ventas/conversaciones" style={{ fontSize: 12.5, fontWeight: 600 }}>Ver todas</Link>
+            </div>
+            {data.conversations.latest.length === 0 ? (
+              <div className="empty" style={{ padding: 32 }}>No hay conversaciones sin leer.</div>
+            ) : (
+              <ul className="home-chats">
+                {data.conversations.latest.map((c) => (
+                  <li key={c.id}>
+                    <Link href="/ventas/conversaciones">
+                      <span className="home-chat-top">
+                        <strong>{c.name}</strong>
+                        <small className="muted">{c.at ? when.format(new Date(c.at)) : ""}</small>
+                      </span>
+                      <span className="home-chat-preview">{c.preview || "—"}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
 
       <section className="panel">
@@ -171,7 +271,7 @@ export default function InicioPage() {
                   <td className="num"><Badge tone="warn">{hoursText(l.hours)}</Badge></td>
                 </tr>
               ))}
-              {!loading && late.length === 0 && (
+              {late.length === 0 && (
                 <tr>
                   <td colSpan={5}>
                     <div className="empty" style={{ padding: 24 }}>No hay trabajos demorados.</div>

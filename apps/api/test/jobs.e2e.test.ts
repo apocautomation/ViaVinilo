@@ -344,6 +344,74 @@ describe("eliminar un pedido (D-088)", () => {
   });
 });
 
+describe("resumen de Inicio (D-089)", () => {
+  it("D-089: separa la foto del taller de los números del período, y cuenta cada pedido en su tablero raíz", async () => {
+    const before = (await http("owner").get("/jobs/summary")).body;
+    const paraCotizar = await newJob("LATEX");
+    const conError = await newJob("DTF", { status: "FILE_ERROR" });
+    const esperaSena = await newJob("DTF");
+    await http("owner").post(`/jobs/${esperaSena.id}/transition`, { to: "QUOTED", quotedAmount: "30.000", depositAmount: "15.000" });
+    const enProduccion = await newJob("DTF");
+    await http("owner").post(`/jobs/${enProduccion.id}/transition`, { to: "QUOTED", quotedAmount: "10.000" });
+    expect(paraCotizar.id && conError.id).toBeTruthy();
+
+    const res = await http("owner").get("/jobs/summary");
+    expect(res.status).toBe(200);
+    const d = res.body;
+    expect(d.now.toQuote - before.now.toQuote).toBe(1);
+    expect(d.now.fileError - before.now.fileError).toBe(1);
+    expect(d.now.waitingDeposit - before.now.waitingDeposit).toBe(1);
+    expect(d.now.inProduction - before.now.inProduction).toBe(1);
+    expect(d.period.entered - before.period.entered).toBe(4);
+    // Látex suma en Gran Formato, y los sub-servicios no aparecen sueltos.
+    const board = (code: string, body = d) => body.perBoard.find((b: { code: string }) => b.code === code);
+    expect(board("GRAN_FORMATO").toQuote - board("GRAN_FORMATO", before).toQuote).toBe(1);
+    expect(board("LATEX")).toBeUndefined();
+    // Totales del período: lo cotizado hoy.
+    expect(d.canSeeAmounts).toBe(true);
+    expect(Number(d.amounts.quoted) - Number(before.amounts.quoted)).toBe(40000);
+
+    const soloGf = await http("owner").get("/jobs/summary?sector=GRAN_FORMATO");
+    expect(soloGf.body.perBoard.map((b: { code: string }) => b.code)).toEqual(["GRAN_FORMATO"]);
+    // Un período sin movimiento no trae pedidos, pero la foto del taller es la misma.
+    const viejo = await http("owner").get("/jobs/summary?from=2020-01-01&to=2020-01-31");
+    expect(viejo.body.period).toEqual({ entered: 0, delivered: 0 });
+    expect(viejo.body.amounts).toMatchObject({ quoted: "0", delivered: "0", deposits: "0" });
+    expect(viejo.body.now).toEqual(d.now);
+    expect((await http("owner").get("/jobs/summary?from=2026-12-01&to=2026-11-01")).status).toBe(400);
+  });
+
+  it("D-089: los totales en pesos y el total entregado solo los ve el dueño o quien tiene el permiso", async () => {
+    const job = await newJob();
+    await http("owner").post(`/jobs/${job.id}/transition`, { to: "QUOTED", quotedAmount: "50.000", depositAmount: "20.000" });
+    for (const to of ["DEPOSIT_RECEIVED", "PRINTED", "READY", "DELIVERED"]) await http("owner").post(`/jobs/${job.id}/transition`, { to });
+    const owner = (await http("owner").get("/jobs/summary")).body;
+    expect(Number(owner.amounts.delivered)).toBeGreaterThanOrEqual(50000);
+    expect(Number(owner.amounts.deposits)).toBeGreaterThanOrEqual(20000);
+    expect(owner.period.delivered).toBeGreaterThanOrEqual(1);
+
+    const att = (await http("attention").get("/jobs/summary")).body;
+    expect(att.canSeeAmounts).toBe(false);
+    expect(att.amounts).toBeNull();
+    expect(att.period.delivered).toBe(owner.period.delivered);
+    expect(att.conversations).not.toBeNull();
+
+    const attention = await prisma.user.findUniqueOrThrow({ where: { email: "asesor@vv.test" } });
+    await prisma.user.update({ where: { id: attention.id }, data: { canSeeBilling: true } });
+    const allowed = (await http("attention").get("/jobs/summary")).body;
+    expect(allowed.canSeeAmounts).toBe(true);
+    expect(allowed.amounts.delivered).toBe(owner.amounts.delivered);
+    await prisma.user.update({ where: { id: attention.id }, data: { canSeeBilling: false } });
+  });
+
+  it("D-089 y D-017: producción ve el resumen solo de sus sectores y sin conversaciones", async () => {
+    const res = (await http("production").get("/jobs/summary")).body;
+    expect(res.perBoard.map((b: { code: string }) => b.code)).toEqual(["DTF"]);
+    expect(res.amounts).toBeNull();
+    expect(res.conversations).toBeNull();
+  });
+});
+
 describe("cambios de estado", () => {
   it("actualización §2.4: los pasos no se pueden saltear", async () => {
     const job = await newJob();

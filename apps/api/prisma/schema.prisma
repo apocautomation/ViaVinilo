@@ -303,6 +303,8 @@ model User {
   name              String
   passwordHash      String?
   roles             UserRole[]
+  /// Puede ver los totales en pesos de Inicio (D-089). El dueño los ve siempre.
+  canSeeBilling     Boolean      @default(false)
   active            Boolean      @default(true)
   /// Sectores de un usuario con rol PRODUCTION.
   sectors           UserSector[]

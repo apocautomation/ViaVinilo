@@ -1378,6 +1378,24 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: `DELETE /jobs/:id` con `reason`. Sin migración. El mail que originó el pedido no lo vuelve a crear: la idempotencia por Message-ID sigue valiendo porque el registro no se borra.
 - **Abierto**: si atención también tiene que poder eliminar, se agrega el rol.
 
+### D-089 · 24/11/2026 · Ezequiel (después de la prueba de punta a punta) · Inicio: estadísticas correctas, totales en pesos, filtros y permiso para verlos
+- **Qué estaba mal** (informe `docs/INFORME-PRUEBAS-2026-11-24.md`):
+  - "En producción" contaba todo lo no entregado: en producción mostraba 571 y 570 estaban en "Archivo recibido", sin cotizar.
+  - El cuadro "Conversaciones" era un texto fijo ("todavía no hay") aunque había 312, con 283 sin leer.
+  - No había ningún total en pesos ni forma de elegir el período.
+  - Inicio bajaba los tableros completos y contaba en el navegador (con tope de 1.000 pedidos por tablero).
+- **Decisión**: Inicio se rehace sobre un resumen que calcula la API (`GET /jobs/summary`).
+  - **En el taller ahora** (no depende del período): Para cotizar, Con error de archivo, Esperando seña, En producción (cotizado sin seña pendiente, con seña, impreso o en calandra), Listos para retirar y Demorados.
+  - **Período**: Hoy, 7 días, 30 días, Este mes o fechas elegidas (día/mes/año), y filtro por sector. Muestra pedidos que entraron y pedidos entregados.
+  - **Totales en pesos del período**: Total entregado (precio de los pedidos entregados), Total cotizado y Señas registradas.
+  - **Gráfico por sector** con las cinco franjas; los sub-servicios suman en su tablero. Cada fila lleva al tablero.
+  - **Conversaciones sin leer**: cantidad y las últimas cinco. Solo para dueño y atención.
+- **"Total facturado"**: Ezequiel lo pidió con ese nombre. Hoy el sistema no factura ni registra cobros (Etapa 3), así que se muestra como **Total entregado** con la aclaración en pantalla de que es lo que corresponde facturar, no lo cobrado. Cuando exista la facturación ARCA, ese número pasa a salir de los comprobantes.
+- **Permiso para ver los pesos**: nuevo permiso por usuario `canSeeBilling` ("Puede ver el total entregado, cotizado y las señas en Inicio"), que el dueño marca en Configuración → Usuarios. El dueño los ve siempre. Sin el permiso la API no manda los montos (no es solo ocultarlos en pantalla). El cambio queda auditado.
+  - **Por qué por usuario y no por rol**: los roles son tres y fijos; Ezequiel pidió poder asignar quién lo ve. Un permiso suelto lo resuelve sin rehacer el esquema de roles.
+- **Impacto**: migración `20261125010000_user_can_see_billing` (una columna, por defecto apagado). Se actualiza también el texto de "Qué puede hacer cada rol".
+- **Abierto**: el permiso solo cubre los totales de Inicio; los precios de cada pedido los siguen viendo todos los que ven el pedido, porque los necesitan para cotizar y cobrar la seña.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

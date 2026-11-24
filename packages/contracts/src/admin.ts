@@ -19,6 +19,8 @@ export const createUserSchema = z.object({
   roles: rolesSchema,
   /** Tableros que ve (solo importa para Producción: dueño y atención ven todos). */
   sectorIds: sectorIdsSchema.default([]),
+  /** Puede ver los totales en pesos de Inicio (D-089). El dueño los ve siempre. */
+  canSeeBilling: z.boolean().default(false),
   password: staffPasswordSchema,
 });
 export type CreateUserInput = z.input<typeof createUserSchema>;
@@ -29,6 +31,7 @@ export const updateUserSchema = z
     email: z.string().trim().toLowerCase().email("El email no es válido"),
     roles: rolesSchema,
     sectorIds: sectorIdsSchema,
+    canSeeBilling: z.boolean(),
     active: z.boolean(),
   })
   .partial()
@@ -42,14 +45,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "Todo lo de Atención y Producción, en todos los tableros",
     "Usuarios, roles, tableros, máquinas y motivos de error",
     "Prender o apagar los avisos automáticos y el control de archivos",
-    "Imprimir sin seña y dar de baja clientes",
+    "Imprimir sin seña, eliminar pedidos y dar de baja clientes",
+    "Ver los totales en pesos de Inicio y decidir quién más los ve",
   ],
   ATTENTION: [
     "Conversaciones: responder por la app o por mail, y prender el bot en un chat",
     "Clientes: altas, aprobar o rechazar, editar e invitar a la app",
     "Pedidos de todos los tableros: ver, cotizar y mover",
   ],
-  PRODUCTION: ["Ver y mover los pedidos de sus tableros", "Descargar el archivo para imprimir cuando está liberado", "Asignar la máquina"],
+  PRODUCTION: ["Ver y mover los pedidos de sus tableros", "Descargar el archivo del pedido y corregir la medida", "Asignar la máquina"],
 };
 
 export const machineSchema = z.object({
