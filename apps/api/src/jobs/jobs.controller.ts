@@ -21,6 +21,14 @@ const boardQuerySchema = z.object({
 });
 
 const streamQuerySchema = z.object({ sector: sectorCodeSchema });
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida");
+const summarySchema = z.object({
+  /** Período (días de Salta, inclusive). Sin fechas: hoy. */
+  from: day.optional(),
+  to: day.optional(),
+  /** Un tablero (incluye sus sub-servicios). */
+  sector: sectorCodeSchema.optional(),
+});
 const byCustomerSchema = z.object({
   search: z.string().trim().max(100).optional(),
   /** Solo los clientes con algún trabajo que se retira en esa sucursal (D-083). */
@@ -49,6 +57,12 @@ export class JobsController {
   @Get()
   list(@ZodQuery(listJobsSchema) query: Parameters<JobsService["list"]>[1], @CurrentUser() user: AuthUser) {
     return this.jobs.list(user, query);
+  }
+
+  /** Resumen de Inicio (D-089): números del período y foto del taller, con totales en pesos si el usuario puede verlos. */
+  @Get("summary")
+  summary(@ZodQuery(summarySchema) query: { from?: string; to?: string; sector?: string }, @CurrentUser() user: AuthUser) {
+    return this.jobs.summary(user, query);
   }
 
   /** Trabajos por cliente (D-084): los pedidos en curso de cada cliente, de todos los sectores juntos. */

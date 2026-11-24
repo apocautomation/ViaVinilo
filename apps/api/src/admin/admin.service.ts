@@ -10,6 +10,7 @@ const userSelect = {
   name: true,
   email: true,
   roles: true,
+  canSeeBilling: true,
   active: true,
   createdAt: true,
   sectors: { select: { sector: { select: { id: true, code: true, name: true } } } },
@@ -31,7 +32,7 @@ export class AdminService {
   // ───────────── Usuarios ─────────────
 
   private shape(u: Prisma.UserGetPayload<{ select: typeof userSelect }>) {
-    return { id: u.id, name: u.name, email: u.email, roles: u.roles, active: u.active, createdAt: u.createdAt, sectors: u.sectors.map((s) => s.sector) };
+    return { id: u.id, name: u.name, email: u.email, roles: u.roles, canSeeBilling: u.canSeeBilling, active: u.active, createdAt: u.createdAt, sectors: u.sectors.map((s) => s.sector) };
   }
 
   async users() {
@@ -39,7 +40,7 @@ export class AdminService {
     return rows.map((u) => this.shape(u));
   }
 
-  async createUser(input: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; password: string }, actorId: string) {
+  async createUser(input: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; canSeeBilling?: boolean; password: string }, actorId: string) {
     const passwordHash = await hashPassword(input.password);
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -48,6 +49,7 @@ export class AdminService {
             name: input.name,
             email: input.email,
             roles: [...new Set(input.roles)],
+            canSeeBilling: input.canSeeBilling ?? false,
             passwordHash,
             sectors: { create: input.sectorIds.map((sectorId) => ({ sectorId })) },
           },
@@ -77,7 +79,7 @@ export class AdminService {
     return target;
   }
 
-  async updateUser(id: string, input: { name?: string; email?: string; roles?: UserRole[]; sectorIds?: string[]; active?: boolean }, actorId: string) {
+  async updateUser(id: string, input: { name?: string; email?: string; roles?: UserRole[]; sectorIds?: string[]; canSeeBilling?: boolean; active?: boolean }, actorId: string) {
     const before = await this.guardOwners(id, actorId, input);
     const { sectorIds, ...data } = input;
     try {
@@ -93,8 +95,8 @@ export class AdminService {
             entityId: id,
             action: "update",
             userId: actorId,
-            before: { name: before.name, email: before.email, roles: before.roles, active: before.active },
-            after: { name: user.name, email: user.email, roles: user.roles, active: user.active, ...(sectorIds ? { sectors: sectorIds.length } : {}) },
+            before: { name: before.name, email: before.email, roles: before.roles, canSeeBilling: before.canSeeBilling, active: before.active },
+            after: { name: user.name, email: user.email, roles: user.roles, canSeeBilling: user.canSeeBilling, active: user.active, ...(sectorIds ? { sectors: sectorIds.length } : {}) },
           },
           tx,
         );

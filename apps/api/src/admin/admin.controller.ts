@@ -28,7 +28,7 @@ export class AdminController {
 
   @Post("users")
   createUser(
-    @ZodBody(createUserSchema) body: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; password: string },
+    @ZodBody(createUserSchema) body: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; canSeeBilling?: boolean; password: string },
     @CurrentUser() user: AuthUser,
   ) {
     return this.admin.createUser(body, user.id);
@@ -37,7 +37,7 @@ export class AdminController {
   @Patch("users/:id")
   updateUser(
     @Param("id") id: string,
-    @ZodBody(updateUserSchema) body: { name?: string; email?: string; roles?: UserRole[]; sectorIds?: string[]; active?: boolean },
+    @ZodBody(updateUserSchema) body: { name?: string; email?: string; roles?: UserRole[]; sectorIds?: string[]; canSeeBilling?: boolean; active?: boolean },
     @CurrentUser() user: AuthUser,
   ) {
     return this.admin.updateUser(id, body, user.id);

@@ -97,6 +97,19 @@ describe("Configuración: usuarios, roles y tableros (D-067)", () => {
   });
 });
 
+describe("Configuración: permiso para ver los totales (D-089)", () => {
+  it("D-089: el dueño le da o le quita a un usuario el permiso de ver los totales en pesos; queda auditado", async () => {
+    const created = await as("owner").post("/admin/users", { name: "Caja", email: "caja@viavinilo.test", roles: ["ATTENTION"], password: "caja-clave-2026" });
+    expect(created.status).toBe(201);
+    expect(created.body.canSeeBilling).toBe(false);
+    const on = await as("owner").patch(`/admin/users/${created.body.id}`, { canSeeBilling: true });
+    expect(on.body.canSeeBilling).toBe(true);
+    const audit = await prisma.auditLog.findFirst({ where: { entity: "User", entityId: created.body.id, action: "update" }, orderBy: { createdAt: "desc" } });
+    expect(audit).toMatchObject({ before: { canSeeBilling: false }, after: { canSeeBilling: true } });
+    expect((await as("attention").patch(`/admin/users/${created.body.id}`, { canSeeBilling: false })).status).toBe(403);
+  });
+});
+
 describe("Configuración: máquinas y motivos de error (D-067)", () => {
   it("D-067: el dueño crea una máquina para un tablero y la desactiva", async () => {
     const created = await as("owner").post("/admin/machines", { name: "DTF 60 nueva", sectorIds: [dtfId] });

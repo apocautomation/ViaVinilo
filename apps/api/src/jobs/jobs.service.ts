@@ -211,6 +211,112 @@ export class JobsService {
   }
 
   /**
+   * Resumen de Inicio (D-089). Dos cosas distintas:
+   * - **Foto del taller ahora** (no depende del período): cuántos pedidos hay en cada paso.
+   * - **Período elegido**: cuántos entraron y cuántos se entregaron, y los totales en pesos.
+   * Todo se calcula en la base (antes Inicio bajaba los tableros enteros y contaba en el navegador).
+   * Los pesos solo viajan si el usuario es dueño o tiene el permiso `canSeeBilling`.
+   */
+  async summary(user: AuthUser, q: { from?: string; to?: string; sector?: string }) {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TZ }).format(new Date());
+    const fromDay = q.from ?? q.to ?? today;
+    const toDay = q.to ?? q.from ?? today;
+    if (fromDay > toDay) throw new BadRequestException("El período está al revés: la fecha desde es posterior a la fecha hasta");
+    const from = new Date(`${fromDay}T00:00:00-03:00`);
+    const to = new Date(new Date(`${toDay}T00:00:00-03:00`).getTime() + 864e5);
+
+    const allowed = await this.access.allowedSectorIds(user);
+    const base: Prisma.JobOrderWhereInput = { deletedAt: null };
+    if (allowed !== "all") base.sectorId = { in: allowed };
+    if (q.sector) base.sector = { OR: [{ code: q.sector }, { parent: { code: q.sector } }] };
+
+    const me = await this.prisma.user.findUnique({ where: { id: user.id }, select: { canSeeBilling: true } });
+    const canSeeAmounts = user.roles.includes("OWNER") || me?.canSeeBilling === true;
+    const period = { gte: from, lt: to };
+    const sum = (where: Prisma.JobOrderWhereInput, field: "quotedAmount" | "depositAmount") =>
+      this.prisma.jobOrder.aggregate({ where: { ...base, ...where }, _sum: { [field]: true }, _count: true });
+
+    const [byStatus, waitingDeposit, entered, delivered, sectors] = await Promise.all([
+      this.prisma.jobOrder.groupBy({ by: ["status", "sectorId"], where: { ...base, status: { notIn: ["DELIVERED", "CANCELLED"] } }, _count: true }),
+      this.prisma.jobOrder.groupBy({ by: ["sectorId"], where: { ...base, status: "QUOTED", depositRequired: true, depositPaidAt: null }, _count: true }),
+      this.prisma.jobOrder.count({ where: { ...base, createdAt: period } }),
+      this.prisma.jobOrder.count({ where: { ...base, status: "DELIVERED", deliveredAt: period } }),
+      this.prisma.sector.findMany({ where: { active: true }, select: { id: true, code: true, name: true, parentId: true }, orderBy: { name: "asc" } }),
+    ]);
+
+    // Cada pedido cuenta en el tablero raíz (los sub-servicios suman en Gran Formato).
+    const rootOf = new Map(sectors.map((s) => [s.id, s.parentId ?? s.id]));
+    const empty = () => ({ toQuote: 0, fileError: 0, waitingDeposit: 0, inProduction: 0, ready: 0 });
+    const boards = new Map<string, ReturnType<typeof empty>>();
+    const bucket = (sectorId: string) => {
+      const root = rootOf.get(sectorId) ?? sectorId;
+      if (!boards.has(root)) boards.set(root, empty());
+      return boards.get(root)!;
+    };
+    for (const row of byStatus) {
+      const b = bucket(row.sectorId);
+      if (row.status === "RECEIVED" || row.status === "PENDING_SIGNUP") b.toQuote += row._count;
+      else if (row.status === "FILE_ERROR") b.fileError += row._count;
+      else if (row.status === "READY") b.ready += row._count;
+      // Cotizado, con seña, impreso o en calandra: ya está en marcha. Los que esperan seña se restan abajo.
+      else b.inProduction += row._count;
+    }
+    for (const row of waitingDeposit) {
+      const b = bucket(row.sectorId);
+      b.waitingDeposit += row._count;
+      b.inProduction -= row._count;
+    }
+    const visible = sectors.filter((s) => !s.parentId && (allowed === "all" || allowed.includes(s.id) || boards.has(s.id)) && (!q.sector || s.code === q.sector));
+    const perBoard = visible.map((s) => ({ code: s.code, name: s.name, ...(boards.get(s.id) ?? empty()) }));
+    const now = perBoard.reduce((acc, b) => ({ toQuote: acc.toQuote + b.toQuote, fileError: acc.fileError + b.fileError, waitingDeposit: acc.waitingDeposit + b.waitingDeposit, inProduction: acc.inProduction + b.inProduction, ready: acc.ready + b.ready }), empty());
+
+    let amounts: { quoted: string; quotedCount: number; delivered: string; deposits: string } | null = null;
+    if (canSeeAmounts) {
+      const [quoted, deliveredSum, deposits] = await Promise.all([
+        sum({ quotedAt: period, status: { not: "CANCELLED" } }, "quotedAmount"),
+        sum({ status: "DELIVERED", deliveredAt: period }, "quotedAmount"),
+        sum({ depositPaidAt: period, status: { not: "CANCELLED" } }, "depositAmount"),
+      ]);
+      const text = (v: unknown) => (v as Prisma.Decimal | null)?.toString() ?? "0";
+      amounts = {
+        /** Cotizado en el período: suma de los precios cargados esos días. */
+        quoted: text(quoted._sum.quotedAmount),
+        quotedCount: quoted._count,
+        /** Entregado en el período: lo más parecido a "facturado" hasta que exista la facturación (Etapa 3). */
+        delivered: text(deliveredSum._sum.quotedAmount),
+        /** Señas registradas en el período. */
+        deposits: text(deposits._sum.depositAmount),
+      };
+    }
+
+    // Conversaciones sin leer: solo para quien atiende (dueño y atención).
+    let conversations: { unread: number; latest: { id: string; name: string; preview: string | null; at: Date | null; unread: number }[] } | null = null;
+    if (user.roles.includes("OWNER") || user.roles.includes("ATTENTION")) {
+      const [unread, latest] = await Promise.all([
+        this.prisma.conversation.count({ where: { staffUnread: { gt: 0 } } }),
+        this.prisma.conversation.findMany({
+          where: { staffUnread: { gt: 0 } },
+          orderBy: { lastMessageAt: "desc" },
+          take: 5,
+          select: { id: true, lastMessagePreview: true, lastMessageAt: true, staffUnread: true, customer: { select: { customerNumber: true, firstName: true, lastName: true, businessName: true } } },
+        }),
+      ]);
+      conversations = {
+        unread,
+        latest: latest.map((c) => ({
+          id: c.id,
+          name: [c.customer?.firstName, c.customer?.lastName].filter(Boolean).join(" ") || c.customer?.businessName || (c.customer ? `Cliente N.º ${c.customer.customerNumber}` : "Sin cliente"),
+          preview: c.lastMessagePreview,
+          at: c.lastMessageAt,
+          unread: c.staffUnread,
+        })),
+      };
+    }
+
+    return { from: fromDay, to: toDay, period: { entered, delivered }, now, perBoard, canSeeAmounts, amounts, conversations };
+  }
+
+  /**
    * Trabajos por cliente (D-084): los pedidos en curso (ni entregados ni cancelados) agrupados por
    * cliente, de todos los sectores que ve el usuario. Sirve para que caja junte lo que un cliente
    * tiene repartido en varios tableros. Primero los clientes con algo listo para retirar.

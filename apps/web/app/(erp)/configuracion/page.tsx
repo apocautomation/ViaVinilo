@@ -23,6 +23,7 @@ interface StaffUser {
   name: string;
   email: string;
   roles: UserRole[];
+  canSeeBilling: boolean;
   active: boolean;
   sectors: SectorRef[];
 }
@@ -68,6 +69,7 @@ function UserDialog({ user, sectors, onClose, onSaved }: { user: StaffUser | nul
   const [email, setEmail] = useState(user?.email ?? "");
   const [roles, setRoles] = useState<UserRole[]>(user?.roles ?? ["PRODUCTION"]);
   const [sectorIds, setSectorIds] = useState<string[]>(user?.sectors.map((s) => s.id) ?? []);
+  const [canSeeBilling, setCanSeeBilling] = useState(user?.canSeeBilling ?? false);
   const [password, setPassword] = useState(user ? "" : generatePassword());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -79,11 +81,11 @@ function UserDialog({ user, sectors, onClose, onSaved }: { user: StaffUser | nul
     setError("");
     try {
       if (user) {
-        await api(`/admin/users/${user.id}`, { method: "PATCH", body: JSON.stringify({ name, email, roles, sectorIds }) });
+        await api(`/admin/users/${user.id}`, { method: "PATCH", body: JSON.stringify({ name, email, roles, sectorIds, canSeeBilling }) });
         if (password) await api(`/admin/users/${user.id}/password`, { method: "POST", body: JSON.stringify({ password }) });
         onSaved(password ? "Usuario guardado y contraseña cambiada. Pasásela en persona." : "Usuario guardado.");
       } else {
-        await api("/admin/users", { method: "POST", body: JSON.stringify({ name, email, roles, sectorIds, password }) });
+        await api("/admin/users", { method: "POST", body: JSON.stringify({ name, email, roles, sectorIds, canSeeBilling, password }) });
         onSaved(`Usuario creado. Pasale su email y la contraseña en persona; después no se vuelve a mostrar.`);
       }
     } catch (err) {
@@ -122,6 +124,17 @@ function UserDialog({ user, sectors, onClose, onSaved }: { user: StaffUser | nul
             <SectorChecks sectors={sectors} value={sectorIds} onChange={setSectorIds} />
           ) : (
             <span className="muted">Dueño y Atención ven todos los tableros.</span>
+          )}
+        </div>
+        <div className="field">
+          Totales en pesos
+          {roles.includes("OWNER") ? (
+            <span className="muted">El dueño siempre ve los totales de Inicio.</span>
+          ) : (
+            <label className="check">
+              <input type="checkbox" checked={canSeeBilling} onChange={(e) => setCanSeeBilling(e.target.checked)} />
+              Puede ver el total entregado, cotizado y las señas en Inicio
+            </label>
           )}
         </div>
         <label className="field">
@@ -259,7 +272,10 @@ export default function ConfiguracionPage() {
                     <tr key={u.id}>
                       <td className="cell-title">{u.name}</td>
                       <td>{u.email}</td>
-                      <td>{u.roles.map((r) => USER_ROLE_LABELS[r]).join(" · ")}</td>
+                      <td>
+                        {u.roles.map((r) => USER_ROLE_LABELS[r]).join(" · ")}
+                        {u.canSeeBilling && !u.roles.includes("OWNER") && <div className="cell-sub">Ve los totales en pesos</div>}
+                      </td>
                       <td>{u.roles.some((r) => r !== "PRODUCTION") ? "Todos" : u.sectors.map((s) => s.name).join(", ") || <span className="muted">Ninguno</span>}</td>
                       <td>
                         <Badge tone={u.active ? "ok" : "neutral"}>{u.active ? "Activo" : "Desactivado"}</Badge>
