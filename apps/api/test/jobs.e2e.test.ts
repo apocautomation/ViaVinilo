@@ -270,6 +270,30 @@ describe("trabajos por cliente (D-084)", () => {
     const sanJuan = await http("owner").get("/jobs/by-customer?pickup=san-juan&search=sosa");
     expect(sanJuan.body.customers).toHaveLength(0);
   });
+
+  it("D-085: va por páginas sin dejar clientes afuera, y filtra los que tienen trabajos en varios sectores", async () => {
+    const solo = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Inés", lastName: "Lamas", searchText: "ines lamas" } });
+    await prisma.jobOrder.create({ data: { customerId: solo.id, sectorId: sectors.DTF!.id, status: "RECEIVED", source: "EMAIL", sourceMessageId: `<bc-${++seq}@test>` } });
+    const all = await http("owner").get("/jobs/by-customer?pageSize=100");
+    const total: number = all.body.totalCustomers;
+    expect(total).toBeGreaterThanOrEqual(3);
+    expect(all.body.customers).toHaveLength(total);
+    const seen = new Set<string>();
+    for (let page = 1; page <= total; page++) {
+      const res = await http("owner").get(`/jobs/by-customer?pageSize=1&page=${page}`);
+      expect(res.body).toMatchObject({ page, pageSize: 1, totalCustomers: total });
+      expect(res.body.customers).toHaveLength(1);
+      seen.add(res.body.customers[0].customer.id);
+    }
+    expect(seen.size).toBe(total);
+    expect((await http("owner").get(`/jobs/by-customer?pageSize=1&page=${total + 1}`)).body.customers).toHaveLength(0);
+
+    const several = await http("owner").get("/jobs/by-customer?several=true&pageSize=100");
+    expect(several.body.customers.length).toBeGreaterThan(0);
+    expect(several.body.customers.every((c: G) => c.boards.length > 1)).toBe(true);
+    expect(several.body.customers.map((c: G) => c.customer.id)).not.toContain(solo.id);
+    expect(several.body.totalCustomers).toBeLessThan(total);
+  });
 });
 
 describe("cambios de estado", () => {

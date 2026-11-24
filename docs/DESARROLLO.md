@@ -1338,6 +1338,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: `GET /jobs/by-customer`. Sin migración.
 - **Abierto**: hasta 200 clientes por pantalla; si el volumen crece hay que paginar. Para el historial completo de un cliente (también lo entregado) sigue estando su ficha y Ventas → Pedidos.
 
+### D-085 · 24/11/2026 · Ezequiel + revisión de producción · "Trabajos por cliente" por páginas y con los clientes plegados
+- **Qué pasaba**: la pantalla de D-084 mostraba hasta 200 clientes con todos sus pedidos desplegados. En producción hay 303 clientes con trabajos en curso (562 pedidos), así que 103 quedaban afuera sin aviso salvo que se usara el buscador.
+- **Decisión**:
+  - La lista va **por páginas** de 30 clientes, con todos los clientes.
+  - Cada cliente arranca **plegado**, con su renglón de resumen (sectores, cantidad de trabajos, listos para retirar y total cotizado); se abre con un clic. Si una búsqueda deja 5 clientes o menos, se muestran abiertos.
+  - "Solo con trabajos en varios sectores" pasa a filtrarse en la API, para que el conteo y las páginas sean correctos.
+- **Por qué**: una pantalla para juntar los trabajos de un cliente no puede esconder clientes. Ezequiel aprobó el arreglo al ver los números de producción.
+- **Impacto**: `GET /jobs/by-customer` acepta `page`, `pageSize` y `several`, y devuelve `page` y `pageSize`. Sin migración. Cierra el punto abierto de D-084.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

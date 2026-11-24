@@ -25,6 +25,13 @@ const byCustomerSchema = z.object({
   search: z.string().trim().max(100).optional(),
   /** Solo los clientes con algún trabajo que se retira en esa sucursal (D-083). */
   pickup: pickupBranchSchema.optional(),
+  /** Solo los clientes con trabajos en más de un tablero: los que hay que juntar. */
+  several: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(30),
 });
 const machineSchema = z.object({ machineId: z.string().min(1).nullable() });
 const serviceSchema = z.object({ sector: sectorCodeSchema });
@@ -44,7 +51,7 @@ export class JobsController {
 
   /** Trabajos por cliente (D-084): los pedidos en curso de cada cliente, de todos los sectores juntos. */
   @Get("by-customer")
-  byCustomer(@ZodQuery(byCustomerSchema) query: { search?: string; pickup?: PickupBranch }, @CurrentUser() user: AuthUser) {
+  byCustomer(@ZodQuery(byCustomerSchema) query: Parameters<JobsService["byCustomer"]>[1], @CurrentUser() user: AuthUser) {
     return this.jobs.byCustomer(user, query);
   }
 

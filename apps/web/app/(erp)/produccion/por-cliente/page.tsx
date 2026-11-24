@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { isPickupBranch, PICKUP_BRANCHES, PICKUP_LABELS, type JobStatus } from "@viavinilo/contracts";
 import { api, ApiError } from "../../../lib/api";
 import { Badge, PageHead, ars, type Tone } from "../../ui";
@@ -57,8 +57,19 @@ export default function JobsByCustomerPage() {
   const [query, setQuery] = useState("");
   const [pickup, setPickup] = useState("");
   const [several, setSeveral] = useState(false);
-  const [data, setData] = useState<{ customers: Group[]; totalCustomers: number; totalJobs: number } | null>(null);
+  const [page, setPage] = useState(1);
+  /** D-085: cada cliente arranca plegado; se abre con un clic. Con una búsqueda se abren todos. */
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [data, setData] = useState<{ customers: Group[]; totalCustomers: number; totalJobs: number; pageSize: number } | null>(null);
   const [error, setError] = useState("");
+  useEffect(() => setPage(1), [query, pickup, several]);
+  const toggle = (id: string) =>
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(search.trim()), 350);
@@ -66,19 +77,22 @@ export default function JobsByCustomerPage() {
   }, [search]);
 
   useEffect(() => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ page: String(page) });
     if (query) params.set("search", query);
     if (pickup) params.set("pickup", pickup);
+    if (several) params.set("several", "true");
     let cancelled = false;
-    api<{ customers: Group[]; totalCustomers: number; totalJobs: number }>(`/jobs/by-customer?${params}`)
+    api<{ customers: Group[]; totalCustomers: number; totalJobs: number; pageSize: number }>(`/jobs/by-customer?${params}`)
       .then((d) => !cancelled && (setData(d), setError("")))
       .catch((e: unknown) => !cancelled && setError(e instanceof ApiError ? e.message : "No pudimos cargar los trabajos"));
     return () => {
       cancelled = true;
     };
-  }, [query, pickup]);
+  }, [query, pickup, several, page]);
 
-  const groups = data?.customers.filter((g) => !several || g.boards.length > 1) ?? [];
+  const groups = data?.customers ?? [];
+  const pages = data ? Math.max(1, Math.ceil(data.totalCustomers / data.pageSize)) : 1;
+  const isOpen = (id: string) => opened.has(id) || (query !== "" && groups.length <= 5);
 
   return (
     <div className="page">
@@ -120,9 +134,12 @@ export default function JobsByCustomerPage() {
 
         <div className="by-customer">
           {groups.map((g) => (
-            <article key={g.customer.id} className="by-customer-card">
+            <article key={g.customer.id} className="by-customer-card" data-open={isOpen(g.customer.id)}>
               <header>
-                <div>
+                <button type="button" className="btn btn-ghost btn-sm icon-only" aria-expanded={isOpen(g.customer.id)} aria-label={`Ver los trabajos de ${g.customer.name ?? "este cliente"}`} onClick={() => toggle(g.customer.id)}>
+                  {isOpen(g.customer.id) ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <Link href={`/ventas/clientes/${g.customer.id}`} className="cell-title">
                     {g.customer.name ?? "Cliente sin nombre"}
                   </Link>
@@ -142,6 +159,7 @@ export default function JobsByCustomerPage() {
                   {g.quotedTotal && <strong className="mono">{ars.format(Number(g.quotedTotal))}</strong>}
                 </div>
               </header>
+              {isOpen(g.customer.id) && (
               <div className="table-wrap">
                 <table className="data">
                   <thead>
@@ -185,9 +203,24 @@ export default function JobsByCustomerPage() {
                   </tbody>
                 </table>
               </div>
+              )}
             </article>
           ))}
         </div>
+
+        {data && pages > 1 && (
+          <div className="pager">
+            <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              Anterior
+            </button>
+            <span className="muted">
+              Página {page} de {pages}
+            </span>
+            <button className="btn btn-ghost btn-sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>
+              Siguiente
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

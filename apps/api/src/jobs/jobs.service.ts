@@ -224,7 +224,7 @@ export class JobsService {
    * cliente, de todos los sectores que ve el usuario. Sirve para que caja junte lo que un cliente
    * tiene repartido en varios tableros. Primero los clientes con algo listo para retirar.
    */
-  async byCustomer(user: AuthUser, q: { search?: string; pickup?: string }) {
+  async byCustomer(user: AuthUser, q: { search?: string; pickup?: string; several?: boolean; page?: number; pageSize?: number }) {
     const allowed = await this.access.allowedSectorIds(user);
     const where: Prisma.JobOrderWhereInput = { deletedAt: null, status: { notIn: ["DELIVERED", "CANCELLED"] } };
     if (allowed !== "all") where.sectorId = { in: allowed };
@@ -239,7 +239,8 @@ export class JobsService {
     const rows = await this.prisma.jobOrder.findMany({
       where,
       orderBy: { createdAt: "asc" },
-      take: 2000,
+      // Se agrupa en memoria: son los pedidos en curso, no el historial. El tope es una red de seguridad.
+      take: 10_000,
       select: {
         id: true,
         number: true,
@@ -302,8 +303,18 @@ export class JobsService {
           })),
         };
       })
+      .filter((c) => !q.several || c.boards.length > 1)
       .sort((a, b) => b.ready - a.ready || b.total - a.total || (a.customer.name ?? "").localeCompare(b.customer.name ?? ""));
-    return { customers: customers.slice(0, 200), totalCustomers: customers.length, totalJobs: customers.reduce((n, c) => n + c.total, 0) };
+    // D-085: por páginas, para que no quede ningún cliente afuera (antes se cortaba en 200 sin avisar).
+    const pageSize = q.pageSize ?? 30;
+    const page = q.page ?? 1;
+    return {
+      customers: customers.slice((page - 1) * pageSize, page * pageSize),
+      page,
+      pageSize,
+      totalCustomers: customers.length,
+      totalJobs: customers.reduce((n, c) => n + c.total, 0),
+    };
   }
 
   async board(user: AuthUser, query: BoardQuery) {
