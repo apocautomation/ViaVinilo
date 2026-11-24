@@ -59,7 +59,8 @@ export interface Order {
 
 const SALTA = "America/Argentina/Salta";
 const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: SALTA });
-const hour = new Intl.DateTimeFormat("es-AR", { timeZone: SALTA, hour: "2-digit", minute: "2-digit" });
+// Siempre 24 h (D-091), como el ERP: "17:30" y no "05:30 p. m.".
+const hour = new Intl.DateTimeFormat("es-AR", { timeZone: SALTA, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const dayMonth = new Intl.DateTimeFormat("es-AR", { timeZone: SALTA, day: "2-digit", month: "2-digit" });
 
 /** "Hoy 12:20", "Ayer 09:15", "Mañana 10:00" o "18/11 16:30", siempre en hora de Salta. */

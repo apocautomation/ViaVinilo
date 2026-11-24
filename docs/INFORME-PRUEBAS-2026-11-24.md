@@ -23,15 +23,15 @@ Prueba hecha en el entorno local (base en memoria, API, ERP y app de clientes), 
 ## A. Para arreglar (funcionan mal o confunden)
 
 1. **Arrastrar tarjetas, sin confirmar con mouse real.** Hay que probarlo a mano en Chrome. Además, el arrastre nativo del navegador no funciona en pantallas táctiles (tablet en el taller): si van a usar tablet, hay que hacerlo de otra forma.
-2. **Corregir la medida no rehace el control si el pedido ya está en "Archivo con error".** Queda el cartel viejo ("Para 58 × 100 cm da 25 dpi") aunque la medida ya sea otra. Hoy la única salida es tocar "Archivo corregido", que le avisa al cliente "recibimos el archivo corregido" sin que haya mandado nada.
-3. **Al corregir la medida, el título del pedido sigue mostrando la medida vieja** (tablero, Pedidos y app del cliente), porque está copiada en la descripción.
+2. ✅ Resuelto en D-091. **Corregir la medida no rehace el control si el pedido ya está en "Archivo con error".** Queda el cartel viejo ("Para 58 × 100 cm da 25 dpi") aunque la medida ya sea otra. Hoy la única salida es tocar "Archivo corregido", que le avisa al cliente "recibimos el archivo corregido" sin que haya mandado nada.
+3. ✅ Resuelto en D-091. **Al corregir la medida, el título del pedido sigue mostrando la medida vieja** (tablero, Pedidos y app del cliente), porque está copiada en la descripción.
 4. ✅ Resuelto en D-089. **Inicio: el cuadro "Conversaciones" siempre dice que no hay.** Es un texto fijo; nunca consulta. En producción hay 312 conversaciones, 283 sin leer.
 5. ✅ Resuelto en D-089. **Inicio: "En producción" cuenta todo lo que no está entregado.** En producción muestra 571 y en realidad 570 están en "Archivo recibido", sin cotizar ni imprimir. También cuenta los pedidos con error de archivo.
 6. ✅ Resuelto en D-089. **Inicio: el gráfico "Producción por sector" no muestra los cotizados que esperan seña como grupo aparte** y no distingue los sub-servicios de Gran Formato.
-7. **Horas en formato 12 h en la app del cliente** ("04:51 p. m.", "27/11 05:30 p. m."). El ERP ya usa 24 h; la app tiene que usar lo mismo.
-8. **El aviso de error le dice al cliente "mandalo corregido por mail a la casilla"**, cuando la app le ofrece "Reenviar el archivo por el chat". Además queda con doble punto ("pixelado..").
-9. **Textos de los avisos muy largos**: repiten entre paréntesis toda la descripción del pedido ("20 x 30 cm · 4 copias · Servicio: DTF Textil · Prueba de punta a punta…").
-10. **Descripción redundante en los pedidos de la app**: "DTF Textil · 58 × 100 cm · 1 copia · Servicio: DTF Textil".
+7. ✅ Resuelto en D-091. **Horas en formato 12 h en la app del cliente** ("04:51 p. m.", "27/11 05:30 p. m."). El ERP ya usa 24 h; la app tiene que usar lo mismo.
+8. ✅ Resuelto en D-091. **El aviso de error le dice al cliente "mandalo corregido por mail a la casilla"**, cuando la app le ofrece "Reenviar el archivo por el chat". Además queda con doble punto ("pixelado..").
+9. ✅ Resuelto en D-091. **Textos de los avisos muy largos**: repiten entre paréntesis toda la descripción del pedido ("20 x 30 cm · 4 copias · Servicio: DTF Textil · Prueba de punta a punta…").
+10. ✅ Resuelto en D-091. **Descripción redundante en los pedidos de la app**: "DTF Textil · 58 × 100 cm · 1 copia · Servicio: DTF Textil".
 11. ✅ Resuelto en D-089. **Configuración → "Qué puede hacer cada rol" quedó desactualizado**: dice que producción descarga el archivo "cuando está liberado" (ya no hay bloqueo) y no menciona eliminar pedidos.
 12. **Pedido entregado con "Saldo a pagar $ 12.000"** en la app: el sistema no registra el pago del saldo (es de la Etapa 3), así que el cliente lo va a ver siempre pendiente.
 

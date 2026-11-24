@@ -59,9 +59,8 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
     const sectorCode = extraBoard ? extraBoard.code : SECTOR_OF[serviceId]!;
     form.append("sector", sectorCode);
     form.append("pickupBranch", pickup ?? defaultPickupBranch(sectorCode));
-    const label = service?.name ?? extraBoard?.name;
-    const details = [label ? `Servicio: ${label}` : "", note.trim()].filter(Boolean).join("\n");
-    if (details) form.append("note", details);
+    // D-091: el servicio ya va en el tablero del pedido; repetirlo en la nota ensuciaba la descripción.
+    if (note.trim()) form.append("note", note.trim());
     form.append("file", file);
     setError("");
     setProgress(0);
@@ -234,7 +233,7 @@ function Chat() {
             )}
             {m.jobId && m.direction === "IN" && m.channel === "APP" && <span className="via-mail">Pedido creado: lo ves en Pedidos</span>}
             <time dateTime={m.createdAt}>
-              {new Date(m.createdAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              {new Date(m.createdAt).toLocaleString("es-AR", { timeZone: "America/Argentina/Salta", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
             </time>
           </div>
         ))}
