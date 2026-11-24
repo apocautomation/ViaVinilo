@@ -117,7 +117,7 @@ export default function PedidoPage() {
                 <strong>Hay un problema con el archivo.</strong> {o.error}
               </span>
             </div>
-            <Link href={`/chat?pedido=${o.num}`} className="btn btn-danger btn-block">
+            <Link href={`/chat?pedido=${o.num}&archivo=${o.id}`} className="btn btn-danger btn-block">
               <Upload size={18} /> Reenviar el archivo por el chat
             </Link>
           </section>

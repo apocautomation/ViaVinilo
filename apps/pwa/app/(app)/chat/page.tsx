@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } fr
 import { CircleHelp, Download, Mail, Paperclip, Send, X } from "lucide-react";
 import { ACCEPT_ATTRIBUTE, attachmentsOf, defaultPickupBranch, formatBytes, help, MAX_UPLOAD_BYTES, PICKUP_BRANCHES, PICKUP_LABELS, type PickupBranch } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
+import type { Order } from "../../data";
 import { SECTOR_OF } from "../../services";
 import { api, downloadFile, upload } from "../../session";
 
@@ -32,8 +33,17 @@ function Linkified({ text }: { text: string }) {
  * Mandar un archivo por el chat (D-062): el cliente elige el servicio, escribe medidas y cantidad, y
  * el pedido se crea solo en el tablero de ese servicio, en "Archivo recibido".
  */
-function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: string) => void }) {
+function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent: (label: string, added: boolean) => void; initialJob?: string | null }) {
   const [serviceId, setServiceId] = useState<string | null>(null);
+  /** D-094: el archivo puede ser para un pedido que ya existe (corregido o que faltaba). */
+  const [jobId, setJobId] = useState<string | null>(initialJob ?? null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  useEffect(() => {
+    api<{ orders: Order[] }>("/app/jobs")
+      .then((r) => setOrders(r.orders.filter((o) => o.canAddFile)))
+      .catch(() => undefined);
+  }, []);
+  const targetOrder = orders.find((o) => o.id === jobId);
   const [note, setNote] = useState("");
   /** D-083: dónde lo retira. Se propone la sucursal del servicio y el cliente la puede cambiar. */
   const [pickup, setPickup] = useState<PickupBranch | null>(null);
@@ -53,20 +63,23 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!file || !serviceId) return;
+    if (!file || (!serviceId && !jobId)) return;
     if (file.size > MAX_UPLOAD_BYTES) return setError("El archivo es muy grande: el máximo es 150 MB.");
     const form = new FormData();
-    const sectorCode = extraBoard ? extraBoard.code : SECTOR_OF[serviceId]!;
-    form.append("sector", sectorCode);
-    form.append("pickupBranch", pickup ?? defaultPickupBranch(sectorCode));
+    if (jobId) form.append("job", jobId);
+    else {
+      const sectorCode = extraBoard ? extraBoard.code : SECTOR_OF[serviceId!]!;
+      form.append("sector", sectorCode);
+      form.append("pickupBranch", pickup ?? defaultPickupBranch(sectorCode));
+    }
     // D-091: el servicio ya va en el tablero del pedido; repetirlo en la nota ensuciaba la descripción.
     if (note.trim()) form.append("note", note.trim());
     form.append("file", file);
     setError("");
     setProgress(0);
     try {
-      const r = await upload<{ job: { label: string } }>("/app/chat/files", form, setProgress);
-      onSent(r.job.label);
+      const r = await upload<{ job: { label: string }; resent?: boolean; added?: boolean }>("/app/chat/files", form, setProgress);
+      onSent(r.job.label, Boolean(r.resent || r.added));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pudimos subir el archivo.");
       setProgress(null);
@@ -82,6 +95,37 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
             <X size={20} />
           </button>
         </div>
+        {orders.length > 0 && (
+          <>
+            <p className="sheet-label">¿Es un trabajo nuevo o para un pedido que ya tenés?</p>
+            <div className="choices">
+              <button type="button" className="choice" aria-pressed={jobId === null} onClick={() => setJobId(null)}>
+                Trabajo nuevo
+              </button>
+              {orders.map((o) => (
+                <button type="button" key={o.id} className="choice" aria-pressed={jobId === o.id} onClick={() => setJobId(o.id)}>
+                  {o.num}
+                  <small className="muted" style={{ display: "block", fontWeight: 400 }}>
+                    {o.sector}
+                    {o.status === "FILE_ERROR" ? " · archivo con error" : ""}
+                  </small>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {jobId !== null && (
+          <>
+            <p className="muted sheet-hint">
+              El archivo se suma al pedido {targetOrder?.num ?? ""}
+              {targetOrder?.status === "FILE_ERROR" ? " y vuelve a revisión." : "."}
+            </p>
+            <p className="sheet-label">Aclaración (opcional)</p>
+            <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: es el archivo corregido en 300 dpi" />
+          </>
+        )}
+        {jobId === null && (
+          <>
         <p className="sheet-label">1 · ¿Para qué servicio?</p>
         <div className="choices">
           {help.SERVICES.map((s) => (
@@ -110,7 +154,9 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
             );
           })}
         </div>
-        <p className="sheet-label">4 · El archivo</p>
+          </>
+        )}
+        <p className="sheet-label">{jobId === null ? "4 · El archivo" : "El archivo"}</p>
         <label className="drop">
           <Paperclip size={24} />
           <strong>{file ? file.name : "Tocá para elegir el archivo"}</strong>
@@ -123,7 +169,7 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
             <span style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
         )}
-        <button className="btn btn-primary btn-block" disabled={!file || !serviceId || progress !== null}>
+        <button className="btn btn-primary btn-block" disabled={!file || (!serviceId && jobId === null) || progress !== null}>
           {progress !== null ? `Subiendo… ${Math.round(progress * 100)}%` : "Mandar el archivo"}
         </button>
       </form>
@@ -150,12 +196,15 @@ interface Msg {
 const REFRESH_MS = 8000;
 
 function Chat() {
-  const pedido = useSearchParams().get("pedido");
+  const params = useSearchParams();
+  const pedido = params.get("pedido");
+  /** D-094: desde el pedido con error se llega con el clip ya abierto y ese pedido elegido. */
+  const fileFor = params.get("archivo");
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
-  const [text, setText] = useState(pedido ? `Consulta por el pedido ${pedido}: ` : "");
+  const [text, setText] = useState(pedido && !fileFor ? `Consulta por el pedido ${pedido}: ` : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [sending, setSending] = useState(false);
+  const [sending, setSending] = useState(Boolean(fileFor));
   const [notice, setNotice] = useState("");
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -231,7 +280,7 @@ function Chat() {
                 </span>
               ),
             )}
-            {m.jobId && m.direction === "IN" && m.channel === "APP" && <span className="via-mail">Pedido creado: lo ves en Pedidos</span>}
+            {m.jobId && m.direction === "IN" && m.channel === "APP" && <span className="via-mail">Quedó en tu pedido: lo ves en Pedidos</span>}
             <time dateTime={m.createdAt}>
               {new Date(m.createdAt).toLocaleString("es-AR", { timeZone: "America/Argentina/Salta", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
             </time>
@@ -255,9 +304,10 @@ function Chat() {
       {sending && (
         <SendFile
           onClose={() => setSending(false)}
-          onSent={(label) => {
+          initialJob={fileFor}
+          onSent={(label, added) => {
             setSending(false);
-            setNotice(`¡Listo! Recibimos tu archivo: pedido ${label}. Lo revisamos y te pasamos el precio.`);
+            setNotice(added ? `¡Listo! Sumamos el archivo al pedido ${label}. Lo revisamos y te avisamos.` : `¡Listo! Recibimos tu archivo: pedido ${label}. Lo revisamos y te pasamos el precio.`);
             void load();
           }}
         />

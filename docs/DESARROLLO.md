@@ -1436,6 +1436,21 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: sin migración. Solo flujos fijos del bot.
 - **Abierto**: las preguntas generales siguen yendo a la IA. En la prueba, "¿qué diferencia hay entre DTF y sublimación?" recibió una explicación imprecisa: es el límite del modelo local chico (D-057). Se resuelve cargando esas respuestas como fijas cuando la Ayuda sea editable (Etapa 2).
 
+### D-094 · 24/11/2026 · Ezequiel · el cliente suma un archivo a un pedido que ya tiene, y el bot dice por pedido si tiene o no el archivo
+- **Pedido de Ezequiel**: "el bot tiene que gestionar el caso de tener que cargar un archivo a su pedido"; si el cliente pregunta si se recibió el archivo, que diga de qué pedido habla y si lo tenemos o no, "que sea inteligente".
+- **Sumar un archivo a un pedido existente**:
+  - En el clip 📎 del chat, antes de elegir el servicio, el cliente elige **"Trabajo nuevo" o uno de sus pedidos** en curso. Con un pedido elegido solo pide el archivo y una aclaración opcional.
+  - Se puede hasta "Seña recibida" (antes de imprimir). Si el pedido está en "Archivo con error", vuelve a "Archivo recibido" (D-065). Si no, el archivo se suma y el control automático se hace otra vez; queda en el historial sin mandar un aviso de estado.
+  - La aclaración se suma a lo que ya tenía el pedido: antes, mandar el archivo corregido pisaba las medidas cargadas.
+  - Desde el detalle de un pedido con error, "Reenviar el archivo por el chat" abre el clip con ese pedido ya elegido.
+  - `POST /app/chat/files` acepta `job` (número de pedido del cliente) en lugar de `sector`. Un pedido de otro cliente da "no encontrado"; uno ya impreso, error claro.
+- **El bot, por pedido**:
+  - Sabe qué archivos tiene guardados cada pedido. Dice "recibimos el archivo (nombre)" o "tengo el pedido, pero todavía no tengo ningún archivo", o "llegó con un link que todavía no pudimos bajar", y cómo mandarlo eligiendo ese pedido en el clip.
+  - Con **varios pedidos en curso** lista cada uno con su situación y pregunta "¿Por cuál me consultás?".
+  - Si el cliente **nombra un pedido** ("VV-000051", "pedido 51", "orden #51") responde solo por ese; si no es suyo o no existe, lo dice y muestra los que sí tiene.
+- **Límite de subidas**: 10 archivos por minuto por cliente, ahora configurable con `APP_UPLOADS_PER_MINUTE` (los tests suben muchos seguidos).
+- **Impacto**: sin migración.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

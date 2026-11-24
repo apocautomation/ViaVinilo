@@ -45,6 +45,9 @@ const originalName = (f: UploadedFileLike) => safeFileName(Buffer.from(f.origina
  *   del servicio que eligió, en "Archivo recibido", igual que si lo hubiera mandado por mail.
  * - El asesor adjunta archivos al responder: por la app (el cliente los descarga) o por mail.
  */
+/** Pasos en los que el cliente todavía puede sumar o cambiar el archivo de un pedido (D-094): antes de imprimir. */
+const FILE_OPEN_STATUSES: string[] = ["PENDING_SIGNUP", "RECEIVED", "FILE_ERROR", "QUOTED", "DEPOSIT_RECEIVED"];
+
 @Injectable()
 export class ConversationFilesService {
   constructor(
@@ -88,12 +91,20 @@ export class ConversationFilesService {
 
   // ───────────── Cliente (app) ─────────────
 
-  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number }) {
+  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector?: SectorCode; job?: number; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number }) {
     this.check(file);
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId }, select: { status: true, deletedAt: true } });
     if (!customer || customer.deletedAt) throw new NotFoundException("No encontramos tu cuenta");
     if (customer.status === "BLOCKED") throw new ForbiddenException("Tu cuenta no puede enviar trabajos. Escribinos por el chat.");
-    const sector = await this.prisma.sector.findUnique({ where: { code: input.sector } });
+    // D-094: el archivo puede ser para un pedido que el cliente ya tiene (corregido o que faltaba).
+    const chosen = input.job
+      ? await this.prisma.jobOrder.findFirst({ where: { number: input.job, customerId, deletedAt: null }, select: { id: true, number: true, status: true, requestedSpecs: true, sector: true } })
+      : null;
+    if (input.job && !chosen) throw new NotFoundException("No encontramos ese pedido");
+    if (chosen && !FILE_OPEN_STATUSES.includes(chosen.status)) {
+      throw new UnprocessableEntityException("Ese pedido ya está en producción: no se le puede cambiar el archivo. Escribinos por este chat y lo vemos.");
+    }
+    const sector = chosen?.sector ?? (input.sector ? await this.prisma.sector.findUnique({ where: { code: input.sector } }) : null);
     if (!sector) throw new BadRequestException("Elegí un servicio");
 
     const conversationId = await this.conversationOf(customerId);
@@ -113,28 +124,54 @@ export class ConversationFilesService {
     };
 
     // D-065: con un solo pedido en "Archivo con error" en este tablero, es el archivo corregido.
-    const errored = await this.prisma.jobOrder.findMany({
-      where: { customerId, sectorId: sector.id, status: "FILE_ERROR", deletedAt: null },
-      select: { id: true, number: true },
-      take: 2,
-    });
-    if (errored.length === 1) {
-      const target = errored[0]!;
+    const errored = chosen
+      ? []
+      : await this.prisma.jobOrder.findMany({
+          where: { customerId, sectorId: sector.id, status: "FILE_ERROR", deletedAt: null },
+          select: { id: true, number: true, status: true, requestedSpecs: true },
+          take: 2,
+        });
+    const target = chosen ?? (errored.length === 1 ? errored[0]! : null);
+    if (target) {
+      const wasError = target.status === "FILE_ERROR";
+      // La nota se suma a lo que ya había: antes pisaba las medidas del pedido.
+      const prev = (target.requestedSpecs as Record<string, unknown> | null) ?? {};
+      const nextSpecs = note ? { ...prev, note: [prev.note, note].filter(Boolean).join("\n") } : null;
       return this.prisma.$transaction(async (tx) => {
         await tx.jobFile.create({
           data: { jobId: target.id, filename: attachment.name, storageKey: attachment.key!, sizeBytes: BigInt(attachment.size!), mime: attachment.mime!, checksum },
         });
-        await tx.jobOrder.update({ where: { id: target.id }, data: { status: "RECEIVED", fileCheck: Prisma.DbNull, ...(note ? { requestedSpecs: { channel: "app", note } } : {}) } });
-        await tx.jobEvent.create({ data: { jobId: target.id, fromStatus: "FILE_ERROR", toStatus: "RECEIVED", note: "El cliente mandó el archivo corregido por la app" } });
+        await tx.jobOrder.update({
+          where: { id: target.id },
+          data: {
+            ...(wasError ? { status: "RECEIVED" } : {}),
+            // Con un archivo nuevo, el control automático se hace otra vez.
+            ...(wasError || target.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}),
+            ...(nextSpecs ? { requestedSpecs: nextSpecs as Prisma.InputJsonValue } : {}),
+          },
+        });
+        await tx.jobEvent.create({
+          data: wasError
+            ? { jobId: target.id, fromStatus: "FILE_ERROR", toStatus: "RECEIVED", note: "El cliente mandó el archivo corregido por la app" }
+            : // El pedido no cambia de paso: queda en el historial y no dispara un aviso de estado.
+              { jobId: target.id, fromStatus: target.status, toStatus: target.status, note: `El cliente sumó un archivo por la app: ${attachment.name}`, notifiedCustomer: true },
+        });
         const msg = await tx.message.create({
-          data: { conversationId, direction: "IN", channel: "APP", body: note ?? "Te mando el archivo corregido.", attachments: [attachment] as unknown as Prisma.InputJsonValue, jobId: target.id },
+          data: {
+            conversationId,
+            direction: "IN",
+            channel: "APP",
+            body: note ?? (wasError ? "Te mando el archivo corregido." : `Te mando un archivo para el pedido ${formatJobNumber(target.number)}.`),
+            attachments: [attachment] as unknown as Prisma.InputJsonValue,
+            jobId: target.id,
+          },
           select: { id: true, direction: true, channel: true, subject: true, body: true, attachments: true, createdAt: true, fromBot: true, jobId: true },
         });
         await tx.conversation.update({
           where: { id: conversationId },
           data: { lastMessageAt: msg.createdAt, lastMessagePreview: preview(`📎 ${attachment.name}`), staffUnread: { increment: 1 } },
         });
-        return { message: msg, job: { id: target.id, label: formatJobNumber(target.number), sector: sector.name }, resent: true };
+        return { message: msg, job: { id: target.id, label: formatJobNumber(target.number), sector: sector.name }, resent: wasError, added: !wasError };
       });
     }
 

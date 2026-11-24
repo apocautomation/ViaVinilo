@@ -126,6 +126,8 @@ export async function processBotReplies(
         sector: { select: { name: true } },
         // D-092: el motivo del último error de archivo, para decírselo al cliente.
         events: { where: { toStatus: "FILE_ERROR" }, orderBy: { createdAt: "desc" }, take: 1, select: { note: true, reason: { select: { label: true } } } },
+        // D-094: para decir si el pedido tiene o no su archivo.
+        files: { where: { deletedAt: null, purgedAt: null }, orderBy: { createdAt: "desc" }, select: { filename: true } },
       },
     });
     const history = await prisma.message.findMany({
@@ -148,6 +150,8 @@ export async function processBotReplies(
       depositAmount: j.depositAmount?.toString() ?? null,
       estimatedReadyAt: j.estimatedReadyAt,
       createdAt: j.createdAt,
+      files: j.files.map((f) => f.filename),
+      hasLinks: j.externalLinks.length > 0,
       fileIssue:
         j.status === "FILE_ERROR"
           ? [j.events[0]?.reason?.label, j.events[0]?.note?.replace(/^Control automático: /, "")]

@@ -60,6 +60,8 @@ export class AppJobsService {
       /** Dónde lo retira (D-083): lo que eligió o, si no eligió, la sucursal del servicio. */
       pickup: PICKUP_LABELS[isPickupBranch(job.pickupBranch) ? job.pickupBranch : defaultPickupBranch(job.sector.code)],
       canCancel: CUSTOMER_CANCELLABLE.includes(job.status),
+      /** Todavía se le puede sumar o cambiar el archivo (D-094): antes de imprimir. */
+      canAddFile: ["PENDING_SIGNUP", "RECEIVED", "FILE_ERROR", "QUOTED", "DEPOSIT_RECEIVED"].includes(job.status),
       /** Un pedido cancelado se puede volver a pedir (D-075). */
       canReorder: job.status === "CANCELLED",
       error: status === "FILE_ERROR" ? (lastError?.reason?.label ?? "Hay que corregir el archivo.") : null,

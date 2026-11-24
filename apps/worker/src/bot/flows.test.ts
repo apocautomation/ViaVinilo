@@ -61,6 +61,36 @@ describe("flujos fijos del bot (D-060)", () => {
     expect(fixedFlow("te mando mi archivo para remeras", { ...ctx, jobs })).toMatch(/Mandá el archivo/);
   });
 
+  it("D-094: dice si tiene o no el archivo de cada pedido, y cómo sumarlo al pedido", () => {
+    const base = { sector: "DTF Textil", description: "20 x 30 cm", quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), status: "Archivo recibido" };
+    const conArchivo = { ...base, label: "VV-000040", files: ["logo.png"], fileCheck: "ok" as const };
+    const sinArchivo = { ...base, label: "VV-000041", files: [] };
+    expect(fixedFlow("tenes mi archivo?", { ...ctx, jobs: [conArchivo] })).toBe("Tu pedido: VV-000040 (DTF Textil, 20 x 30 cm): recibimos el archivo y el control automático dio bien (logo.png). Falta que lo coticemos.");
+    const no = fixedFlow("tenes mi archivo?", { ...ctx, jobs: [sinArchivo] });
+    expect(no).toContain("tengo el pedido, pero todavía no tengo ningún archivo");
+    expect(no).toContain("eligiendo el pedido VV-000041");
+    expect(fixedFlow("llegó?? mi archivo", { ...ctx, jobs: [{ ...sinArchivo, hasLinks: true }] })).toContain("todavía no lo pudimos bajar");
+  });
+
+  it("D-094: con varios pedidos pregunta por cuál, y si el cliente nombra el número responde por ese", () => {
+    const base = { sector: "DTF Textil", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date() };
+    const jobs = [
+      { ...base, label: "VV-000050", status: "Archivo recibido", files: ["a.png"] },
+      { ...base, label: "VV-000051", status: "Archivo con error", files: ["b.png"], fileIssue: "Resolución baja" },
+    ];
+    const varios = fixedFlow("tenes mi archivo?", { ...ctx, jobs });
+    expect(varios).toMatch(/^Tenés 2 pedidos en curso:/);
+    expect(varios).toContain("• VV-000050 (DTF Textil): recibimos el archivo (a.png)");
+    expect(varios).toContain("• VV-000051 (DTF Textil): el archivo tiene un problema: Resolución baja");
+    expect(varios).toMatch(/¿Por cuál me consultás\? Decime el número\.$/);
+    for (const q of ["y el pedido 51 está correcto?", "tenes el archivo del VV-000051?", "llegó el archivo de la orden #51?"]) {
+      const r = fixedFlow(q, { ...ctx, jobs });
+      expect(r, q).toMatch(/^VV-000051 \(DTF Textil\): el archivo tiene un problema/);
+      expect(r, q).not.toContain("VV-000050");
+    }
+    expect(fixedFlow("tenes el archivo del pedido 99?", { ...ctx, jobs })).toMatch(/^No encuentro un pedido con el número 99 a tu nombre/);
+  });
+
   it("D-060: lo demás lo responde la IA", () => {
     expect(fixedFlow("¿qué diferencia hay entre DTF y sublimación?", ctx)).toBeNull();
   });

@@ -42,7 +42,7 @@ const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo
  */
 /** Se prueba sobre el texto sin tildes: "\\b" no corta bien después de una vocal acentuada. */
 const FILE_QUESTION =
-  /\b(archivos?|disenos?|mail|correo)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archivos?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b|\bque (le )?(pasa|paso|onda)\b.{0,30}\b(archivos?|disenos?|pedidos?|trabajos?)\b|\b(archivos?|disenos?|pedidos?|trabajos?)\b.{0,30}\b(no avanza|sigue igual|trabado|frenado|parado)\b|\bpor ?que no (avanza|sale|lo hacen|lo imprimen)\b|\b(mi|mis) (archivos?|disenos?)\b.*\?/i;
+  /\b(archivos?|disenos?|mail|correo|pedidos?|orden(es)?)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archivos?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b|\bque (le )?(pasa|paso|onda)\b.{0,30}\b(archivos?|disenos?|pedidos?|trabajos?)\b|\b(archivos?|disenos?|pedidos?|trabajos?)\b.{0,30}\b(no avanza|sigue igual|trabado|frenado|parado)\b|\bpor ?que no (avanza|sale|lo hacen|lo imprimen)\b|\b(mi|mis) (archivos?|disenos?)\b.*\?/i;
 const plain = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 /** Un trabajo nuevo: pide imprimir, manda medidas o un archivo, o avisa que adjunta (D-060, D-061). */
 const NEW_JOB =
@@ -130,16 +130,31 @@ function howToPay(serviceId: string | null): string {
 
 const ars = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
 
-/** Un pedido en una línea, con lo que el cliente necesita saber del archivo (D-092). */
+/** "VV-000021", "pedido 21", "orden #21" → 21. */
+export function jobNumberIn(text: string): number | null {
+  const m = /\b(?:vv[\s-]*0*|(?:pedido|orden|trabajo)\s*(?:n(?:ro|um(?:ero)?)?[.°º]*\s*)?#?\s*0*)(\d{1,7})\b/i.exec(text.normalize("NFD").replace(/\p{Diacritic}/gu, ""));
+  return m ? Number(m[1]) : null;
+}
+
+/** Un pedido en una línea, con lo que el cliente necesita saber del archivo (D-092, D-094). */
 function jobLine(j: BotJob): string {
   const base = `${j.label} (${j.sector}${j.description ? `, ${j.description}` : ""})`;
+  const clip = `con el clip 📎 de este chat, eligiendo el pedido ${j.label}`;
+  const names = j.files?.length ? ` (${j.files.slice(0, 2).join(", ")}${j.files.length > 2 ? ` y ${j.files.length - 2} más` : ""})` : "";
   if (j.status === "Archivo con error") {
-    return `${base}: el archivo tiene un problema${j.fileIssue ? `: ${j.fileIssue}` : ""}. Mandalo corregido con el clip 📎 de este chat`;
+    return `${base}: el archivo tiene un problema${j.fileIssue ? `: ${j.fileIssue}` : ""}. Mandalo corregido ${clip}`;
   }
+  // D-094: se sabe que el pedido no tiene ningún archivo guardado.
+  const missing = j.files !== undefined && j.files.length === 0;
   if (j.status === "Archivo recibido") {
-    if (j.fileCheck === "ok") return `${base}: recibimos el archivo y el control automático dio bien. Falta que lo coticemos`;
-    if (j.fileCheck === "review") return `${base}: recibimos el archivo y lo está revisando el equipo antes de cotizar`;
-    return `${base}: recibimos el archivo. Lo revisamos y te pasamos el precio`;
+    if (missing) {
+      return j.hasLinks
+        ? `${base}: recibimos el pedido con el link del archivo, pero todavía no lo pudimos bajar. Si podés, mandalo ${clip}`
+        : `${base}: tengo el pedido, pero todavía no tengo ningún archivo. Mandalo ${clip}`;
+    }
+    if (j.fileCheck === "ok") return `${base}: recibimos el archivo y el control automático dio bien${names}. Falta que lo coticemos`;
+    if (j.fileCheck === "review") return `${base}: recibimos el archivo y lo está revisando el equipo antes de cotizar${names}`;
+    return `${base}: recibimos el archivo${names}. Lo revisamos y te pasamos el precio`;
   }
   if (j.status === "Cotizado" && j.quotedAmount) {
     // D-093: el cliente pregunta "¿está listo?" y lo que le falta saber es el precio y la seña.
@@ -166,9 +181,21 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
     if (active.length === 0) {
       return "Todavía no veo pedidos tuyos en curso. Si mandaste el archivo recién, puede tardar unos minutos en aparecer. Si todavía no lo mandaste, usá el clip 📎 de este chat y te pasamos el precio.";
     }
-    const lines = active.slice(0, 3).map(jobLine);
     const after = c.noticesOn ? " Cuando cambie, te llega un aviso por acá y por mail." : "";
-    return `${active.length === 1 ? "Tu pedido" : "Tus pedidos"}: ${lines.join("; ")}.${after}`;
+    // D-094: si nombra un pedido ("VV-21", "pedido 21"), se responde por ese.
+    const asked = jobNumberIn(text);
+    if (asked !== null) {
+      const one = c.jobs.find((j) => Number(j.label.replace(/\D/g, "")) === asked);
+      if (one) return `${jobLine(one)}.${one.status === "Entregado" || one.status === "Cancelado" ? "" : after}`;
+      return `No encuentro un pedido con el número ${asked} a tu nombre. ${active.length === 1 ? "El que tenés en curso" : "Los que tenés en curso"}: ${active.slice(0, 3).map(jobLine).join("; ")}.`;
+    }
+    const lines = active.slice(0, 3).map(jobLine);
+    if (active.length > 1) {
+      // Con varios pedidos se pregunta a cuál se refiere, mostrando cada uno con su archivo.
+      const more = active.length > 3 ? ` (y ${active.length - 3} más en Pedidos)` : "";
+      return `Tenés ${active.length} pedidos en curso${more}:\n${lines.map((l) => `• ${l}.`).join("\n")}\n¿Por cuál me consultás? Decime el número.`;
+    }
+    return `Tu pedido: ${lines.join("; ")}.${after}`;
   }
 
   // Preguntas frecuentes con datos del sistema (D-060, D-066): no pasan por la IA.

@@ -124,11 +124,12 @@ export class AppChatController {
   /** El cliente manda su archivo por el chat (D-062): se crea el pedido en el tablero del servicio. */
   @Post("files")
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  // Subidas por minuto por cliente. Configurable para los tests, que suben muchos archivos seguidos.
+  @Throttle({ default: { limit: Number(process.env.APP_UPLOADS_PER_MINUTE ?? 10), ttl: 60_000 } })
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   upload(
     @UploadedFile() file: UploadedFileLike | undefined,
-    @ZodBody(appUploadSchema) body: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number },
+    @ZodBody(appUploadSchema) body: { sector?: SectorCode; job?: number; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number },
     @CurrentCustomer() customer: AuthCustomer,
   ) {
     return this.files.customerUpload(customer.id, file, body);
