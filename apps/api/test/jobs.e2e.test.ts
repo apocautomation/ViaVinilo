@@ -236,6 +236,42 @@ describe("sucursal de retiro (D-083)", () => {
   });
 });
 
+describe("trabajos por cliente (D-084)", () => {
+  type G = { customer: { id: string; name: string }; total: number; ready: number; boards: string[]; quotedTotal: string | null; jobs: { id: string; board: { code: string }; service: string | null; statusLabel: string }[] };
+
+  it("D-084: junta los pedidos en curso de un cliente de todos los sectores, con el tablero y el sub-servicio de cada uno", async () => {
+    const otro = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Marta", lastName: "Quiroga", searchText: "marta quiroga" } });
+    const mk = (sector: string, status: JobStatus = "RECEIVED") =>
+      prisma.jobOrder.create({ data: { customerId: otro.id, sectorId: sectors[sector]!.id, status, source: "EMAIL", sourceMessageId: `<bc-${++seq}@test>`, description: `Trabajo ${seq}` } });
+    const dtf = await mk("DTF");
+    const latex = await mk("LATEX", "READY");
+    const entregado = await mk("CALANDRADO", "DELIVERED");
+    await http("owner").post(`/jobs/${dtf.id}/transition`, { to: "QUOTED", quotedAmount: "20.000", depositAmount: "10.000" });
+
+    const res = await http("owner").get("/jobs/by-customer?search=quiroga");
+    expect(res.status).toBe(200);
+    const g: G = res.body.customers[0];
+    expect(res.body.customers).toHaveLength(1);
+    expect(g.customer).toMatchObject({ id: otro.id, name: "Marta Quiroga" });
+    expect(g).toMatchObject({ total: 2, ready: 1, boards: ["DTF Textil", "Gran Formato"], quotedTotal: "20000" });
+    expect(g.jobs.map((j) => j.id)).not.toContain(entregado.id);
+    expect(g.jobs.find((j) => j.id === latex.id)).toMatchObject({ board: { code: "GRAN_FORMATO" }, service: "Látex" });
+    expect(g.jobs.find((j) => j.id === dtf.id)?.statusLabel).toBe("Esperando seña");
+  });
+
+  it("D-084 y D-017: producción ve solo los trabajos de sus sectores; se puede filtrar por sucursal de retiro", async () => {
+    const otro = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Raúl", lastName: "Sosa", searchText: "raul sosa" } });
+    const dtf = await prisma.jobOrder.create({ data: { customerId: otro.id, sectorId: sectors.DTF!.id, status: "RECEIVED", source: "EMAIL", sourceMessageId: `<bc-${++seq}@test>`, pickupBranch: "chile" } });
+    await prisma.jobOrder.create({ data: { customerId: otro.id, sectorId: sectors.SUBLIMACION!.id, status: "RECEIVED", source: "EMAIL", sourceMessageId: `<bc-${++seq}@test>` } });
+    const prod = await http("production").get("/jobs/by-customer?search=sosa");
+    expect(prod.body.customers[0].jobs.map((j: { id: string }) => j.id)).toEqual([dtf.id]);
+    const chile = await http("owner").get("/jobs/by-customer?pickup=chile");
+    expect(chile.body.customers.map((c: G) => c.customer.id)).toContain(otro.id);
+    const sanJuan = await http("owner").get("/jobs/by-customer?pickup=san-juan&search=sosa");
+    expect(sanJuan.body.customers).toHaveLength(0);
+  });
+});
+
 describe("cambios de estado", () => {
   it("actualización §2.4: los pasos no se pueden saltear", async () => {
     const job = await newJob();

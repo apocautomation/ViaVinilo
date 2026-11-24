@@ -1391,6 +1391,33 @@ table.data tfoot td {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+/* D-084: trabajos por cliente */
+.by-customer {
+  display: grid;
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+.by-customer-card {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.by-customer-card > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.by-customer-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 .service-tag {
   margin-right: 6px;
   font-weight: 700;

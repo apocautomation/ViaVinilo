@@ -1276,7 +1276,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   1. **Columna "Esperando seña"** en el tablero, entre Cotizado y Seña recibida. **Hecho en D-081.**
   2. **Sectores reales (resuelve I-26)** — **hecho en D-082**: Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; Sublimación y Calandrado aparte. Sin Embroidery ("vamos a tener solo TPU"). Látex deja de ser un tablero propio.
   3. **Sucursal de retiro** — **hecho en D-083** — (Av. Chile o San Juan) elegida al hacer el pedido, visible en la tarjeta. Hay una camioneta que cruza pedidos dos veces por día; el asistente no decide el lugar.
-  4. **Trabajos por cliente**: ver todos los pedidos de un cliente en todos los sectores, para que caja los junte.
+  4. **Trabajos por cliente** — **hecho en D-084**: ver todos los pedidos de un cliente en todos los sectores, para que caja los junte.
   5. **Número de cliente de Tango** visible y buscable; Ezequiel lo exporta cuando Ricardo le dé acceso por TeamViewer.
   6. **Máquinas reales por sector**: Ricardo pasa el listado (I-10). La asignación de máquina ya existe.
 - **Error de archivo automático (I-24)**: Ezequiel pidió que el pedido con archivo mal pase solo a "Archivo con error" en vez de quedar marcado con un punto. El mecanismo ya existe (D-065) y está apagado en producción; se prende desde Configuración. Antes de prenderlo hay que revisar un caso visto en la demo (un pedido de DTF UV controlado como "2800 × 5000 cm, 3 dpi"), porque con el paso automático ese cliente habría recibido un aviso de error equivocado.
@@ -1326,6 +1326,17 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Por qué**: que caja pueda juntar los trabajos de un cliente y que el pedido se traslade a tiempo, sin depender de leer el mail.
 - **Impacto**: migración `20261124230000_pickup_branch` (una columna, sin tocar datos). `POST /app/chat/files` acepta `pickupBranch` (opcional, para no romper la app ya instalada); nuevo `PATCH /jobs/:id/pickup`; `GET /app/jobs/:n` devuelve `pickup`.
 - **Abierto**: los pedidos anteriores quedan sin definir. Ojo que "después lo vamos a tener que cambiar porque vamos a unificar todo" (Verónica): cuando unifiquen sucursales, esto se revisa. El asistente del chat todavía no pregunta la sucursal.
+
+### D-084 · 24/11/2026 · Reunión con Verónica y Ricardo · pantalla "Trabajos por cliente"
+- **Definición del cliente**: muchos clientes piden en Calandra, Gran Formato y DTF a la vez, y para encontrar todos sus trabajos había que ir tablero por tablero. Verónica: "trabajos por cliente me gustó"; lo usa la chica de caja para unificar los pedidos de un cliente.
+- **Decisión**: nueva pantalla **Producción → Trabajos por cliente**.
+  - Muestra los pedidos **en curso** (ni entregados ni cancelados) agrupados por cliente, de todos los sectores juntos: tablero y sub-servicio, estado ("Esperando seña" incluido), sucursal de retiro, importe y fecha prometida.
+  - Arriba van los clientes con algo **listo para retirar**, después los que más trabajos tienen. Cada cliente dice en cuántos sectores tiene trabajos y la suma de lo cotizado.
+  - Filtros: buscar por cliente, N.º de cliente o N.º de pedido; por sucursal de retiro (D-083); y "solo con trabajos en varios sectores", que es el caso que hay que juntar.
+  - El número de pedido lleva al tablero donde se mueve. Es una pantalla de consulta: no cambia estados.
+  - **Permisos (D-017)**: producción ve solo los trabajos de sus sectores.
+- **Impacto**: `GET /jobs/by-customer`. Sin migración.
+- **Abierto**: hasta 200 clientes por pantalla; si el volumen crece hay que paginar. Para el historial completo de un cliente (también lo entregado) sigue estando su ficha y Ventas → Pedidos.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
