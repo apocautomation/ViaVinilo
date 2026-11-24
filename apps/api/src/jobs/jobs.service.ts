@@ -165,7 +165,8 @@ export class JobsService {
     if (q.tab === "READY") where.status = "READY";
     if (q.tab === "DELIVERED") where.status = "DELIVERED";
     if (q.search) {
-      const digits = q.search.replace(/D/g, "");
+      // Solo los dígitos: con "/D/" (sin la barra) un nombre quedaba como "número" y la búsqueda fallaba.
+      const digits = q.search.replace(/\D/g, "");
       const terms = normalizeSearch(q.search).split(" ").filter(Boolean);
       where.OR = [
         { customer: { AND: terms.map((t) => ({ searchText: { contains: t } })) } },
