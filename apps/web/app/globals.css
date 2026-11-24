@@ -1298,6 +1298,128 @@ table.data tfoot td {
 .icon-only {
   padding: 5px 7px;
 }
+
+/* D-079: panel del pedido que se abre desde el tablero */
+.order-panel {
+  width: min(560px, 100%);
+}
+.order-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 16px;
+}
+.order-panel-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px 28px;
+  margin: 0;
+}
+.order-block {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+.order-block h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.order-block p {
+  margin: 0;
+  font-size: 13.5px;
+}
+.order-block .file-check {
+  margin: 0;
+  font-size: 13px;
+}
+.order-strong {
+  font-weight: 600;
+}
+.order-message {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-neutral-100);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.order-kv {
+  font-size: 13.5px;
+}
+.order-files,
+.order-history {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.order-files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.order-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.order-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-size: 12.5px;
+}
+.order-history li {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.order-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 10px;
+}
+.order-panel {
+  overflow-x: hidden;
+}
+.order-form .field,
+.order-block select {
+  min-width: 0;
+}
+.order-form .field input,
+.order-form .field select,
+.order-form .field textarea,
+.order-block select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.order-block .btn-big {
+  width: 100%;
+}
 .menu-wrap {
   position: relative;
 }

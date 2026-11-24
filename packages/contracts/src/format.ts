@@ -51,3 +51,26 @@ export function parseAmount(input: string | number): string | null {
   if (!/^\d{1,12}(\.\d{1,2})?$/.test(normalized)) return null;
   return Number(normalized).toFixed(2);
 }
+
+/**
+ * Fecha y hora escritas a mano en el ERP, siempre como día/mes/año y en 24 h (D-079): el selector del
+ * navegador las mostraba como mes/día y AM/PM según el idioma de la PC. Devuelve el instante con la
+ * hora de Salta (UTC-3), o null si no es una fecha real. Sin hora, se toma el cierre del día (18:00).
+ */
+export function parseSaltaDateTime(date: string, time = ""): string | null {
+  const d = /^\s*(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2}|\d{4}))?\s*$/.exec(date);
+  if (!d) return null;
+  const t = time.trim() ? /^\s*(\d{1,2})(?::|\.|h)?(\d{2})?\s*$/.exec(time) : ["", "18", "00"];
+  if (!t) return null;
+  const day = Number(d[1]);
+  const month = Number(d[2]);
+  // Sin año: el año en curso en Salta.
+  const year = d[3] ? (d[3].length === 2 ? 2000 + Number(d[3]) : Number(d[3])) : new Date(Date.now() - 3 * 3600_000).getUTCFullYear();
+  const hour = Number(t[1]);
+  const minute = Number(t[2] ?? "0");
+  if (hour > 23 || minute > 59) return null;
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${year}-${p(month)}-${p(day)}T${p(hour)}:${p(minute)}:00-03:00`;
+}

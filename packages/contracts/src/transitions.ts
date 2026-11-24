@@ -100,6 +100,15 @@ export const transitionSchema = z
       .transform((v) => parseAmount(v) ?? "")
       .refine((v) => v !== "" && Number(v) > 0, "Ingresá un precio válido")
       .optional(),
+    /**
+     * Seña que se le pide al cliente al cotizar (D-079). Un monto: el pedido espera esa seña.
+     * Vacío, 0 o null: el pedido no lleva seña. Sin el campo: queda como estaba.
+     */
+    depositAmount: z
+      .union([z.string(), z.number(), z.null()])
+      .transform((v) => (v === null || v === "" ? null : (parseAmount(v) ?? "")))
+      .refine((v) => v !== "", "Ingresá una seña válida")
+      .optional(),
     estimatedReadyAt: z.coerce.date().optional(),
     /** Solo el dueño: imprimir sin seña (R-JOB-3). */
     force: z.boolean().optional(),
