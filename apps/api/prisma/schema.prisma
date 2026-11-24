@@ -334,6 +334,10 @@ model Sector {
   /// Casilla de Hostinger del sector (dtf@, granformato@, ...).
   inboxEmail String?         @unique
   active     Boolean         @default(true)
+  /// Sub-servicio de otro tablero (D-082): Látex, Ecosolvente, etc. dentro de Gran Formato. Se ve en el tablero del padre.
+  parentId   String?
+  parent     Sector?         @relation("SectorChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children   Sector[]        @relation("SectorChildren")
   stages     SectorStage[]
   machines   MachineSector[]
   users      UserSector[]
@@ -343,6 +347,8 @@ model Sector {
   messages   Message[]
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
+
+  @@index([parentId])
 }
 
 /// Secuencia de estados de cada sector (actualización §2.4). Los pasos son obligatorios.

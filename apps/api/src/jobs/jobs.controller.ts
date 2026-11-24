@@ -8,6 +8,8 @@ import { JobsService, type BoardQuery, type TransitionBody } from "./jobs.servic
 
 const boardQuerySchema = z.object({
   sector: sectorCodeSchema,
+  /** Sub-servicio del tablero (D-082): solo los pedidos de ese sub-servicio. */
+  service: sectorCodeSchema.optional(),
   machineId: z.string().min(1).optional(),
   materialId: z.string().min(1).optional(),
   q: z.string().trim().min(1).max(100).optional(),
@@ -20,6 +22,7 @@ const boardQuerySchema = z.object({
 
 const streamQuerySchema = z.object({ sector: sectorCodeSchema });
 const machineSchema = z.object({ machineId: z.string().min(1).nullable() });
+const serviceSchema = z.object({ sector: sectorCodeSchema });
 
 /** Cada cuánto se revisa si cambió el tablero. Cubre también las órdenes que crea el worker de mails. */
 const POLL_MS = Number(process.env.BOARD_POLL_MS ?? 2000);
@@ -75,6 +78,12 @@ export class JobsController {
   @HttpCode(200)
   transition(@Param("id") id: string, @ZodBody(transitionSchema) body: TransitionBody, @CurrentUser() user: AuthUser) {
     return this.jobs.transition(user, id, body);
+  }
+
+  /** Cambia el sub-servicio de un pedido dentro de su tablero (D-082). */
+  @Patch(":id/service")
+  moveService(@Param("id") id: string, @ZodBody(serviceSchema) body: { sector: string }, @CurrentUser() user: AuthUser) {
+    return this.jobs.moveService(user, id, body.sector);
   }
 
   @Patch(":id/machine")

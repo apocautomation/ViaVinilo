@@ -10,7 +10,7 @@ let app: INestApplication;
 let prisma: PrismaClient;
 let stopDb: () => Promise<void>;
 let baseUrl: string;
-const tokens = { owner: "", attention: "", production: "" };
+const tokens = { owner: "", attention: "", production: "", latex: "", granFormato: "" };
 const sectors: Record<string, Sector> = {};
 let customerId: string;
 let reasonId: string;
@@ -61,6 +61,10 @@ beforeAll(async () => {
       data: { code: s.code, name: s.name, inboxEmail: s.inboxEmail, stages: { create: s.stages } },
     });
   }
+  // D-082: los sub-servicios cuelgan de su tablero, igual que en el seed.
+  for (const s of buildSectors("viavinilo.test")) {
+    if (s.parent) await prisma.sector.update({ where: { code: s.code }, data: { parentId: sectors[s.parent]!.id } });
+  }
   for (const m of MACHINES) {
     await prisma.machine.create({
       data: { name: m.name, sectors: { create: m.sectors.map((c) => ({ sectorId: sectors[c]!.id })) } },
@@ -74,7 +78,15 @@ beforeAll(async () => {
   const production = await prisma.user.create({
     data: { email: "dtf@vv.test", name: "Impresor DTF", roles: ["PRODUCTION"], sectors: { create: { sectorId: sectors.DTF!.id } } },
   });
+  const latex = await prisma.user.create({
+    data: { email: "latex@vv.test", name: "Impresor Látex", roles: ["PRODUCTION"], sectors: { create: { sectorId: sectors.LATEX!.id } } },
+  });
+  const granFormato = await prisma.user.create({
+    data: { email: "gf@vv.test", name: "Encargado Gran Formato", roles: ["PRODUCTION"], sectors: { create: { sectorId: sectors.GRAN_FORMATO!.id } } },
+  });
   const jwt = app.get(JwtService);
+  tokens.latex = await jwt.signAsync({ sub: latex.id });
+  tokens.granFormato = await jwt.signAsync({ sub: granFormato.id });
   tokens.owner = await jwt.signAsync({ sub: owner.id });
   tokens.attention = await jwt.signAsync({ sub: attention.id });
   tokens.production = await jwt.signAsync({ sub: production.id });
@@ -142,6 +154,69 @@ describe("tablero de producción (E1.4)", () => {
     expect(cards.find((c: { id: string }) => c.id === a.id).sameMaterialCount).toBe(1);
     // Agrupado por material: las dos del mismo material quedan juntas y primero.
     expect(cards.slice(0, 2).every((c: { material: { id: string } | null }) => c.material?.id === vinilo.id)).toBe(true);
+  });
+});
+
+describe("sub-servicios de un tablero (D-082)", () => {
+  type C = { id: string; service: { code: string; name: string } | null };
+  const cardsOf = (body: { columns: { cards: C[] }[] }) => body.columns.flatMap((c) => c.cards);
+
+  it("D-082: el tablero de Gran Formato junta los pedidos de sus sub-servicios y dice de cuál es cada uno", async () => {
+    const general = await newJob("GRAN_FORMATO");
+    const latex = await newJob("LATEX");
+    const cortes = await newJob("CORTES");
+    const res = await http("owner").get("/jobs/board?sector=GRAN_FORMATO");
+    expect(res.body.services.map((s: { code: string }) => s.code).sort()).toEqual(["CORTES", "ECOSOLVENTE", "LATEX", "UV_RIGIDOS", "UV_ROLLO"]);
+    const cards = cardsOf(res.body);
+    expect(cards.find((c) => c.id === general.id)?.service).toBeNull();
+    expect(cards.find((c) => c.id === latex.id)?.service).toEqual({ code: "LATEX", name: "Látex" });
+    expect(cards.find((c) => c.id === cortes.id)?.service?.name).toBe("Cortes");
+
+    const soloLatex = await http("owner").get("/jobs/board?sector=GRAN_FORMATO&service=LATEX");
+    expect(cardsOf(soloLatex.body).map((c) => c.id)).toEqual([latex.id]);
+    expect((await http("owner").get("/jobs/board?sector=GRAN_FORMATO&service=DTF")).status).toBe(404);
+  });
+
+  it("D-082: en la lista de tableros no aparecen los sub-servicios sueltos", async () => {
+    const res = await http("owner").get("/sectors");
+    const codes = res.body.map((s: { code: string }) => s.code);
+    expect(codes.sort()).toEqual(["CALANDRADO", "DTF", "DTF_UV", "GRAN_FORMATO", "SUBLIMACION", "TPU"]);
+    expect(res.body.find((s: { code: string }) => s.code === "GRAN_FORMATO").services).toHaveLength(5);
+  });
+
+  it("D-017 y D-082: quien tiene Gran Formato ve sus sub-servicios; quien tiene solo Látex entra a ese tablero y ve solo lo suyo", async () => {
+    const latex = await newJob("LATEX");
+    const cortes = await newJob("CORTES");
+    const all = cardsOf((await http("granFormato").get("/jobs/board?sector=GRAN_FORMATO")).body).map((c) => c.id);
+    expect(all).toEqual(expect.arrayContaining([latex.id, cortes.id]));
+
+    const visible = await http("latex").get("/sectors");
+    expect(visible.body.map((s: { code: string }) => s.code)).toEqual(["GRAN_FORMATO"]);
+    expect(visible.body[0].services).toEqual([{ code: "LATEX", name: "Látex" }]);
+    const mine = await http("latex").get("/jobs/board?sector=GRAN_FORMATO");
+    const ids = cardsOf(mine.body).map((c) => c.id);
+    expect(ids).toContain(latex.id);
+    expect(ids).not.toContain(cortes.id);
+    expect((await http("latex").post(`/jobs/${cortes.id}/transition`, { to: "QUOTED", quotedAmount: "1000" })).status).toBe(403);
+    expect((await http("latex").get("/jobs/board?sector=DTF")).status).toBe(403);
+  });
+
+  it("D-082: un pedido se puede pasar a otro sub-servicio del mismo tablero, no a otro tablero; queda auditado", async () => {
+    const job = await newJob("GRAN_FORMATO");
+    const detail = await http("owner").get(`/jobs/${job.id}`);
+    expect(detail.body.services.map((s: { code: string }) => s.code)).toContain("ECOSOLVENTE");
+
+    const moved = await http("granFormato").patch(`/jobs/${job.id}/service`, { sector: "ECOSOLVENTE" });
+    expect(moved.status).toBe(200);
+    expect(moved.body.service).toEqual({ code: "ECOSOLVENTE", name: "Ecosolvente" });
+    const audit = await prisma.auditLog.findFirst({ where: { entityId: job.id, action: "service" } });
+    expect(audit?.after).toEqual({ sector: "ECOSOLVENTE" });
+
+    const otro = await http("owner").patch(`/jobs/${job.id}/service`, { sector: "DTF" });
+    expect(otro.status).toBe(400);
+    expect(otro.body.message).toBe("Ese servicio no es de este tablero");
+    // De vuelta al tablero general.
+    expect((await http("owner").patch(`/jobs/${job.id}/service`, { sector: "GRAN_FORMATO" })).body.service).toBeNull();
   });
 });
 

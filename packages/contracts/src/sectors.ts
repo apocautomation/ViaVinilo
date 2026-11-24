@@ -4,7 +4,7 @@ import { z } from "zod";
  * Tableros de base de Via Vinilo (SPEC §1). Desde D-064 se pueden crear más desde el ERP, así que el
  * código de un tablero es texto: mayúsculas, números y guion bajo.
  */
-export const SECTOR_CODES = ["DTF", "DTF_UV", "GRAN_FORMATO", "LATEX", "CALANDRADO", "SUBLIMACION"] as const;
+export const SECTOR_CODES = ["DTF", "DTF_UV", "TPU", "GRAN_FORMATO", "LATEX", "ECOSOLVENTE", "UV_ROLLO", "UV_RIGIDOS", "CORTES", "CALANDRADO", "SUBLIMACION"] as const;
 export type BaseSectorCode = (typeof SECTOR_CODES)[number];
 
 export const sectorCodeSchema = z.string().regex(/^[A-Z][A-Z0-9_]{1,29}$/, "Tablero inválido");
@@ -40,16 +40,36 @@ export const updateSectorSchema = z
   .refine((v) => Object.keys(v).length > 0, "No hay cambios para guardar");
 
 export const SECTOR_NAMES: Record<BaseSectorCode, string> = {
-  DTF: "DTF",
+  DTF: "DTF Textil",
   DTF_UV: "DTF UV",
+  TPU: "TPU",
   GRAN_FORMATO: "Gran Formato",
   LATEX: "Látex",
+  ECOSOLVENTE: "Ecosolvente",
+  UV_ROLLO: "UV rollo a rollo",
+  UV_RIGIDOS: "UV rígidos",
+  CORTES: "Cortes",
   CALANDRADO: "Calandrado",
   SUBLIMACION: "Sublimación",
 };
 
-/** Parte local de la casilla de mail de cada sector (SPEC E1.1). El dominio va por entorno. */
-export const SECTOR_INBOX_LOCAL_PART: Record<BaseSectorCode, string> = {
+/**
+ * Sub-servicios (D-082, reunión del 24/11): los cinco sistemas de impresión de Gran Formato son
+ * tableros hijos. Se ven todos juntos en el tablero de Gran Formato y cada pedido dice cuál es.
+ */
+export const SECTOR_PARENT: Partial<Record<BaseSectorCode, BaseSectorCode>> = {
+  LATEX: "GRAN_FORMATO",
+  ECOSOLVENTE: "GRAN_FORMATO",
+  UV_ROLLO: "GRAN_FORMATO",
+  UV_RIGIDOS: "GRAN_FORMATO",
+  CORTES: "GRAN_FORMATO",
+};
+
+/**
+ * Parte local de la casilla de mail de cada sector (SPEC E1.1). El dominio va por entorno.
+ * Los tableros nuevos de D-082 nacen sin casilla: se les pone desde Configuración (`cortes@`, `tpu@`).
+ */
+export const SECTOR_INBOX_LOCAL_PART: Partial<Record<BaseSectorCode, string>> = {
   DTF: "dtf",
   DTF_UV: "dtfuv",
   GRAN_FORMATO: "granformato",

@@ -32,10 +32,11 @@ const SECTOR_OF: Record<string, SectorCode> = {
   "dtf-uv": "DTF_UV",
   sublimacion: "SUBLIMACION",
   calandra: "CALANDRADO",
-  "uv-rigidos": "GRAN_FORMATO",
-  ecosolvente: "GRAN_FORMATO",
-  "uv-rollo": "GRAN_FORMATO",
-  corte: "GRAN_FORMATO",
+  // D-082: cada sub-servicio de Gran Formato entra con su nombre (se ven juntos en ese tablero).
+  "uv-rigidos": "UV_RIGIDOS",
+  ecosolvente: "ECOSOLVENTE",
+  "uv-rollo": "UV_ROLLO",
+  corte: "CORTES",
   latex: "LATEX",
 };
 

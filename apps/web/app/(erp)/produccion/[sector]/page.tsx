@@ -31,6 +31,8 @@ interface Card {
   linkCount: number;
   machine: { id: string; name: string } | null;
   material: { id: string; name: string } | null;
+  /** Sub-servicio del pedido (D-082): Látex, Ecosolvente… */
+  service: { code: string; name: string } | null;
   sameMaterialCount: number;
   createdAt: string;
   next: Status | null;
@@ -40,6 +42,8 @@ interface Card {
 interface Board {
   sector: { code: string; name: string };
   machines: { id: string; name: string }[];
+  /** Sub-servicios del tablero (D-082). */
+  services: { code: string; name: string }[];
   /** `key` distingue "Cotizado" de "Esperando seña" (D-081): las dos son del estado QUOTED. */
   columns: { key: string; status: Status; label: string; cards: Card[] }[];
 }
@@ -124,6 +128,9 @@ export default function BoardPage() {
   const [board, setBoard] = useState<Board | null>(null);
   const [q, setQ] = useState("");
   const [machineId, setMachineId] = useState("");
+  const [service, setService] = useState("");
+  // Al cambiar de tablero, el filtro de sub-servicio del anterior ya no sirve.
+  useEffect(() => setService(""), [sector]);
   const [groupByMaterial, setGroupByMaterial] = useState(false);
   /**
    * Vista compacta (D-066): cada tarjeta ocupa 3 renglones, para que un tablero con muchos pedidos no
@@ -156,9 +163,10 @@ export default function BoardPage() {
     const p = new URLSearchParams({ sector });
     if (q.trim()) p.set("q", q.trim());
     if (machineId) p.set("machineId", machineId);
+    if (service) p.set("service", service);
     if (groupByMaterial) p.set("groupByMaterial", "true");
     return p.toString();
-  }, [sector, q, machineId, groupByMaterial]);
+  }, [sector, q, machineId, service, groupByMaterial]);
 
   const load = useCallback(async () => {
     try {
@@ -280,6 +288,16 @@ export default function BoardPage() {
           onChange={(e) => setQ(e.target.value)}
           aria-label="Buscar"
         />
+        {(board?.services.length ?? 0) > 0 && (
+          <select value={service} onChange={(e) => setService(e.target.value)} aria-label="Filtrar por servicio">
+            <option value="">Todos los servicios</option>
+            {board?.services.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        )}
         <select value={machineId} onChange={(e) => setMachineId(e.target.value)} aria-label="Filtrar por máquina">
           <option value="">Todas las máquinas</option>
           {board?.machines.map((m) => (
@@ -343,7 +361,12 @@ export default function BoardPage() {
                             {waitingDeposit && <span className="warn" title={depositLabel}>Seña{card.depositAmount ? ` ${money.format(Number(card.depositAmount))}` : ""}</span>}
                           </span>
                         </span>
-                        {card.description && <span className="desc-line">{card.description}</span>}
+                        {card.description && (
+                          <span className="desc-line">
+                            {card.service && <b className="service-tag">{card.service.name}</b>}
+                            {card.description}
+                          </span>
+                        )}
                       </button>
                       {card.next && (
                         <button className="btn btn-primary btn-sm" disabled={busy === card.id} onClick={() => clickNext(card)}>
@@ -379,6 +402,7 @@ export default function BoardPage() {
                     </div>
                   )}
                   <div className="chips">
+                    {card.service && <span className="chip chip-brand">{card.service.name}</span>}
                     <span className="chip">
                       <Paperclip size={12} aria-hidden /> {card.fileCount} {card.fileCount === 1 ? "archivo" : "archivos"}
                     </span>

@@ -12,8 +12,8 @@ export const NOTICE_STATUSES = ["RECEIVED", "FILE_ERROR", "QUOTED", "READY"] as 
 const ars = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
 const PREVIEW_CHARS = 140;
 
-/** DTF y DTF UV se retiran y se pagan en la sucursal Centro; el resto, en la planta de Av. Chile. */
-const isCentro = (code: SectorCode) => code === "DTF" || code === "DTF_UV";
+/** DTF Textil, DTF UV y TPU se retiran y se pagan en la sucursal Centro; el resto, en la planta de Av. Chile. */
+const isCentro = (code: SectorCode) => code === "DTF" || code === "DTF_UV" || code === "TPU";
 
 export interface NoticeJob {
   number: number;

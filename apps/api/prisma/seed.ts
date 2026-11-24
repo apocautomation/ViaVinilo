@@ -27,6 +27,11 @@ async function main() {
       ]);
     }
 
+    // D-082: los sub-servicios cuelgan de su tablero (Látex, Ecosolvente… dentro de Gran Formato).
+    for (const s of buildSectors(mailDomain)) {
+      await prisma.sector.update({ where: { code: s.code }, data: { parentId: s.parent ? sectorIds.get(s.parent)! : null } });
+    }
+
     for (const m of MACHINES) {
       const machine = await prisma.machine.upsert({
         where: { name: m.name },
