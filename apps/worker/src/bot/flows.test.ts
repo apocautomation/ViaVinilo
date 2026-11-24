@@ -26,6 +26,22 @@ describe("flujos fijos del bot (D-060)", () => {
     expect(fixedFlow("ya está listo mi pedido?", { ...ctx, jobs, noticesOn: true })).toMatch(/te llega un aviso/);
   });
 
+  it("D-092: '¿tenés mi archivo?' y '¿está correcto?' se responden con el estado real, también si el archivo tiene error", () => {
+    const base = { sector: "DTF Textil", description: "58 x 100 cm", quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date() };
+    const conError = [{ ...base, label: "VV-000021", status: "Archivo con error", fileIssue: "Resolución baja. Para 58 × 100 cm da 25 dpi; el mínimo es 250" }];
+    for (const q of ["tenes mi archivo?", "esta correcto?", "llegó el archivo?", "recibieron mi diseño?", "tiene algún error?"]) {
+      const r = fixedFlow(q, { ...ctx, jobs: conError });
+      expect(r, q).toContain("VV-000021");
+      expect(r, q).toContain("el archivo tiene un problema: Resolución baja");
+      expect(r, q).toContain("Mandalo corregido con el clip");
+    }
+    const recibido = [{ ...base, label: "VV-000022", status: "Archivo recibido", fileCheck: "ok" as const }];
+    expect(fixedFlow("tenes mi archivo?", { ...ctx, jobs: recibido })).toContain("recibimos el archivo y el control automático dio bien");
+    expect(fixedFlow("esta correcto?", { ...ctx, jobs: [{ ...recibido[0]!, fileCheck: "review" as const }] })).toContain("lo está revisando el equipo");
+    // Sin pedidos no inventa que lo está esperando ni que lo recibió.
+    expect(fixedFlow("tenes mi archivo?", ctx)).toMatch(/Todavía no veo pedidos tuyos/);
+  });
+
   it("D-060: lo demás lo responde la IA", () => {
     expect(fixedFlow("¿qué diferencia hay entre DTF y sublimación?", ctx)).toBeNull();
   });

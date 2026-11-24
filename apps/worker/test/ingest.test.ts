@@ -628,3 +628,55 @@ describe("criterio de aceptación de la E1 (SPEC §5)", () => {
     expect(await prisma.jobFile.count({ where: { job: { sourceMessageId: { startsWith: "<carga-" } } } })).toBe(800);
   }, 300_000);
 });
+
+describe("sub-servicios sin casilla (D-092)", () => {
+  let eco: Sector;
+  let latex: Sector;
+  let tpu: Sector;
+  beforeAll(async () => {
+    eco = await prisma.sector.create({ data: { code: "ECOSOLVENTE", name: "Ecosolvente", parentId: granFormato.id } });
+    latex = await prisma.sector.create({ data: { code: "LATEX", name: "Látex", parentId: granFormato.id } });
+    await prisma.sector.create({ data: { code: "CORTES", name: "Cortes", parentId: granFormato.id } });
+    tpu = await prisma.sector.create({ data: { code: "TPU", name: "TPU" } });
+  });
+  const send = async (to: Sector, inbox: string, subject: string, text: string, messageId = nextId()) => {
+    const raw = await buildMail({ from: "juan@remeras.test", to: inbox, subject, text, messageId, attachments: [fakePdf(`a-${messageId.replace(/\W/g, "")}.pdf`)] });
+    return ingestMail(deps(), to, raw);
+  };
+  const sectorOf = async (jobId: string | undefined) => (await prisma.jobOrder.findUniqueOrThrow({ where: { id: jobId! } })).sectorId;
+
+  it("D-092: un mail a la casilla de Gran Formato que nombra un sub-servicio entra directo en ese sub-servicio", async () => {
+    const a = await send(granFormato, "granformato@viavinilo.test", "Lona en ECOSOLVENTE 3x1", "Hola, va la lona de 300 x 100 cm.");
+    expect(await sectorOf(a.jobId)).toBe(eco.id);
+    const b = await send(granFormato, "granformato@viavinilo.test", "Vinilo", "Es para látex, 60 x 200 cm");
+    expect(await sectorOf(b.jobId)).toBe(latex.id);
+  });
+
+  it("D-092: si no nombra ninguno, nombra varios o solo dice 'con corte', queda en Gran Formato para que lo clasifique una persona", async () => {
+    const ninguno = await send(granFormato, "granformato@viavinilo.test", "Cartel 2x1", "Va el archivo del cartel.");
+    expect(await sectorOf(ninguno.jobId)).toBe(granFormato.id);
+    const varios = await send(granFormato, "granformato@viavinilo.test", "Cotización", "¿Conviene látex o ecosolvente para esta lona?");
+    expect(await sectorOf(varios.jobId)).toBe(granFormato.id);
+    const conCorte = await send(granFormato, "granformato@viavinilo.test", "Vinilo ecosolvente con corte", "Vinilo ecosolvente con corte al ras, 50 x 50 cm");
+    expect(await sectorOf(conCorte.jobId)).toBe(eco.id);
+  });
+
+  it("D-092: TPU no tiene casilla: un mail a DTF que dice TPU entra al tablero TPU, y uno común sigue en DTF", async () => {
+    const a = await send(dtf, "dtf@viavinilo.test", "Parches TPU", "Necesito 20 parches en TPU de 8 x 8 cm");
+    expect(await sectorOf(a.jobId)).toBe(tpu.id);
+    const b = await send(dtf, "dtf@viavinilo.test", "Remeras", "DTF textil 58 x 100 cm");
+    expect(await sectorOf(b.jobId)).toBe(dtf.id);
+    // Gran Formato no manda nada a TPU aunque el mail lo nombre.
+    const c = await send(granFormato, "granformato@viavinilo.test", "Consulta", "¿hacen tpu?");
+    expect(await sectorOf(c.jobId)).toBe(granFormato.id);
+  });
+
+  it("D-092: el mismo mail leído dos veces no duplica el pedido aunque haya quedado en un sub-servicio", async () => {
+    const id = nextId();
+    const first = await send(granFormato, "granformato@viavinilo.test", "Ecosolvente 2x1", "lona", id);
+    const again = await send(granFormato, "granformato@viavinilo.test", "Ecosolvente 2x1", "lona", id);
+    expect(first.result).toBe("CREATED");
+    expect(again).toMatchObject({ result: "DUPLICATE", jobId: first.jobId });
+  });
+});
+

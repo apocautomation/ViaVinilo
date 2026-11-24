@@ -221,3 +221,51 @@ describe("cliente de IA (D-056)", () => {
     expect(String(err)).not.toContain("sk-secreta");
   });
 });
+
+describe("el bot informa el estado real del archivo (D-092)", () => {
+  it("D-092: de punta a punta: con un pedido en 'Archivo con error', '¿tenés mi archivo?' y '¿está correcto?' explican el problema sin llamar a la IA", async () => {
+    const reason = await prisma.fileErrorReason.create({ data: { code: "LOW_RESOLUTION", label: "Resolución baja" } });
+    const job = await prisma.jobOrder.create({
+      data: {
+        customerId,
+        sectorId,
+        status: "FILE_ERROR",
+        source: "API",
+        description: "58 x 100 cm · 1 copia",
+        events: { create: { fromStatus: "RECEIVED", toStatus: "FILE_ERROR", reasonId: reason.id, note: "Control automático: El archivo tiene 600 × 1000 píxeles. Para 58 × 100 cm da 25 dpi; el mínimo para DTF es 250. Va a salir pixelado." } },
+      },
+    });
+    await botOn();
+    const { llm, calls } = fakeLlm({ reply: "¡Dale! Apenas llegue tu archivo, lo veré en el sistema. ¿Podés esperar unos minutos mientras lo reviso?" });
+    const t0 = Date.now();
+    await customerWrites("tenes mi archivo?", new Date(t0));
+    expect(await processBotReplies(prisma, llm)).toMatchObject({ answered: 1 });
+    await customerWrites("esta correcto?", new Date(t0 + 1000));
+    expect(await processBotReplies(prisma, llm)).toMatchObject({ answered: 1 });
+    const replies = await prisma.message.findMany({ where: { conversationId, fromBot: true }, orderBy: { createdAt: "asc" } });
+    expect(replies).toHaveLength(2);
+    for (const r of replies) {
+      expect(r.body).toContain("el archivo tiene un problema: Resolución baja");
+      expect(r.body).toContain("da 25 dpi");
+      expect(r.body).toContain("Mandalo corregido con el clip");
+      expect(r.body).not.toMatch(/apenas llegue/i);
+    }
+    expect(calls).toHaveLength(0);
+    await prisma.jobEvent.deleteMany({ where: { jobId: job.id } });
+    await prisma.jobOrder.delete({ where: { id: job.id } });
+  });
+
+  it("D-092: si la IA va a repetir exactamente lo que ya dijo, el bot deriva a un asesor en vez de repetirlo", async () => {
+    await botOn();
+    const { llm } = fakeLlm({ reply: "No tengo ese dato, ¿me contás un poco más?" });
+    const t0 = Date.now();
+    await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t0));
+    expect(await processBotReplies(prisma, llm)).toMatchObject({ answered: 1, handoffs: 0 });
+    await customerWrites("¿y cuál dura más en la ropa?", new Date(t0 + 1000));
+    expect(await processBotReplies(prisma, llm)).toMatchObject({ handoffs: 1 });
+    const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
+    expect(conv).toMatchObject({ needsHuman: true, botEnabled: false, needsHumanReason: "El bot iba a repetir la misma respuesta" });
+    const last = await prisma.message.findFirstOrThrow({ where: { conversationId, fromBot: true }, orderBy: { createdAt: "desc" } });
+    expect(last.body).toMatch(/Te paso con un asesor/);
+  });
+});

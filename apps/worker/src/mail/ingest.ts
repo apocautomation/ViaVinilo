@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, type MailIngestResult, type PrismaClient, type Sector } from "@prisma/client";
 import type { FileStorage } from "../storage";
-import { customerSearchText, detectPickupBranch, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
+import { customerSearchText, detectPickupBranch, detectSubService, SECTOR_SHARED_INBOX, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
 import { extractContact } from "./contact";
 import { recordInboundMail } from "./conversation";
 import { parseMail, type ParsedMail } from "./parse";
@@ -124,8 +124,17 @@ async function decide(
     return { ...base, result: "SKIPPED_AUTO_REPLY" };
   }
 
-  const existing = await prisma.jobOrder.findUnique({
-    where: { sectorId_sourceMessageId: { sectorId: sector.id, sourceMessageId: mail.messageId } },
+  // D-092: el pedido puede quedar en un sub-servicio de esta casilla (Látex, Ecosolvente… en Gran
+  // Formato; TPU en DTF). La familia es la casilla más esos tableros.
+  const shared = (SECTOR_SHARED_INBOX as Record<string, string[] | undefined>)[sector.code] ?? [];
+  const related = await prisma.sector.findMany({
+    where: { active: true, id: { not: sector.id }, OR: [{ parentId: sector.id }, ...(shared.length ? [{ code: { in: shared } }] : [])] },
+    select: { id: true, code: true, name: true },
+  });
+  const familyIds = [sector.id, ...related.map((r) => r.id)];
+
+  const existing = await prisma.jobOrder.findFirst({
+    where: { sectorId: { in: familyIds }, sourceMessageId: mail.messageId },
     select: { id: true },
   });
   if (existing) {
@@ -207,7 +216,7 @@ async function decide(
   // D-065: si el cliente tiene un solo pedido en "Archivo con error" en este tablero, este mail es el
   // archivo corregido: se suma a ese pedido y vuelve a "Archivo recibido" (no se crea otro).
   const errored = files.length
-    ? await prisma.jobOrder.findMany({ where: { customerId: customer.id, sectorId: sector.id, status: "FILE_ERROR", deletedAt: null }, select: { id: true }, take: 2 })
+    ? await prisma.jobOrder.findMany({ where: { customerId: customer.id, sectorId: { in: familyIds }, status: "FILE_ERROR", deletedAt: null }, select: { id: true }, take: 2 })
     : [];
   if (errored.length === 1) {
     const target = errored[0]!.id;
@@ -230,12 +239,16 @@ async function decide(
     return { ...base, result: "RESENT", jobId: target };
   }
 
+  // D-092: si el mail nombra un solo sub-servicio de esta casilla, el pedido entra directo ahí.
+  const subCode = related.length ? detectSubService(`${mail.subject}\n${mail.text}`, related.map((r) => r.code)) : null;
+  const target = related.find((r) => r.code === subCode) ?? null;
+
   let jobId: string;
   try {
     const job = await prisma.jobOrder.create({
       data: {
         customerId: customer.id,
-        sectorId: sector.id,
+        sectorId: target?.id ?? sector.id,
         status,
         source: "EMAIL",
         sourceMessageId: mail.messageId,
@@ -269,8 +282,8 @@ async function decide(
     jobId = job.id;
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
-    const dup = await prisma.jobOrder.findUniqueOrThrow({
-      where: { sectorId_sourceMessageId: { sectorId: sector.id, sourceMessageId: mail.messageId } },
+    const dup = await prisma.jobOrder.findFirstOrThrow({
+      where: { sectorId: { in: familyIds }, sourceMessageId: mail.messageId },
       select: { id: true },
     });
     await log(deps, sector, received, "DUPLICATE", { jobId: dup.id });

@@ -1414,6 +1414,21 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: sin migración. Resuelve los puntos A-2, A-3, A-7, A-8, A-9 y A-10 del informe `docs/INFORME-PRUEBAS-2026-11-24.md`.
 - **Abierto**: A-1 (arrastre de tarjetas con mouse real y en pantallas táctiles) y A-12 (un pedido entregado sigue mostrando "Saldo a pagar", porque el cobro del saldo es de la Etapa 3).
 
+### D-092 · 24/11/2026 · Ezequiel (captura de un chat real) · el bot informa el estado real del archivo, y los mails se clasifican en los sub-servicios sin casilla
+- **Bot, qué pasó**: en un chat real el cliente preguntó "¿tenés mi archivo?" y "¿está correcto?" y el bot contestó tres veces lo mismo: "Apenas llegue tu archivo, lo veré en el sistema…", incluso con el pedido en "Archivo con error".
+  - **Causa**: esas preguntas no estaban en los flujos fijos (D-060), así que las contestaba la IA, y el modelo local inventó. Además el bot no conocía el motivo del error de archivo, solo el nombre del estado.
+- **Bot, decisión**:
+  - Las preguntas por el archivo ("¿tenés mi archivo?", "¿llegó?", "¿está correcto?", "¿tiene algún error?") se contestan con un **flujo fijo**, sin IA, con los pedidos reales del cliente.
+  - Por pedido dice: en "Archivo con error", el motivo y el detalle del control y que lo mande corregido con el clip; en "Archivo recibido", si el control dio bien, si lo está revisando el equipo o que falta cotizar; en el resto, el estado.
+  - **No repite**: si la IA va a decir exactamente lo mismo que ya dijo en ese chat, el bot deriva a un asesor y se apaga en ese chat.
+  - La IA también recibe el motivo del error en el contexto.
+- **Mails a sub-servicios sin casilla**: Cortes, Ecosolvente, UV rollo a rollo, UV rígidos y TPU no tienen casilla. Cada mail que entra a la casilla de Gran Formato (o a la de DTF Textil y DTF UV, para TPU) se revisa: si nombra **un solo** sub-servicio, el pedido entra directo en ese; si nombra varios o ninguno, queda en el tablero de la casilla para que lo clasifique una persona.
+  - **Por qué**: Ezequiel: "esas casillas que faltan, que revise todos los mails que llegan y se fije si es alguna de esas". Evita depender de crear casillas nuevas.
+  - **Palabras**: látex; ecosolvente; "UV … rollo" o "rollo a rollo"; "UV … rígido", "rígidos" o "cama plana"; "ploteo/plotter/servicio de corte", "solo corte" o un asunto que empieza con "corte"; TPU. "Con corte" suelto no cuenta, porque lo dice casi cualquier pedido de vinilo.
+  - El archivo corregido y el control de duplicados (Message-ID) miran toda la familia de la casilla, para no duplicar pedidos que quedaron en un sub-servicio.
+- **Impacto**: sin migración. `bot-dry-run` acepta pedidos de ejemplo para probar el bot real con un pedido en error.
+- **Abierto**: los pedidos que ya estaban en Gran Formato y DTF no se reclasifican solos; se puede correr una pasada sobre los existentes. `TODO(spec): I-10` — las palabras se ajustan cuando Ricardo pase cómo nombran los clientes cada servicio.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

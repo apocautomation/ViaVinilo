@@ -77,3 +77,39 @@ export const SECTOR_INBOX_LOCAL_PART: Partial<Record<BaseSectorCode, string>> = 
   CALANDRADO: "calandra",
   SUBLIMACION: "sublimacion",
 };
+
+/**
+ * Tableros que no cuelgan de otro pero reciben sus pedidos por la casilla de otro (D-092): TPU no
+ * tiene casilla propia y sus mails llegan a la de DTF Textil.
+ */
+export const SECTOR_SHARED_INBOX: Partial<Record<BaseSectorCode, BaseSectorCode[]>> = {
+  DTF: ["TPU"],
+  DTF_UV: ["TPU"],
+};
+
+/**
+ * Palabras que identifican un sub-servicio en el texto de un mail (D-092). Son a propósito pocas y
+ * claras: "corte" suelto no cuenta, porque casi cualquier pedido de vinilo dice "con corte".
+ */
+const SUBSERVICE_WORDS: { code: BaseSectorCode; re: RegExp }[] = [
+  { code: "LATEX", re: /\blatex\b/ },
+  { code: "ECOSOLVENTE", re: /\beco ?solvente\b/ },
+  { code: "UV_ROLLO", re: /\buv\b.{0,20}\brollo\b|\brollo a rollo\b/ },
+  { code: "UV_RIGIDOS", re: /\buv\b.{0,20}\brigid\w*|\brigidos?\b|\bcama plana\b/ },
+  { code: "CORTES", re: /\b(ploteo|plotter|servicio|trabajo|pedido) de cortes?\b|\b(solo|solamente|para) cortes?\b|^\s*cortes?\b/m },
+  { code: "TPU", re: /\btpu\b/ },
+];
+
+/**
+ * A qué sub-servicio corresponde un mail según lo que dice, entre los candidatos de esa casilla.
+ * Devuelve el código solo si nombra exactamente uno; si nombra varios o ninguno, null (queda en el
+ * tablero de la casilla y lo clasifica una persona).
+ */
+export function detectSubService(text: string, candidates: readonly string[]): string | null {
+  const plain = text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+  const found = new Set(SUBSERVICE_WORDS.filter((w) => candidates.includes(w.code) && w.re.test(plain)).map((w) => w.code));
+  return found.size === 1 ? [...found][0]! : null;
+}
