@@ -712,11 +712,29 @@ export class JobsService {
     await this.access.assert(user, job.sectorId);
     if ((job.measure ?? null) !== measure) {
       const specs = { ...((job.requestedSpecs as Record<string, unknown> | null) ?? {}), measureEdited: true };
+      // D-091: los pedidos de la app arrancan la descripción con la medida; se actualiza para que no quede la vieja.
+      const description = job.measure && measure && job.description?.startsWith(job.measure) ? `${measure}${job.description.slice(job.measure.length)}` : undefined;
+      // D-091: si el error lo puso el control automático, con la medida nueva el pedido vuelve a
+      // "Archivo recibido" y se controla otra vez. Un error puesto por una persona no se toca.
+      const lastError = job.status === "FILE_ERROR" ? await this.prisma.jobEvent.findFirst({ where: { jobId: id, toStatus: "FILE_ERROR" }, orderBy: { createdAt: "desc" } }) : null;
+      const recheck = lastError !== null && lastError.userId === null;
       await this.prisma.$transaction(async (tx) => {
         await tx.jobOrder.update({
           where: { id },
-          data: { measure, requestedSpecs: specs as Prisma.InputJsonValue, ...(job.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}) },
+          data: {
+            measure,
+            requestedSpecs: specs as Prisma.InputJsonValue,
+            ...(description ? { description } : {}),
+            ...(job.status === "RECEIVED" || recheck ? { fileCheck: Prisma.DbNull } : {}),
+            ...(recheck ? { status: "RECEIVED" } : {}),
+          },
         });
+        if (recheck) {
+          // notifiedCustomer en true: el cliente no mandó nada, no corresponde avisarle "recibimos tu archivo".
+          await tx.jobEvent.create({
+            data: { jobId: id, fromStatus: "FILE_ERROR", toStatus: "RECEIVED", userId: user.id, note: "El taller corrigió la medida: se vuelve a controlar el archivo", notifiedCustomer: true },
+          });
+        }
         await this.audit.log({ entity: "JobOrder", entityId: id, action: "measure", userId: user.id, before: { measure: job.measure }, after: { measure } }, tx);
       });
     }

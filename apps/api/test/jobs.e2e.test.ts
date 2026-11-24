@@ -412,6 +412,27 @@ describe("resumen de Inicio (D-089)", () => {
   });
 });
 
+describe("medida corregida en un pedido con error (D-091)", () => {
+  it("D-091: si el error lo puso el control automático, corregir la medida devuelve el pedido a 'Archivo recibido' para controlarlo de nuevo, sin avisarle al cliente", async () => {
+    const job = await newJob("DTF", { status: "FILE_ERROR" });
+    await prisma.jobOrder.update({ where: { id: job.id }, data: { measure: "58 x 100 cm", description: "58 x 100 cm · 1 copia", fileCheck: { verdict: "error", detail: "x" } } });
+    await prisma.jobEvent.create({ data: { jobId: job.id, fromStatus: "RECEIVED", toStatus: "FILE_ERROR", note: "Control automático: baja resolución" } });
+
+    const res = await http("production").patch(`/jobs/${job.id}/measure`, { measure: "5,8 x 10 cm" });
+    expect(res.body).toMatchObject({ status: "RECEIVED", measure: "5,8 x 10 cm", description: "5,8 x 10 cm · 1 copia", fileCheck: null });
+    const ev = await prisma.jobEvent.findFirstOrThrow({ where: { jobId: job.id, toStatus: "RECEIVED" }, orderBy: { createdAt: "desc" } });
+    expect(ev).toMatchObject({ fromStatus: "FILE_ERROR", notifiedCustomer: true });
+    expect(ev.note).toContain("corrigió la medida");
+  });
+
+  it("D-091: si el error lo puso una persona, corregir la medida no mueve el pedido", async () => {
+    const job = await newJob();
+    await http("production").post(`/jobs/${job.id}/transition`, { to: "FILE_ERROR", reasonId });
+    const res = await http("production").patch(`/jobs/${job.id}/measure`, { measure: "20 x 30 cm" });
+    expect(res.body).toMatchObject({ status: "FILE_ERROR", measure: "20 x 30 cm" });
+  });
+});
+
 describe("cambios de estado", () => {
   it("actualización §2.4: los pasos no se pueden saltear", async () => {
     const job = await newJob();

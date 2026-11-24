@@ -99,6 +99,16 @@ describe("avisos de estado al cliente (D-060)", () => {
     expect(noticeText("READY", { number: 13, description: null, sector: { code: "DTF", name: "DTF" }, quotedAmount: null, depositRequired: false, depositAmount: null }, { firstName: null }).text).toMatch(/San Juan 714/);
   });
 
+  it("D-091: el aviso de error ofrece el chat de la app, no deja doble punto y recorta la descripción larga", () => {
+    const job = { number: 15, description: "58 x 100 cm · 1 copia · remeras para el evento del sábado en la plaza, con el logo nuevo", sector: { code: "DTF", name: "DTF Textil" }, quotedAmount: null, depositRequired: false, depositAmount: null };
+    const { text } = noticeText("FILE_ERROR", job, { firstName: "Ana", reason: "Resolución baja. Va a salir pixelado." });
+    expect(text).toContain("por el chat de la app");
+    expect(text).not.toContain("..");
+    expect(text).toContain("pixelado. Mandalo");
+    expect(text).toMatch(/\(58 x 100 cm · 1 copia · remeras para el evento del sábado[^)]*…\)/);
+    expect(text.length).toBeLessThan(330);
+  });
+
   it("D-083: el aviso de 'listo para retirar' nombra la sucursal que eligió el cliente, no la del servicio", () => {
     const job = { number: 14, description: null, sector: { code: "DTF", name: "DTF Textil" }, quotedAmount: null, depositRequired: false, depositAmount: null };
     expect(noticeText("READY", { ...job, pickupBranch: "chile" }, { firstName: null }).text).toMatch(/Av\. Chile 1822/);

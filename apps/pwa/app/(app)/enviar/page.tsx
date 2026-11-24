@@ -64,8 +64,7 @@ export default function EnviarPage() {
     form.append("widthCm", String(widthCm));
     form.append("heightCm", String(heightCm));
     form.append("copies", copies);
-    const details = [`Servicio: ${serviceName}`, note.trim()].filter(Boolean).join("\n");
-    form.append("note", details);
+    if (note.trim()) form.append("note", note.trim());
     form.append("file", file);
     setError("");
     setProgress(0);

@@ -33,7 +33,9 @@ export function noticeText(
   opts: { firstName: string | null; reason?: string | null; resent?: boolean },
 ): { subject: string; text: string } {
   const label = formatJobNumber(job.number);
-  const what = job.description ? ` (${job.description})` : "";
+  // D-091: la descripción va recortada; entera hacía los avisos larguísimos.
+  const short = (job.description ?? "").replace(/\s+/g, " ").trim();
+  const what = short ? ` (${short.length > 60 ? `${short.slice(0, 57).trimEnd()}…` : short})` : "";
   const hi = opts.firstName ? `Hola ${opts.firstName}!` : "¡Hola!";
   switch (status) {
     case "RECEIVED":
@@ -44,7 +46,7 @@ export function noticeText(
     case "FILE_ERROR":
       return {
         subject: `Hay que corregir el archivo · ${label}`,
-        text: `${hi} El archivo del pedido ${label}${what} tiene un problema${opts.reason ? `: ${opts.reason}` : ""}. Mandalo corregido por mail a la casilla de ${job.sector.name} y lo seguimos.`,
+        text: `${hi} El archivo del pedido ${label}${what} tiene un problema${opts.reason ? `: ${opts.reason.replace(/[.\s]+$/, "")}` : ""}. Mandalo corregido por el chat de la app (con el clip) o por mail a la casilla de ${job.sector.name}, y lo seguimos.`,
       };
     case "QUOTED": {
       const price = job.quotedAmount ? ars.format(Number(job.quotedAmount)) : null;

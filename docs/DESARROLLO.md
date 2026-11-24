@@ -1402,6 +1402,18 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Arreglo**: se corrige la expresión y se agrega un test que busca por nombre, por una letra y por "VV-000123".
 - **Impacto**: solo `GET /jobs` con `search`. Sin migración.
 
+### D-091 · 24/11/2026 · Ezequiel (pendientes del informe de pruebas) · medida corregida en pedidos con error, horas en 24 h y textos de avisos
+- **Medida corregida en un pedido con error**: si el pedido está en "Archivo con error" porque lo puso el **control automático**, al corregir la medida vuelve a "Archivo recibido" y se controla de nuevo con la medida nueva. Al cliente no se le avisa "recibimos tu archivo" (no mandó nada). Si el error lo puso una persona (colores, fuentes, etc.), corregir la medida no mueve el pedido.
+  - **Por qué**: antes quedaba el cartel viejo ("Para 58 × 100 cm da 25 dpi") y la única salida era tocar "Archivo corregido", que le mandaba al cliente un aviso falso.
+- **Título del pedido**: en los pedidos de la app la descripción empieza con la medida; al corregirla se actualiza también ahí, para que tablero, Pedidos y app no muestren la vieja.
+- **Horas en 24 h en la app del cliente** ("17:30" en vez de "05:30 p. m."), igual que el ERP. También se fija la zona horaria de Salta en el chat.
+- **Avisos al cliente**:
+  - El aviso de error ofrece mandar el archivo corregido **por el chat de la app** o por mail (antes solo nombraba la casilla). Se quita el doble punto final.
+  - La descripción del pedido va recortada a 60 caracteres; entera hacía los avisos muy largos.
+- **Descripción de los pedidos de la app**: ya no repite "Servicio: DTF Textil" (el servicio es el tablero del pedido).
+- **Impacto**: sin migración. Resuelve los puntos A-2, A-3, A-7, A-8, A-9 y A-10 del informe `docs/INFORME-PRUEBAS-2026-11-24.md`.
+- **Abierto**: A-1 (arrastre de tarjetas con mouse real y en pantallas táctiles) y A-12 (un pedido entregado sigue mostrando "Saldo a pagar", porque el cobro del saldo es de la Etapa 3).
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

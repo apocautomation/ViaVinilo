@@ -13,7 +13,7 @@ interface Notice {
   createdAt: string;
 }
 
-const when = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Salta", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const when = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Salta", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 /** Avisos automáticos de los pedidos (D-060, D-068): los mismos que llegan al celular y por mail. */
 export default function AvisosPage() {
