@@ -22,6 +22,8 @@ export interface NoticeJob {
   quotedAmount: string | null;
   depositRequired: boolean;
   depositAmount: string | null;
+  /** Sucursal elegida para retirar (D-083). Sin dato: la del servicio. */
+  pickupBranch?: string | null;
 }
 
 /** Texto del aviso. Lo mismo va por el chat y por mail. */
@@ -56,7 +58,8 @@ export function noticeText(
       };
     }
     case "READY": {
-      const b = help.BRANCHES[isCentro(job.sector.code) ? 1 : 0]!;
+      // D-083: se avisa la sucursal que eligió el cliente; si no eligió, la del servicio.
+      const b = help.BRANCHES.find((x) => x.id === job.pickupBranch) ?? help.BRANCHES[isCentro(job.sector.code) ? 1 : 0]!;
       return {
         subject: `Tu pedido está listo para retirar · ${label}`,
         text: `${hi} Tu pedido ${label}${what} está terminado y listo para retirar en ${b.name}, ${b.address} (${b.hours.map((h) => `${h.days} ${h.time}`).join("; ")}). Si lo retira un cadete, tiene que entrar al local.`,
@@ -107,6 +110,7 @@ export async function processNotices(prisma: PrismaClient, opts: { limit?: numbe
         quotedAmount: ev.job.quotedAmount?.toString() ?? null,
         depositRequired: ev.job.depositRequired,
         depositAmount: ev.job.depositAmount?.toString() ?? null,
+        pickupBranch: ev.job.pickupBranch,
       },
       { firstName: customer.firstName, reason: [ev.reason?.label, ev.note?.replace(/^Control automático: /, "")].filter(Boolean).join(". ") || null, resent: ev.fromStatus === "FILE_ERROR" },
     );

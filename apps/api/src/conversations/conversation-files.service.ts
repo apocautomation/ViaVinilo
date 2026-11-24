@@ -18,6 +18,7 @@ import {
   safeFileName,
   type MessageAttachment,
   type MessageChannel,
+  type PickupBranch,
   type SectorCode,
 } from "@viavinilo/contracts";
 import { PrismaService } from "../prisma/prisma.service";
@@ -87,7 +88,7 @@ export class ConversationFilesService {
 
   // ───────────── Cliente (app) ─────────────
 
-  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector: SectorCode; note?: string }) {
+  async customerUpload(customerId: string, file: UploadedFileLike | undefined, input: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch }) {
     this.check(file);
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId }, select: { status: true, deletedAt: true } });
     if (!customer || customer.deletedAt) throw new NotFoundException("No encontramos tu cuenta");
@@ -133,6 +134,7 @@ export class ConversationFilesService {
           sectorId: sector.id,
           status: "RECEIVED",
           source: "API",
+          pickupBranch: input.pickupBranch ?? null,
           sourceMessageId: `app:${attachment.key}`,
           description: (note ?? attachment.name).slice(0, 200),
           requestedSpecs: { channel: "app", note },

@@ -1,7 +1,7 @@
 import { ConflictException, Controller, ForbiddenException, Get, HttpCode, Injectable, NotFoundException, Param, ParseIntPipe, Post, UseGuards } from "@nestjs/common";
 import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import { Prisma, type JobStatus } from "@prisma/client";
-import { alertSettingsSchema, DEFAULT_ALERT_SETTINGS, formatBytes, formatJobNumber, reorderSchema, type ReorderInput } from "@viavinilo/contracts";
+import { alertSettingsSchema, DEFAULT_ALERT_SETTINGS, defaultPickupBranch, formatBytes, formatJobNumber, isPickupBranch, PICKUP_LABELS, reorderSchema, type ReorderInput } from "@viavinilo/contracts";
 import { CurrentCustomer, CustomerAuth, type AuthCustomer } from "../auth/decorators";
 import { ZodBody } from "../common/zod";
 import { PrismaService } from "../prisma/prisma.service";
@@ -17,7 +17,7 @@ export const CUSTOMER_CANCELLABLE: JobStatus[] = ["PENDING_SIGNUP", "RECEIVED", 
 const DELIVERED_LIMIT = 50;
 
 const jobInclude = {
-  sector: { select: { name: true, stages: { orderBy: { position: "asc" }, select: { status: true } } } },
+  sector: { select: { name: true, code: true, stages: { orderBy: { position: "asc" }, select: { status: true } } } },
   files: { where: { deletedAt: null }, orderBy: { createdAt: "asc" }, select: { filename: true, sizeBytes: true, purgedAt: true } },
   events: { orderBy: { createdAt: "asc" }, select: { toStatus: true, createdAt: true, reason: { select: { label: true } } } },
 } satisfies Prisma.JobOrderInclude;
@@ -57,6 +57,8 @@ export class AppJobsService {
       depositAmount: job.depositAmount?.toString() ?? null,
       depositPaid: job.depositPaidAt !== null,
       readyAt: job.estimatedReadyAt,
+      /** Dónde lo retira (D-083): lo que eligió o, si no eligió, la sucursal del servicio. */
+      pickup: PICKUP_LABELS[isPickupBranch(job.pickupBranch) ? job.pickupBranch : defaultPickupBranch(job.sector.code)],
       canCancel: CUSTOMER_CANCELLABLE.includes(job.status),
       /** Un pedido cancelado se puede volver a pedir (D-075). */
       canReorder: job.status === "CANCELLED",

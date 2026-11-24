@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma, type MailIngestResult, type PrismaClient, type Sector } from "@prisma/client";
 import type { FileStorage } from "../storage";
-import { customerSearchText, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
+import { customerSearchText, detectPickupBranch, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
 import { extractContact } from "./contact";
 import { recordInboundMail } from "./conversation";
 import { parseMail, type ParsedMail } from "./parse";
@@ -239,6 +239,8 @@ async function decide(
         status,
         source: "EMAIL",
         sourceMessageId: mail.messageId,
+        // D-083: si el mail dice dónde retira, queda en el pedido; si no, lo define el asesor.
+        pickupBranch: detectPickupBranch(`${mail.subject}\n${mail.text}`),
         description: mail.subject,
         requestedSpecs: {
           subject: mail.subject,

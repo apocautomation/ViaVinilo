@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, Download, FileText, Lock, Paperclip } from "lucide-react";
+import { isPickupBranch, PICKUP_LABELS } from "@viavinilo/contracts";
 import { api, downloadFile, getUser, watchBoard, type SessionUser } from "../../../lib/api";
 import { Help } from "../../help";
 import { ars } from "../../ui";
@@ -25,6 +26,8 @@ interface Card {
   depositAmount: string | null;
   depositPaidAt: string | null;
   estimatedReadyAt: string | null;
+  /** Sucursal donde retira (D-083). */
+  pickupBranch: string | null;
   fileCount: number;
   /** Resultado del control automático del archivo (D-065). */
   fileCheck: { verdict: "ok" | "review" | "error" | "unknown"; detail: string; hint?: string; linkNote?: string } | null;
@@ -364,6 +367,7 @@ export default function BoardPage() {
                         {card.description && (
                           <span className="desc-line">
                             {card.service && <b className="service-tag">{card.service.name}</b>}
+                            {isPickupBranch(card.pickupBranch) && <b className="service-tag">→ {PICKUP_LABELS[card.pickupBranch]}</b>}
                             {card.description}
                           </span>
                         )}
@@ -409,6 +413,7 @@ export default function BoardPage() {
                     {card.linkCount > 0 && <span className="chip">{card.linkCount} link</span>}
                     {card.quotedAmount && <span className="chip chip-brand">{money.format(Number(card.quotedAmount))}</span>}
                     {waitingDeposit && <span className="chip chip-warn">{depositLabel}</span>}
+                    {isPickupBranch(card.pickupBranch) && <span className="chip">Retira en {PICKUP_LABELS[card.pickupBranch]}</span>}
                     {card.material && <span className="chip">{card.material.name}</span>}
                     {card.sameMaterialCount > 0 && (
                       <span className="chip chip-brand">+{card.sameMaterialCount} con el mismo material</span>
