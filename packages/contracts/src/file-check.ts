@@ -69,6 +69,18 @@ export function readPdfPageSize(bytes: Uint8Array): { widthCm: number; heightCm:
   return widthCm > 0 && heightCm > 0 && Number.isFinite(widthCm + heightCm) ? { widthCm, heightCm } : null;
 }
 
+/**
+ * Medidas que no pueden ser reales para una impresión (D-080): más de 3,2 m en el lado corto o más de
+ * 50 m en el largo. Casi siempre es la unidad mal escrita ("28x50 mts" por 28 × 50 cm), así que no se
+ * da el archivo por malo: lo mira el operador.
+ * TODO(spec): I-24 — confirmar los topes con Ricardo cuando pase el ancho real de cada máquina.
+ */
+export const MAX_SHORT_SIDE_CM = 320;
+export const MAX_LONG_SIDE_CM = 5000;
+
+/** Un par de números sin resolver ("58x300", "16 x 16"): el cliente escribió más de una medida. */
+const LOOSE_PAIR = /\d\s*[x×*]\s*\d/i;
+
 /** Cuánto puede diferir el tamaño de un PDF de la medida pedida para darlo por bueno. */
 const PDF_TOLERANCE = 0.03;
 
@@ -101,7 +113,7 @@ export function checkFile(input: {
    * `assumed`: el cliente no puso la unidad y se supuso ("58x30" → cm). Con una medida supuesta
    * nunca se da el archivo por malo: como mucho se pide revisarlo.
    */
-  measures: { widthCm?: number; heightCm?: number; assumed?: boolean }[];
+  measures: { widthCm?: number; heightCm?: number; assumed?: boolean; raw?: string }[];
 }): FileCheck {
   const { image, filename } = input;
   const pairs = input.measures.filter((m) => m.widthCm && m.heightCm);
@@ -136,6 +148,16 @@ export function checkFile(input: {
     };
   }
   const { widthCm, heightCm, assumed } = pairs[0] as { widthCm: number; heightCm: number; assumed?: boolean };
+  // D-080: con una medida imposible, o con otras medidas sueltas en el mismo pedido, no se decide solo.
+  if (Math.min(widthCm, heightCm) > MAX_SHORT_SIDE_CM || Math.max(widthCm, heightCm) > MAX_LONG_SIDE_CM) {
+    return {
+      verdict: "review",
+      detail: `El cliente escribió ${fmt(widthCm)} × ${fmt(heightCm)} cm, que no parece una medida real: puede ser la unidad mal puesta. ${hint}`,
+      hint,
+      file: filename,
+    };
+  }
+  const otherPairs = input.measures.some((m) => !(m.widthCm && m.heightCm) && !!m.raw && LOOSE_PAIR.test(m.raw));
   const dpi = (px: number, cm: number) => px / (cm / 2.54);
   // El archivo puede venir girado: se toma la orientación que mejor da.
   const straight = Math.min(dpi(image.width, widthCm), dpi(image.height, heightCm));
@@ -144,11 +166,12 @@ export function checkFile(input: {
   const guess = assumed ? " El cliente no puso la unidad: se tomó la medida en centímetros o metros según el número." : "";
   const facts = `El archivo tiene ${image.width} × ${image.height} píxeles. Para ${fmt(widthCm)} × ${fmt(heightCm)} cm da ${effective} dpi; el mínimo para ${input.sectorName} es ${min}.${guess}`;
   // Con la medida supuesta no se da por malo: lo mira el operador.
-  if (effective < min * AUTO_ERROR_FRACTION && !assumed) {
+  if (effective < min * AUTO_ERROR_FRACTION && !assumed && !otherPairs) {
     return { verdict: "error", reasonCode: "LOW_RESOLUTION", detail: `${facts} Va a salir pixelado.`, effectiveDpi: effective, file: filename };
   }
   if (effective < min) {
-    return { verdict: "review", reasonCode: "LOW_RESOLUTION", detail: `${facts} Puede salir pixelado: revisalo.`, effectiveDpi: effective, file: filename };
+    const why = otherPairs ? " El cliente escribió más de una medida: confirmá cuál corresponde a este archivo." : "";
+    return { verdict: "review", reasonCode: "LOW_RESOLUTION", detail: `${facts} Puede salir pixelado: revisalo.${why}`, effectiveDpi: effective, file: filename };
   }
   return { verdict: "ok", detail: `${image.width} × ${image.height} píxeles: ${effective} dpi para ${fmt(widthCm)} × ${fmt(heightCm)} cm.${guess}`, effectiveDpi: effective, file: filename };
 }

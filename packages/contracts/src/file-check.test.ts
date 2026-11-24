@@ -95,4 +95,28 @@ describe("control del archivo: PDF y medidas sin unidad (D-071)", () => {
     // Con la unidad escrita por el cliente, el mismo archivo sí es un error.
     expect(checkFile({ ...dtf, image: readImageInfo(png(1500, 2586)), measures: [{ widthCm: 58, heightCm: 100 }] }).verdict).toBe("error");
   });
+
+  it("D-080: una medida imposible (unidad mal escrita) no da el archivo por malo: se pide revisarlo", () => {
+    // "28x50 mts" se lee como 28 m × 50 m.
+    const a = checkFile({ ...dtf, image: { format: "png", width: 3500, height: 6250 }, measures: [{ raw: "28x50 mts", widthCm: 2800, heightCm: 5000 }] });
+    expect(a.verdict).toBe("review");
+    expect(a.reasonCode).toBeUndefined();
+    expect(a.detail).toContain("no parece una medida real");
+    // "58 mts x 75.05 cm": 58 metros de largo.
+    const b = checkFile({ ...dtf, image: { format: "png", width: 6850, height: 8867 }, measures: [{ raw: "58 mts x 75.05 cm", widthCm: 5800, heightCm: 75.05 }] });
+    expect(b.verdict).toBe("review");
+    // Una medida grande pero posible se sigue controlando normal.
+    const c = checkFile({ ...dtf, image: { format: "png", width: 1500, height: 2000 }, measures: [{ raw: "58x700cm", widthCm: 58, heightCm: 700 }] });
+    expect(c.verdict).toBe("error");
+  });
+
+  it("D-080: si el cliente escribió otras medidas sueltas, la baja resolución se revisa en vez de pasar a error", () => {
+    const measures = [{ raw: "58x 79" }, { raw: "4mx2", widthCm: 400, heightCm: 200 }];
+    const r = checkFile({ ...dtf, image: { format: "png", width: 6650, height: 9393 }, measures });
+    expect(r.verdict).toBe("review");
+    expect(r.detail).toContain("más de una medida");
+    // Un largo suelto ("58 cm") no es otra medida: el error claro sigue siendo error.
+    const solo = checkFile({ ...dtf, image: { format: "png", width: 1362, height: 718 }, measures: [{ raw: "58cm x 19cm", widthCm: 58, heightCm: 19 }, { raw: "58 cm" }] });
+    expect(solo.verdict).toBe("error");
+  });
 });

@@ -1282,6 +1282,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Error de archivo automático (I-24)**: Ezequiel pidió que el pedido con archivo mal pase solo a "Archivo con error" en vez de quedar marcado con un punto. El mecanismo ya existe (D-065) y está apagado en producción; se prende desde Configuración. Antes de prenderlo hay que revisar un caso visto en la demo (un pedido de DTF UV controlado como "2800 × 5000 cm, 3 dpi"), porque con el paso automático ese cliente habría recibido un aviso de error equivocado.
 - **Sin definir todavía**: cómo calculan una cotización (para automatizarla), y cuándo se mandan las invitaciones a los clientes.
 
+### D-080 · 24/11/2026 · Ezequiel + revisión de producción · una medida dudosa no da el archivo por malo
+- **Qué pasaba**: de los 11 pedidos que el control marcaba como "Archivo con problema" el 24/11, 4 no tenían el archivo mal sino la medida mal leída: el cliente puso mal la unidad ("28x50 mts", "58 mts x 75.05 cm", "58 x 1,50mts") o escribió varias medidas y se tomó la que no era ("4mx2" junto a "58x 79").
+- **Decisión**: en esos casos el control pide revisar en vez de marcar error:
+  - **Medida imposible**: más de 3,2 m en el lado corto o más de 50 m en el largo. El aviso dice que la medida no parece real y cuánto se puede imprimir con ese archivo.
+  - **Varias medidas**: si además de la medida usada el cliente escribió otro par suelto ("58x300"), la baja resolución queda como "Revisar el archivo".
+- **Por qué**: Ezequiel pidió que el archivo con error pase solo a "Archivo con error" (D-079). Con el paso automático prendido, esos 4 clientes habrían recibido un aviso de error equivocado. El paso automático sigue saliendo solo con el caso claro: una sola medida, con unidad, posible, y resolución menor a la mitad del mínimo.
+- **Impacto**: `checkFile` en `packages/contracts`. Sin migración. Al desplegar se vuelven a controlar los pedidos en "Archivo recibido" que estaban marcados con error.
+- **Abierto**: `TODO(spec): I-24` — los topes (3,2 m y 50 m) son provisorios hasta tener el ancho real de cada máquina (I-10). El paso automático se prende desde Configuración.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
