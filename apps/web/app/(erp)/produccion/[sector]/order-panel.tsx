@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Download, ExternalLink, Lock, X } from "lucide-react";
-import { parseAmount, parseSaltaDateTime } from "@viavinilo/contracts";
+import { parseAmount, parseSaltaDateTime, PICKUP_BRANCHES, PICKUP_LABELS } from "@viavinilo/contracts";
 import { api, downloadFile } from "../../../lib/api";
 import { ars, MoneyInput } from "../../ui";
 
@@ -30,6 +30,7 @@ interface Detail {
   depositAmount: string | null;
   depositPaidAt: string | null;
   estimatedReadyAt: string | null;
+  pickupBranch: string | null;
   fileCheck: { verdict: "ok" | "review" | "error" | "unknown"; detail: string; hint?: string; linkNote?: string } | null;
   machine: { id: string; name: string } | null;
   material: { id: string; name: string } | null;
@@ -272,6 +273,25 @@ export function OrderPanel(props: {
                 </p>
               )}
             </section>
+
+            {job.status !== "DELIVERED" && job.status !== "CANCELLED" && (
+              <section className="order-block">
+                <h3>Retiro</h3>
+                <select
+                  value={job.pickupBranch ?? ""}
+                  disabled={busy}
+                  aria-label="Sucursal donde retira"
+                  onChange={(e) => void run(() => api(`/jobs/${jobId}/pickup`, { method: "PATCH", body: JSON.stringify({ branch: e.target.value || null }) }))}
+                >
+                  <option value="">Sin definir</option>
+                  {PICKUP_BRANCHES.map((b) => (
+                    <option key={b} value={b}>
+                      Retira en {PICKUP_LABELS[b]}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            )}
 
             {job.services.length > 0 && job.status !== "DELIVERED" && job.status !== "CANCELLED" && (
               <section className="order-block">

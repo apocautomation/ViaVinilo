@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, MessageEvent, Param, Patch, Post, Sse } from "@nestjs/common";
-import { listJobsSchema, sectorCodeSchema, transitionSchema } from "@viavinilo/contracts";
+import { listJobsSchema, pickupBranchSchema, sectorCodeSchema, transitionSchema, type PickupBranch } from "@viavinilo/contracts";
 import { Observable, distinctUntilChanged, from, interval, map, merge, startWith, switchMap } from "rxjs";
 import { z } from "zod";
 import { CurrentUser, type AuthUser } from "../auth/decorators";
@@ -23,6 +23,7 @@ const boardQuerySchema = z.object({
 const streamQuerySchema = z.object({ sector: sectorCodeSchema });
 const machineSchema = z.object({ machineId: z.string().min(1).nullable() });
 const serviceSchema = z.object({ sector: sectorCodeSchema });
+const pickupSchema = z.object({ branch: pickupBranchSchema.nullable() });
 
 /** Cada cuánto se revisa si cambió el tablero. Cubre también las órdenes que crea el worker de mails. */
 const POLL_MS = Number(process.env.BOARD_POLL_MS ?? 2000);
@@ -84,6 +85,12 @@ export class JobsController {
   @Patch(":id/service")
   moveService(@Param("id") id: string, @ZodBody(serviceSchema) body: { sector: string }, @CurrentUser() user: AuthUser) {
     return this.jobs.moveService(user, id, body.sector);
+  }
+
+  /** Sucursal donde retira el cliente (D-083). */
+  @Patch(":id/pickup")
+  setPickup(@Param("id") id: string, @ZodBody(pickupSchema) body: { branch: PickupBranch | null }, @CurrentUser() user: AuthUser) {
+    return this.jobs.setPickup(user, id, body.branch);
   }
 
   @Patch(":id/machine")

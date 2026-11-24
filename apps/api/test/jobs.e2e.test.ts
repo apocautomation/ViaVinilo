@@ -220,6 +220,22 @@ describe("sub-servicios de un tablero (D-082)", () => {
   });
 });
 
+describe("sucursal de retiro (D-083)", () => {
+  it("D-083: el taller ve y corrige dónde retira el cliente; queda auditado", async () => {
+    const job = await newJob();
+    const set = await http("production").patch(`/jobs/${job.id}/pickup`, { branch: "chile" });
+    expect(set.status).toBe(200);
+    expect(set.body.pickupBranch).toBe("chile");
+    const board = await http("production").get("/jobs/board?sector=DTF");
+    const card = board.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards).find((c: { id: string }) => c.id === job.id);
+    expect(card.pickupBranch).toBe("chile");
+    const audit = await prisma.auditLog.findFirst({ where: { entityId: job.id, action: "pickup" } });
+    expect(audit?.after).toEqual({ pickupBranch: "chile" });
+    expect((await http("production").patch(`/jobs/${job.id}/pickup`, { branch: "tucuman" })).status).toBe(400);
+    expect((await http("production").patch(`/jobs/${job.id}/pickup`, { branch: null })).body.pickupBranch).toBeNull();
+  });
+});
+
 describe("cambios de estado", () => {
   it("actualización §2.4: los pasos no se pueden saltear", async () => {
     const job = await newJob();

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sectorCodeSchema } from "./sectors";
+import { pickupBranchSchema } from "./pickup";
 
 /**
  * Archivos en Conversaciones (D-062): el cliente manda su archivo por el chat de la app (y se crea
@@ -39,6 +40,8 @@ export function safeFileName(name: string): string {
 export const appUploadSchema = z.object({
   sector: sectorCodeSchema,
   note: z.string().trim().max(1000).optional(),
+  /** Sucursal donde retira (D-083). Opcional para no romper la app ya instalada; la app nueva siempre la manda. */
+  pickupBranch: pickupBranchSchema.optional(),
 });
 export type AppUploadInput = z.input<typeof appUploadSchema>;
 

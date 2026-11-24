@@ -1275,7 +1275,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Definiciones de la reunión que quedan para los PR siguientes** (en este orden):
   1. **Columna "Esperando seña"** en el tablero, entre Cotizado y Seña recibida. **Hecho en D-081.**
   2. **Sectores reales (resuelve I-26)** — **hecho en D-082**: Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; Sublimación y Calandrado aparte. Sin Embroidery ("vamos a tener solo TPU"). Látex deja de ser un tablero propio.
-  3. **Sucursal de retiro** (Av. Chile o San Juan) elegida al hacer el pedido, visible en la tarjeta. Hay una camioneta que cruza pedidos dos veces por día; el asistente no decide el lugar.
+  3. **Sucursal de retiro** — **hecho en D-083** — (Av. Chile o San Juan) elegida al hacer el pedido, visible en la tarjeta. Hay una camioneta que cruza pedidos dos veces por día; el asistente no decide el lugar.
   4. **Trabajos por cliente**: ver todos los pedidos de un cliente en todos los sectores, para que caja los junte.
   5. **Número de cliente de Tango** visible y buscable; Ezequiel lo exporta cuando Ricardo le dé acceso por TeamViewer.
   6. **Máquinas reales por sector**: Ricardo pasa el listado (I-10). La asignación de máquina ya existe.
@@ -1314,6 +1314,18 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
   - `TODO(spec): I-10` — máquinas reales por sector: los nuevos heredan las de Gran Formato o DTF hasta tener el listado de Ricardo.
   - Resolución mínima de TPU: queda en 100 dpi (el valor general) hasta confirmarla; DTF Textil y DTF UV siguen en 250.
   - Crear sub-servicios desde el ERP: hoy solo por migración.
+
+### D-083 · 24/11/2026 · Reunión con Verónica y Ricardo · sucursal de retiro en cada pedido
+- **Definición del cliente**: hay clientes que piden en varios sectores y quieren juntar todo en una sucursal ("retiro en la Chile" o "retiro en la San Juan"). Una camioneta cruza pedidos entre las dos dos veces por día. Verónica: "no quiero que el bot decida"; hay que saberlo "en el momento que hace el pedido para que ya salga con el destino".
+- **Decisión**:
+  - Cada pedido guarda dónde lo retira el cliente (`JobOrder.pickupBranch`: `chile` o `san-juan`).
+  - **App**: al mandar un archivo, el cliente elige la sucursal en un paso propio (antes iba escrito en la nota). Se propone la sucursal donde se produce el servicio y la puede cambiar.
+  - **Mail**: si el mail dice dónde retira ("retiro en la San Juan", "lo paso a buscar por la Chile"), se toma de ahí. Solo cuenta junto a retirar, buscar o pasar, para no confundirlo con la dirección de una firma; si nombra las dos o ninguna, queda **sin definir**.
+  - **Taller**: la tarjeta muestra "Retira en …" y el panel del pedido tiene un desplegable para definirla o corregirla. El cambio queda auditado (`pickup`).
+  - **Aviso de "listo para retirar"**: nombra la sucursal elegida (dirección y horario). Si no hay elección, la del servicio, como hasta ahora.
+- **Por qué**: que caja pueda juntar los trabajos de un cliente y que el pedido se traslade a tiempo, sin depender de leer el mail.
+- **Impacto**: migración `20261124230000_pickup_branch` (una columna, sin tocar datos). `POST /app/chat/files` acepta `pickupBranch` (opcional, para no romper la app ya instalada); nuevo `PATCH /jobs/:id/pickup`; `GET /app/jobs/:n` devuelve `pickup`.
+- **Abierto**: los pedidos anteriores quedan sin definir. Ojo que "después lo vamos a tener que cambiar porque vamos a unificar todo" (Verónica): cuando unifiquen sucursales, esto se revisa. El asistente del chat todavía no pregunta la sucursal.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

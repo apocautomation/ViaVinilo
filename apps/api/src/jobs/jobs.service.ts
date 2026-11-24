@@ -136,6 +136,8 @@ export class JobsService {
       depositAmount: row.depositAmount?.toString() ?? null,
       depositPaidAt: row.depositPaidAt,
       estimatedReadyAt: row.estimatedReadyAt,
+      /** Sucursal donde retira (D-083): "chile", "san-juan" o null si todavía no se sabe. */
+      pickupBranch: row.pickupBranch,
       fileCount: row._count.files,
       /** Resultado del control automático del archivo (D-065). */
       fileCheck: row.fileCheck as { verdict: string; detail: string; hint?: string; linkNote?: string } | null,
@@ -481,6 +483,20 @@ export class JobsService {
       }
     });
 
+    return this.detail(user, id);
+  }
+
+  /** Sucursal donde retira el cliente (D-083). La puede corregir el taller; queda auditado. */
+  async setPickup(user: AuthUser, id: string, branch: string | null) {
+    const job = await this.prisma.jobOrder.findFirst({ where: { id, deletedAt: null } });
+    if (!job) throw new NotFoundException("No encontramos esa orden");
+    await this.access.assert(user, job.sectorId);
+    if (job.pickupBranch !== branch) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.jobOrder.update({ where: { id }, data: { pickupBranch: branch } });
+        await this.audit.log({ entity: "JobOrder", entityId: id, action: "pickup", userId: user.id, before: { pickupBranch: job.pickupBranch }, after: { pickupBranch: branch } }, tx);
+      });
+    }
     return this.detail(user, id);
   }
 

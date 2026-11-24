@@ -441,6 +441,8 @@ model JobOrder {
   linksFetchedAt    DateTime?
   /// Qué pasó con los links que no se pudieron bajar; lo lee el operador en la tarjeta.
   linksNote         String?
+  /// Sucursal donde retira el cliente (D-083): "chile" o "san-juan". Null: todavía no se sabe.
+  pickupBranch      String?
   files             JobFile[]
   events            JobEvent[]
   createdAt         DateTime      @default(now())

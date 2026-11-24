@@ -198,6 +198,12 @@ export default function PedidoPage() {
             )}
             <dt>Listo para retirar</dt>
             <dd>{o.readyAt ? formatWhen(o.readyAt) : "—"}</dd>
+            {o.pickup && (
+              <>
+                <dt>Retirás en</dt>
+                <dd>{o.pickup}</dd>
+              </>
+            )}
             <dt>Enviado por</dt>
             <dd>{o.channel === "App" ? "La app" : o.channel}</dd>
           </dl>

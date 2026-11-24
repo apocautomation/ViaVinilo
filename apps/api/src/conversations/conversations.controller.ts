@@ -11,6 +11,7 @@ import {
   sendMessageSchema,
   staffUploadSchema,
   type MessageChannel,
+  type PickupBranch,
   type SectorCode,
 } from "@viavinilo/contracts";
 import { ConversationFilesService, type UploadedFileLike } from "./conversation-files.service";
@@ -127,7 +128,7 @@ export class AppChatController {
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   upload(
     @UploadedFile() file: UploadedFileLike | undefined,
-    @ZodBody(appUploadSchema) body: { sector: SectorCode; note?: string },
+    @ZodBody(appUploadSchema) body: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch },
     @CurrentCustomer() customer: AuthCustomer,
   ) {
     return this.files.customerUpload(customer.id, file, body);

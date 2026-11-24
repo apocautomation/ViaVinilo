@@ -264,6 +264,24 @@ describe("archivos en Conversaciones (D-062)", () => {
     expect(Buffer.from(dl.body).toString()).toBe(pdf.toString());
   });
 
+  it("D-083: el cliente elige dónde retira al mandar el archivo y lo ve en su pedido", async () => {
+    const res = await http()
+      .post("/app/chat/files")
+      .set("Authorization", `Bearer ${tokens.customer}`)
+      .field("sector", "DTF")
+      .field("note", "58 x 50 cm")
+      .field("pickupBranch", "chile")
+      .attach("file", pdf, "Remera chile.pdf");
+    expect(res.status).toBe(201);
+    const job = await prisma.jobOrder.findUniqueOrThrow({ where: { id: res.body.job.id } });
+    expect(job.pickupBranch).toBe("chile");
+    const mine = await as("customer").get(`/app/jobs/${job.number}`);
+    expect(mine.body.pickup).toBe("Av. Chile");
+    // Sin elección (app vieja): se muestra la sucursal del servicio.
+    await prisma.jobOrder.update({ where: { id: job.id }, data: { pickupBranch: null } });
+    expect((await as("customer").get(`/app/jobs/${job.number}`)).body.pickup).toBe("San Juan");
+  });
+
   it("D-062: no acepta archivos que no son de impresión", async () => {
     const res = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").attach("file", Buffer.from("x"), "virus.exe");
     expect(res.status).toBe(422);

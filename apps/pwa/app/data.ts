@@ -44,6 +44,8 @@ export interface Order {
   depositAmount: string | null;
   depositPaid: boolean;
   readyAt: string | null;
+  /** Sucursal donde lo retira (D-083). */
+  pickup?: string;
   /** El cliente todavía puede cancelarlo desde la app (hasta "Cotizado"). */
   canCancel: boolean;
   /** Está cancelado y se puede volver a pedir. */

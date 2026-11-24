@@ -98,4 +98,12 @@ describe("avisos de estado al cliente (D-060)", () => {
     expect(dtf.text).toMatch(/Ya entra a producción/);
     expect(noticeText("READY", { number: 13, description: null, sector: { code: "DTF", name: "DTF" }, quotedAmount: null, depositRequired: false, depositAmount: null }, { firstName: null }).text).toMatch(/San Juan 714/);
   });
+
+  it("D-083: el aviso de 'listo para retirar' nombra la sucursal que eligió el cliente, no la del servicio", () => {
+    const job = { number: 14, description: null, sector: { code: "DTF", name: "DTF Textil" }, quotedAmount: null, depositRequired: false, depositAmount: null };
+    expect(noticeText("READY", { ...job, pickupBranch: "chile" }, { firstName: null }).text).toMatch(/Av\. Chile 1822/);
+    expect(noticeText("READY", { ...job, pickupBranch: null }, { firstName: null }).text).toMatch(/San Juan 714/);
+    const lona = { ...job, sector: { code: "GRAN_FORMATO", name: "Gran Formato" } };
+    expect(noticeText("READY", { ...lona, pickupBranch: "san-juan" }, { firstName: null }).text).toMatch(/San Juan 714/);
+  });
 });

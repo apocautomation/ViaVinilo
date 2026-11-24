@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { CircleHelp, Download, Mail, Paperclip, Send, X } from "lucide-react";
-import { ACCEPT_ATTRIBUTE, attachmentsOf, formatBytes, help, MAX_UPLOAD_BYTES, type SectorCode } from "@viavinilo/contracts";
+import { ACCEPT_ATTRIBUTE, attachmentsOf, defaultPickupBranch, formatBytes, help, MAX_UPLOAD_BYTES, PICKUP_BRANCHES, PICKUP_LABELS, type PickupBranch, type SectorCode } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
 import { api, downloadFile, upload } from "../../session";
 
@@ -47,6 +47,8 @@ const SECTOR_OF: Record<string, SectorCode> = {
 function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: string) => void }) {
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  /** D-083: dónde lo retira. Se propone la sucursal del servicio y el cliente la puede cambiar. */
+  const [pickup, setPickup] = useState<PickupBranch | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -66,7 +68,9 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
     if (!file || !serviceId) return;
     if (file.size > MAX_UPLOAD_BYTES) return setError("El archivo es muy grande: el máximo es 150 MB.");
     const form = new FormData();
-    form.append("sector", extraBoard ? extraBoard.code : SECTOR_OF[serviceId]!);
+    const sectorCode = extraBoard ? extraBoard.code : SECTOR_OF[serviceId]!;
+    form.append("sector", sectorCode);
+    form.append("pickupBranch", pickup ?? defaultPickupBranch(sectorCode));
     const label = service?.name ?? extraBoard?.name;
     const details = [label ? `Servicio: ${label}` : "", note.trim()].filter(Boolean).join("\n");
     if (details) form.append("note", details);
@@ -105,9 +109,21 @@ function SendFile({ onClose, onSent }: { onClose: () => void; onSent: (label: st
           ))}
         </div>
         {service && <p className="muted sheet-hint">Formato: {service.formats}.</p>}
-        <p className="sheet-label">2 · Medidas, cantidad y sucursal</p>
-        <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: 58 × 100 cm, 2 copias, retiro en San Juan" />
-        <p className="sheet-label">3 · El archivo</p>
+        <p className="sheet-label">2 · Medidas y cantidad</p>
+        <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: 58 × 100 cm, 2 copias" />
+        <p className="sheet-label">3 · ¿Dónde lo retirás?</p>
+        <div className="choices">
+          {PICKUP_BRANCHES.map((b) => {
+            const selected = (pickup ?? (serviceId ? defaultPickupBranch(extraBoard ? extraBoard.code : SECTOR_OF[serviceId]!) : null)) === b;
+            return (
+              <button type="button" key={b} className="choice" aria-pressed={selected} onClick={() => setPickup(b)}>
+                {help.BRANCHES.find((x) => x.id === b)?.name ?? PICKUP_LABELS[b]}
+                <small className="muted" style={{ display: "block", fontWeight: 400 }}>{help.BRANCHES.find((x) => x.id === b)?.address}</small>
+              </button>
+            );
+          })}
+        </div>
+        <p className="sheet-label">4 · El archivo</p>
         <label className="drop">
           <Paperclip size={24} />
           <strong>{file ? file.name : "Tocá para elegir el archivo"}</strong>
