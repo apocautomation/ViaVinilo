@@ -34,6 +34,9 @@ const WHY: Record<DownloadFailure, string> = {
   error: "no se pudo conectar",
 };
 
+const DRIVE_NOT_FOUND =
+  "Google no lo entrega: se borró o solo lo puede abrir quien recibió el mail. Pedile al cliente que lo comparta con «cualquier persona que tenga el enlace» o que lo mande adjunto";
+
 type Storage = Pick<FileStorage, "putStream" | "freeBytes">;
 
 export async function processLinkDownloads(
@@ -62,7 +65,9 @@ export async function processLinkDownloads(
     const created: Prisma.JobFileCreateManyInput[] = [];
     const fail = (provider: LinkProvider, reason: DownloadFailure) => {
       failed++;
-      notes.push(`No se pudo bajar el archivo de ${PROVIDER_NAME[provider]}: ${WHY[reason]}.`);
+      // Google contesta "no existe" también cuando el archivo está, pero solo lo puede abrir quien recibió el mail.
+      const why = provider === "drive" && reason === "not_found" ? DRIVE_NOT_FOUND : WHY[reason];
+      notes.push(`No se pudo bajar el archivo de ${PROVIDER_NAME[provider]}: ${why}.`);
     };
 
     // Un link copiado de un mail en HTML puede traer "&amp;" en vez de "&": se corrige antes de usarlo.

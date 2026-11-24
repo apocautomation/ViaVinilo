@@ -1241,6 +1241,10 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Seguridad**: igual que en D-072. Cada servicio tiene su lista de direcciones permitidas y cada redirección se revisa; la dirección que devuelve la API de WeTransfer también.
 - **Después de subirlo** se vuelven a procesar los pedidos que tenían un link sin bajar (los de más de 150 MB, WeTransfer y la carpeta).
 - **Por qué**: Ezequiel: "sacá la limitación de MB y los links de otros servicios que se descarguen también".
+- **Ajustes del 24/11/2026** (fuente: lo que se vio en producción al reprocesar):
+  - Un link copiado del HTML del mail puede venir con `&amp;` en lugar de `&`: se corrige antes de usarlo.
+  - **Drive que contesta "no existe"**: los links que arma Gmail cuando el cliente inserta un archivo de Drive (`docs.google.com/uc?…&revid=…`) solo los abre el destinatario con su sesión; a nosotros Google nos contesta "no encontrado", igual que con un archivo borrado. La tarjeta ahora dice las dos posibilidades y qué pedirle al cliente (compartirlo con "cualquier persona que tenga el enlace" o mandarlo adjunto). Para WeTransfer el texto sigue siendo "ya no existe o venció".
+  - **Escritura a disco**: por cada espera al disco quedaba un aviso de error sin soltar (Node avisaba `MaxListenersExceededWarning`). Se corrigió, y un error del disco en medio de la escritura ya no puede tirar el worker.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

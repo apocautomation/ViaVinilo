@@ -303,4 +303,28 @@ describe("links: el archivo queda en el pedido (D-072, D-076)", () => {
     expect(seen).toEqual([DRIVE_DIRECT]);
     expect((await prisma.jobOrder.findUniqueOrThrow({ where: { id: j.id } })).linksNote).toBeNull();
   });
+
+  it("D-076: si Google dice que el archivo no existe, la tarjeta explica que puede no ser público y qué pedirle al cliente", async () => {
+    const j = await job([DRIVE]);
+    await processLinkDownloads(prisma, storage, clientWith(async () => ({ ok: false, reason: "not_found" })), NO_MIN);
+    const note = (await prisma.jobOrder.findUniqueOrThrow({ where: { id: j.id } })).linksNote;
+    expect(note).toContain("solo lo puede abrir quien recibió el mail");
+    expect(note).toContain("cualquier persona que tenga el enlace");
+  });
+
+  it("D-076: escribir un archivo en muchos pedazos no deja avisos colgados en el disco", async () => {
+    const warnings: string[] = [];
+    const onWarning = (w: Error) => warnings.push(w.name);
+    process.on("warning", onWarning);
+    try {
+      const chunk = Buffer.alloc(1024 * 1024, 3);
+      let sent = 0;
+      const body = new ReadableStream<Uint8Array>({ pull: (c) => (sent++ < 40 ? c.enqueue(chunk) : c.close()) });
+      expect((await storage.putStream("links/prueba/pedazos.bin", body)).size).toBe(40 * chunk.length);
+      await new Promise((ok) => setImmediate(ok));
+    } finally {
+      process.off("warning", onWarning);
+    }
+    expect(warnings).not.toContain("MaxListenersExceededWarning");
+  });
 });
