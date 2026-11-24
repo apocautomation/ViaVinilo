@@ -42,6 +42,13 @@ export const appUploadSchema = z.object({
   note: z.string().trim().max(1000).optional(),
   /** Sucursal donde retira (D-083). Opcional para no romper la app ya instalada; la app nueva siempre la manda. */
   pickupBranch: pickupBranchSchema.optional(),
+  /**
+   * Medidas y copias cargadas en el formulario de "Enviar" (D-087), ya en centímetros. Con esto el
+   * pedido nace con la medida exacta, sin tener que leerla de un texto libre.
+   */
+  widthCm: z.coerce.number().positive().max(100_000).optional(),
+  heightCm: z.coerce.number().positive().max(100_000).optional(),
+  copies: z.coerce.number().int().min(1).max(100_000).optional(),
 });
 export type AppUploadInput = z.input<typeof appUploadSchema>;
 

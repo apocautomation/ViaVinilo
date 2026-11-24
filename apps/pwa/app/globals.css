@@ -1506,3 +1506,57 @@ details.faq .help-body p.help-warn {
   min-height: 0;
   padding: 8px 14px;
 }
+
+/* D-087: Enviar armado como un mail */
+.compose {
+  display: grid;
+  gap: 12px;
+}
+.compose-row {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.compose-row span {
+  flex: none;
+  width: 56px;
+  color: var(--color-text-muted);
+}
+.compose-measure {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 8px;
+}
+.compose-measure > span {
+  padding-bottom: 12px;
+  color: var(--color-text-muted);
+}
+.compose-measure .field {
+  min-width: 0;
+}
+.compose-measure .field input,
+.compose-measure .field select {
+  width: 100%;
+  box-sizing: border-box;
+}
+.compose-measure .field:nth-of-type(4) {
+  grid-column: 3;
+}
+.compose textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+.compose-hint p,
+.compose-missing {
+  margin: 0;
+  font-size: 13px;
+}

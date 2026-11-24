@@ -128,7 +128,7 @@ export class AppChatController {
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   upload(
     @UploadedFile() file: UploadedFileLike | undefined,
-    @ZodBody(appUploadSchema) body: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch },
+    @ZodBody(appUploadSchema) body: { sector: SectorCode; note?: string; pickupBranch?: PickupBranch; widthCm?: number; heightCm?: number; copies?: number },
     @CurrentCustomer() customer: AuthCustomer,
   ) {
     return this.files.customerUpload(customer.id, file, body);
