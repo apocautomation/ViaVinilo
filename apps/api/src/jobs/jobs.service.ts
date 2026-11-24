@@ -219,6 +219,93 @@ export class JobsService {
     };
   }
 
+  /**
+   * Trabajos por cliente (D-084): los pedidos en curso (ni entregados ni cancelados) agrupados por
+   * cliente, de todos los sectores que ve el usuario. Sirve para que caja junte lo que un cliente
+   * tiene repartido en varios tableros. Primero los clientes con algo listo para retirar.
+   */
+  async byCustomer(user: AuthUser, q: { search?: string; pickup?: string }) {
+    const allowed = await this.access.allowedSectorIds(user);
+    const where: Prisma.JobOrderWhereInput = { deletedAt: null, status: { notIn: ["DELIVERED", "CANCELLED"] } };
+    if (allowed !== "all") where.sectorId = { in: allowed };
+    if (q.search) {
+      const digits = q.search.replace(/\D/g, "");
+      const terms = normalizeSearch(q.search).split(" ").filter(Boolean);
+      where.OR = [
+        { customer: { AND: terms.map((t) => ({ searchText: { contains: t } })) } },
+        ...(digits && digits.length <= 9 ? [{ number: Number(digits) }, { customer: { customerNumber: Number(digits) } }] : []),
+      ];
+    }
+    const rows = await this.prisma.jobOrder.findMany({
+      where,
+      orderBy: { createdAt: "asc" },
+      take: 2000,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        description: true,
+        measure: true,
+        quotedAmount: true,
+        depositRequired: true,
+        depositAmount: true,
+        depositPaidAt: true,
+        estimatedReadyAt: true,
+        pickupBranch: true,
+        createdAt: true,
+        sector: { select: { code: true, name: true, parent: { select: { code: true, name: true } } } },
+        customer: { select: { id: true, customerNumber: true, firstName: true, lastName: true, businessName: true } },
+      },
+    });
+
+    type Row = (typeof rows)[number];
+    const groups = new Map<string, { customer: NonNullable<Row["customer"]>; jobs: Row[] }>();
+    for (const r of rows) {
+      if (!r.customer) continue;
+      const g = groups.get(r.customer.id) ?? { customer: r.customer, jobs: [] };
+      g.jobs.push(r);
+      groups.set(r.customer.id, g);
+    }
+    const customers = [...groups.values()]
+      .filter((g) => !q.pickup || g.jobs.some((j) => j.pickupBranch === q.pickup))
+      .map((g) => {
+        const boards = new Set(g.jobs.map((j) => j.sector.parent?.name ?? j.sector.name));
+        const amounts = g.jobs.filter((j) => j.quotedAmount);
+        return {
+          customer: {
+            id: g.customer.id,
+            number: g.customer.customerNumber,
+            name: [g.customer.firstName, g.customer.lastName].filter(Boolean).join(" ") || g.customer.businessName || null,
+          },
+          total: g.jobs.length,
+          ready: g.jobs.filter((j) => j.status === "READY").length,
+          /** En cuántos tableros tiene trabajos: más de uno es lo que hay que juntar. */
+          boards: [...boards].sort(),
+          /** Suma de lo cotizado; null si ninguno está cotizado. */
+          quotedTotal: amounts.length ? amounts.reduce((sum, j) => sum.plus(j.quotedAmount!), new Prisma.Decimal(0)).toString() : null,
+          jobs: g.jobs.map((j) => ({
+            id: j.id,
+            label: formatJobNumber(j.number),
+            status: j.status,
+            statusLabel: j.status === "QUOTED" && j.depositRequired && !j.depositPaidAt ? "Esperando seña" : JOB_STATUS_LABELS[j.status],
+            /** Tablero donde se mueve el pedido y, si tiene, el sub-servicio (D-082). */
+            board: { code: j.sector.parent?.code ?? j.sector.code, name: j.sector.parent?.name ?? j.sector.name },
+            service: j.sector.parent ? j.sector.name : null,
+            description: j.description,
+            measure: j.measure,
+            quotedAmount: j.quotedAmount?.toString() ?? null,
+            depositAmount: j.depositRequired ? (j.depositAmount?.toString() ?? null) : null,
+            depositPending: j.depositRequired && !j.depositPaidAt,
+            estimatedReadyAt: j.estimatedReadyAt,
+            pickupBranch: j.pickupBranch,
+            createdAt: j.createdAt,
+          })),
+        };
+      })
+      .sort((a, b) => b.ready - a.ready || b.total - a.total || (a.customer.name ?? "").localeCompare(b.customer.name ?? ""));
+    return { customers: customers.slice(0, 200), totalCustomers: customers.length, totalJobs: customers.reduce((n, c) => n + c.total, 0) };
+  }
+
   async board(user: AuthUser, query: BoardQuery) {
     const sector = await this.sectorWithStages(query.sector);
     const family = await this.family(user, sector.id);

@@ -55,6 +55,7 @@ export const NAV: NavSection[] = [
     title: "Producción",
     items: [
       // Los tableros de cada sector van en un desplegable arriba de estos ítems (D-064).
+      { href: "/produccion/por-cliente", label: "Trabajos por cliente", icon: Users, stage: 1 },
       { href: "/produccion/tableros", label: "Administrar tableros", icon: Settings, stage: 1 },
       { href: "/produccion-tiempos", label: "Panel de tiempos", icon: Timer, stage: 1 },
     ],
