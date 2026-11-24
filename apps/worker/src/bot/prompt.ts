@@ -19,6 +19,10 @@ export interface BotJob {
   depositAmount?: string | null;
   estimatedReadyAt: Date | null;
   createdAt: Date;
+  /** Archivos guardados en el pedido (D-094). Sin el dato (undefined) el bot no afirma nada. */
+  files?: string[];
+  /** El pedido llegó con un link al archivo (D-094). */
+  hasLinks?: boolean;
   /** Por qué está en "Archivo con error" (D-092): motivo y detalle del control. */
   fileIssue?: string | null;
   /** Resultado del control automático del archivo mientras está en "Archivo recibido" (D-092). */

@@ -37,8 +37,12 @@ export function safeFileName(name: string): string {
 }
 
 /** El cliente manda su archivo por el chat: elige el servicio y puede agregar medidas o aclaraciones. */
-export const appUploadSchema = z.object({
-  sector: sectorCodeSchema,
+export const appUploadSchema = z
+  .object({
+  /** Servicio del trabajo nuevo. No hace falta si el archivo es para un pedido que ya existe (`job`). */
+  sector: sectorCodeSchema.optional(),
+  /** Número de un pedido del cliente al que se le suma este archivo (D-094). */
+  job: z.coerce.number().int().positive().optional(),
   note: z.string().trim().max(1000).optional(),
   /** Sucursal donde retira (D-083). Opcional para no romper la app ya instalada; la app nueva siempre la manda. */
   pickupBranch: pickupBranchSchema.optional(),
@@ -49,7 +53,8 @@ export const appUploadSchema = z.object({
   widthCm: z.coerce.number().positive().max(100_000).optional(),
   heightCm: z.coerce.number().positive().max(100_000).optional(),
   copies: z.coerce.number().int().min(1).max(100_000).optional(),
-});
+  })
+  .refine((v) => v.sector || v.job, { message: "Elegí un servicio o un pedido", path: ["sector"] });
 export type AppUploadInput = z.input<typeof appUploadSchema>;
 
 /** El asesor responde con archivos (y texto opcional), por la app o por mail. */

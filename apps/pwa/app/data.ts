@@ -48,6 +48,8 @@ export interface Order {
   pickup?: string;
   /** El cliente todavía puede cancelarlo desde la app (hasta "Cotizado"). */
   canCancel: boolean;
+  /** Todavía se le puede sumar o cambiar el archivo (D-094). */
+  canAddFile?: boolean;
   /** Está cancelado y se puede volver a pedir. */
   canReorder: boolean;
   error: string | null;

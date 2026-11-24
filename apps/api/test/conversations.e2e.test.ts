@@ -27,6 +27,7 @@ beforeAll(async () => {
   process.env.DATABASE_URL = testDb.url;
   process.env.JWT_SECRET = "secreto-de-prueba-de-al-menos-32-caracteres";
   process.env.STORAGE_DIR = storageDir;
+  process.env.APP_UPLOADS_PER_MINUTE = "100";
   const { NestFactory } = await import("@nestjs/core");
   const { AppModule } = await import("../src/app.module");
   const { PrismaService } = await import("../src/prisma/prisma.service");
@@ -303,6 +304,47 @@ describe("archivos en Conversaciones (D-062)", () => {
     // Medidas imposibles no pasan.
     const bad = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").field("widthCm", "-5").field("heightCm", "10").attach("file", pdf, "x.pdf");
     expect(bad.status).toBe(400);
+  });
+
+  it("D-094: el cliente suma un archivo a un pedido que ya tiene, sin crear otro pedido", async () => {
+    const before = await prisma.jobOrder.count();
+    const job = await prisma.jobOrder.create({
+      data: { customerId, sectorId: dtfId, status: "RECEIVED", source: "COUNTER", description: "Sin archivo", requestedSpecs: { measures: [{ raw: "20 x 30 cm", widthCm: 20, heightCm: 30 }] }, fileCheck: { verdict: "unknown", detail: "x" } },
+    });
+    const res = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("job", String(job.number)).field("note", "Acá va el archivo").attach("file", pdf, "Para el pedido.pdf");
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ added: true, resent: false, job: { id: job.id } });
+    expect(await prisma.jobOrder.count()).toBe(before + 1);
+    const row = await prisma.jobOrder.findUniqueOrThrow({ where: { id: job.id }, include: { files: true, events: true } });
+    expect(row.status).toBe("RECEIVED");
+    expect(row.files.map((f) => f.filename)).toEqual(["Para el pedido.pdf"]);
+    // Se controla de nuevo, y no se pierden las medidas del pedido.
+    expect(row.fileCheck).toBeNull();
+    expect(row.requestedSpecs).toMatchObject({ note: "Acá va el archivo", measures: [{ raw: "20 x 30 cm" }] });
+    // Queda en el historial sin disparar un aviso de estado.
+    expect(row.events.at(-1)).toMatchObject({ fromStatus: "RECEIVED", toStatus: "RECEIVED", notifiedCustomer: true });
+    const mine = await as("customer").get(`/app/jobs/${job.number}`);
+    expect(mine.body.canAddFile).toBe(true);
+  });
+
+  it("D-094: a un pedido con error le vuelve a 'Archivo recibido'; a uno ya impreso o de otro cliente no se le puede sumar", async () => {
+    const conError = await prisma.jobOrder.create({ data: { customerId, sectorId: dtfId, status: "FILE_ERROR", source: "COUNTER" } });
+    const fix = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("job", String(conError.number)).attach("file", pdf, "Corregido.pdf");
+    expect(fix.body).toMatchObject({ resent: true });
+    expect((await prisma.jobOrder.findUniqueOrThrow({ where: { id: conError.id } })).status).toBe("RECEIVED");
+
+    const impreso = await prisma.jobOrder.create({ data: { customerId, sectorId: dtfId, status: "PRINTED", source: "COUNTER" } });
+    const late = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("job", String(impreso.number)).attach("file", pdf, "Tarde.pdf");
+    expect(late.status).toBe(422);
+    expect(late.body.message).toMatch(/ya está en producción/);
+
+    const otro = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Otro" } });
+    const ajeno = await prisma.jobOrder.create({ data: { customerId: otro.id, sectorId: dtfId, status: "RECEIVED", source: "COUNTER" } });
+    const nope = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("job", String(ajeno.number)).attach("file", pdf, "Ajeno.pdf");
+    expect(nope.status).toBe(404);
+    expect((await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).attach("file", pdf, "Nada.pdf")).status).toBe(400);
+    // Limpieza: el pedido con error no tiene que confundir a los tests que siguen.
+    await prisma.jobOrder.updateMany({ where: { id: { in: [conError.id, impreso.id] } }, data: { deletedAt: new Date() } });
   });
 
   it("D-062: no acepta archivos que no son de impresión", async () => {
