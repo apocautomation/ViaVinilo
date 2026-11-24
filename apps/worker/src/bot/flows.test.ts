@@ -22,7 +22,7 @@ describe("flujos fijos del bot (D-060)", () => {
   it("D-060: '¿está listo?' se responde con los pedidos reales; sin pedidos no promete nada", () => {
     expect(fixedFlow("¿cuándo va a estar listo lo que te pedí?", ctx)).toMatch(/Todavía no veo pedidos tuyos/);
     const jobs = [{ label: "VV-000012", sector: "Calandrado", status: "Cotizado", description: "Tela", quotedAmount: "1", depositRequired: true, depositPaid: false, estimatedReadyAt: null, createdAt: new Date() }];
-    expect(fixedFlow("ya está listo mi pedido?", { ...ctx, jobs })).toBe("Tu pedido: VV-000012 (Calandrado, Tela): Cotizado.");
+    expect(fixedFlow("ya está listo mi pedido?", { ...ctx, jobs: [{ ...jobs[0]!, quotedAmount: null }] })).toBe("Tu pedido: VV-000012 (Calandrado, Tela): Cotizado.");
     expect(fixedFlow("ya está listo mi pedido?", { ...ctx, jobs, noticesOn: true })).toMatch(/te llega un aviso/);
   });
 
@@ -40,6 +40,25 @@ describe("flujos fijos del bot (D-060)", () => {
     expect(fixedFlow("esta correcto?", { ...ctx, jobs: [{ ...recibido[0]!, fileCheck: "review" as const }] })).toContain("lo está revisando el equipo");
     // Sin pedidos no inventa que lo está esperando ni que lo recibió.
     expect(fixedFlow("tenes mi archivo?", ctx)).toMatch(/Todavía no veo pedidos tuyos/);
+  });
+
+  it("D-093: un pedido cotizado se informa con el precio y, si falta, la seña", () => {
+    const base = { label: "VV-000030", sector: "Gran Formato", status: "Cotizado", description: "Lona 3 x 1 m", estimatedReadyAt: null, createdAt: new Date() };
+    const conSena = fixedFlow("ya está listo mi pedido?", { ...ctx, jobs: [{ ...base, quotedAmount: "45000", depositRequired: true, depositPaid: false, depositAmount: "20000" }] });
+    expect(conSena).toMatch(/cotizado en \$\s?45\.000,00\. Para empezar falta la seña de \$\s?20\.000,00/);
+    expect(conSena).toContain("pedime el alias");
+    const pagada = fixedFlow("ya está listo mi pedido?", { ...ctx, jobs: [{ ...base, quotedAmount: "45000", depositRequired: true, depositPaid: true }] });
+    expect(pagada).toMatch(/cotizado en \$\s?45\.000,00\.$/);
+    expect(pagada).not.toMatch(/seña/);
+  });
+
+  it("D-093: otras formas de preguntar por el archivo también van al estado real", () => {
+    const jobs = [{ label: "VV-000021", sector: "DTF Textil", status: "Archivo con error", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), fileIssue: "Resolución baja" }];
+    for (const q of ["qué le pasa a mi archivo, por qué no avanza?", "por que no avanza?", "mi archivo sirve así?", "qué pasó con el diseño que mandé", "el pedido sigue igual, está trabado?"]) {
+      expect(fixedFlow(q, { ...ctx, jobs }), q).toContain("el archivo tiene un problema: Resolución baja");
+    }
+    // Avisar que manda un archivo sigue siendo un trabajo nuevo, no una consulta.
+    expect(fixedFlow("te mando mi archivo para remeras", { ...ctx, jobs })).toMatch(/Mandá el archivo/);
   });
 
   it("D-060: lo demás lo responde la IA", () => {
