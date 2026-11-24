@@ -40,6 +40,8 @@ export interface TransitionBody {
   reasonId?: string;
   note?: string;
   quotedAmount?: string;
+  /** D-079: monto de la seña pedida al cotizar; null si el pedido no lleva seña. */
+  depositAmount?: string | null;
   estimatedReadyAt?: Date;
   force?: boolean;
 }
@@ -124,6 +126,7 @@ export class JobsService {
       measure: row.measure,
       quotedAmount: row.quotedAmount?.toString() ?? null,
       depositRequired: row.depositRequired,
+      depositAmount: row.depositAmount?.toString() ?? null,
       depositPaidAt: row.depositPaidAt,
       estimatedReadyAt: row.estimatedReadyAt,
       fileCount: row._count.files,
@@ -342,6 +345,7 @@ export class JobsService {
 
     const data: Prisma.JobOrderUpdateManyMutationInput = { status: body.to };
     let priceChange: { before: string | null; after: string } | null = null;
+    let depositChange: { before: string | null; after: string | null } | null = null;
 
     if (body.to === "FILE_ERROR") {
       const reason = await this.prisma.fileErrorReason.findFirst({ where: { id: body.reasonId, active: true } });
@@ -361,6 +365,17 @@ export class JobsService {
       }
       data.quotedAt = new Date();
       if (body.estimatedReadyAt) data.estimatedReadyAt = body.estimatedReadyAt;
+      // D-079: la seña se pide al cotizar. Sin el campo, el pedido queda como estaba.
+      if (body.depositAmount !== undefined) {
+        const deposit = body.depositAmount && Number(body.depositAmount) > 0 ? new Prisma.Decimal(body.depositAmount) : null;
+        const price = body.quotedAmount ? new Prisma.Decimal(body.quotedAmount) : job.quotedAmount;
+        if (deposit && price && deposit.gt(price)) throw new UnprocessableEntityException("La seña no puede ser mayor que el precio");
+        const before = job.depositRequired ? (job.depositAmount?.toString() ?? "sin monto") : null;
+        const after = deposit?.toString() ?? null;
+        if (before !== after) depositChange = { before, after };
+        data.depositRequired = deposit !== null;
+        data.depositAmount = deposit;
+      }
     }
     if (body.to === "DEPOSIT_RECEIVED") {
       data.depositPaidAt = new Date();
@@ -384,6 +399,9 @@ export class JobsService {
       });
       if (priceChange) {
         await this.audit.log({ entity: "JobOrder", entityId: id, action: "price", userId: user.id, before: { quotedAmount: priceChange.before }, after: { quotedAmount: priceChange.after } }, tx);
+      }
+      if (depositChange) {
+        await this.audit.log({ entity: "JobOrder", entityId: id, action: "deposit", userId: user.id, before: { depositAmount: depositChange.before }, after: { depositAmount: depositChange.after } }, tx);
       }
       if (check.skipsDeposit) {
         await this.audit.log({ entity: "JobOrder", entityId: id, action: "force_without_deposit", userId: user.id, before: { status: job.status }, after: { status: body.to, note: body.note ?? null } }, tx);

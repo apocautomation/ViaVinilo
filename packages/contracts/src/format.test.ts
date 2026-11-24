@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskAmount, maskCuit, maskDni, parseAmount } from "./format";
+import { maskAmount, maskCuit, maskDni, parseAmount, parseSaltaDateTime } from "./format";
 import { transitionSchema } from "./transitions";
 
 describe("formatos argentinos en los campos (D-055)", () => {
@@ -33,5 +33,25 @@ describe("formatos argentinos en los campos (D-055)", () => {
     expect(parseAmount(18500.5)).toBe("18500.50");
     expect(parseAmount("abc")).toBeNull();
     expect(transitionSchema.parse({ to: "QUOTED", quotedAmount: "1.234.567,89" }).quotedAmount).toBe("1234567.89");
+  });
+
+  it("D-079: la fecha se escribe día/mes/año y en 24 h, y se guarda con la hora de Salta", () => {
+    expect(parseSaltaDateTime("24/11/2026", "18:00")).toBe("2026-11-24T18:00:00-03:00");
+    expect(parseSaltaDateTime("5/1/27", "9")).toBe("2027-01-05T09:00:00-03:00");
+    // Sin hora: cierre del día.
+    expect(parseSaltaDateTime("24/11/2026")).toBe("2026-11-24T18:00:00-03:00");
+    // Mes/día (como lo mostraba el navegador) no es una fecha válida: no se adivina.
+    expect(parseSaltaDateTime("11/24/2026", "18:00")).toBeNull();
+    expect(parseSaltaDateTime("31/02/2026", "10:00")).toBeNull();
+    expect(parseSaltaDateTime("24/11/2026", "25:00")).toBeNull();
+    expect(parseSaltaDateTime("mañana")).toBeNull();
+  });
+
+  it("D-079: la seña al cotizar acepta un monto, vacío o null", () => {
+    expect(transitionSchema.parse({ to: "QUOTED", quotedAmount: "20.000", depositAmount: "10.000" }).depositAmount).toBe("10000.00");
+    expect(transitionSchema.parse({ to: "QUOTED", quotedAmount: "20.000", depositAmount: "" }).depositAmount).toBeNull();
+    expect(transitionSchema.parse({ to: "QUOTED", quotedAmount: "20.000", depositAmount: null }).depositAmount).toBeNull();
+    expect(transitionSchema.parse({ to: "QUOTED", quotedAmount: "20.000" }).depositAmount).toBeUndefined();
+    expect(transitionSchema.safeParse({ to: "QUOTED", quotedAmount: "20.000", depositAmount: "abc" }).success).toBe(false);
   });
 });

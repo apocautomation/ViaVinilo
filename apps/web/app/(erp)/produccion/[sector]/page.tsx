@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, Download, FileText, Lock, Paperclip } from "lucide-react";
 import { api, downloadFile, getUser, watchBoard, type SessionUser } from "../../../lib/api";
 import { Help } from "../../help";
-import { ars, MoneyInput } from "../../ui";
+import { ars } from "../../ui";
+import { OrderPanel, type PanelMode } from "./order-panel";
 
 type Status =
   | "PENDING_SIGNUP" | "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED"
@@ -21,6 +22,8 @@ interface Card {
   measure: string | null;
   quotedAmount: string | null;
   depositRequired: boolean;
+  depositAmount: string | null;
+  depositPaidAt: string | null;
   estimatedReadyAt: string | null;
   fileCount: number;
   /** Resultado del control automático del archivo (D-065). */
@@ -60,12 +63,6 @@ const NEXT_ACTION: Partial<Record<Status, string>> = {
   READY: "Marcar terminado",
   DELIVERED: "Entregar",
 };
-
-type Dialog =
-  | { kind: "quote"; card: Card }
-  | { kind: "error"; card: Card }
-  | { kind: "cancel"; card: Card }
-  | { kind: "force"; card: Card };
 
 /** Color de cada columna (punto del encabezado y borde de la tarjeta). */
 const STATUS_COLOR: Partial<Record<Status, string>> = {
@@ -128,11 +125,12 @@ export default function BoardPage() {
   const [machineId, setMachineId] = useState("");
   const [groupByMaterial, setGroupByMaterial] = useState(false);
   /**
-   * Vista compacta (D-066): cada tarjeta ocupa 3 renglones y se abre con un clic, para que un tablero
-   * con muchos pedidos no sea un scroll interminable. La elección se recuerda en el navegador.
+   * Vista compacta (D-066): cada tarjeta ocupa 3 renglones, para que un tablero con muchos pedidos no
+   * sea un scroll interminable. La elección se recuerda en el navegador. Al tocar una tarjeta se abre
+   * el panel del pedido (D-079).
    */
   const [compact, setCompact] = useState(true);
-  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [panel, setPanel] = useState<{ id: string; mode: PanelMode } | null>(null);
   useEffect(() => {
     try {
       if (localStorage.getItem("vv.board.compact") === "0") setCompact(false);
@@ -142,23 +140,14 @@ export default function BoardPage() {
   }, []);
   const toggleCompact = (value: boolean) => {
     setCompact(value);
-    setOpened(new Set());
     try {
       localStorage.setItem("vv.board.compact", value ? "1" : "0");
     } catch {
       /* sin almacenamiento */
     }
   };
-  const toggleCard = (id: string) =>
-    setOpened((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<Dialog | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -208,7 +197,6 @@ export default function BoardPage() {
     setBusy(card.id);
     try {
       await api(`/jobs/${card.id}/transition`, { method: "POST", body: JSON.stringify(body) });
-      setDialog(null);
       await load();
     } catch (e) {
       setToast((e as Error).message);
@@ -220,7 +208,7 @@ export default function BoardPage() {
 
   function clickNext(card: Card) {
     if (!card.next) return;
-    if (card.next === "QUOTED" && !card.quotedAmount) setDialog({ kind: "quote", card });
+    if (card.next === "QUOTED" && !card.quotedAmount) setPanel({ id: card.id, mode: "quote" });
     else void move(card, { to: card.next });
   }
 
@@ -244,29 +232,6 @@ export default function BoardPage() {
       if (!detail.files.length) setToast("Este pedido no tiene archivos guardados.");
     } catch (e) {
       setToast(e instanceof Error ? e.message : "No pudimos descargar el archivo.");
-    }
-  }
-
-  function submitDialog(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!dialog) return;
-    const f = new FormData(e.currentTarget);
-    const { card } = dialog;
-    if (dialog.kind === "quote") {
-      const eta = String(f.get("eta") || "");
-      void move(card, {
-        to: "QUOTED",
-        quotedAmount: String(f.get("amount") || ""),
-        // El operador carga la hora de Salta (UTC-3).
-        ...(eta ? { estimatedReadyAt: `${eta}:00-03:00` } : {}),
-      });
-    } else if (dialog.kind === "error") {
-      void move(card, { to: "FILE_ERROR", reasonId: f.get("reason"), note: String(f.get("note") || "") || undefined });
-    } else if (dialog.kind === "cancel") {
-      void move(card, { to: "CANCELLED", note: String(f.get("note") || "") });
-    } else {
-      const to = card.next === "DEPOSIT_RECEIVED" ? "PRINTED" : card.next;
-      void move(card, { to, force: true, note: String(f.get("note") || "") || undefined });
     }
   }
 
@@ -356,12 +321,13 @@ export default function BoardPage() {
               {col.cards.map((card) => {
                 const mins = minutesSince(card.createdAt, now);
                 const step = stepOf(card.status);
-                const open = !compact || opened.has(card.id);
-                if (!open) {
+                const waitingDeposit = card.depositRequired && !card.depositPaidAt && card.next === "DEPOSIT_RECEIVED";
+                const depositLabel = `Esperando seña${card.depositAmount ? ` de ${money.format(Number(card.depositAmount))}` : ""}`;
+                if (compact) {
                   const check = card.status === "RECEIVED" ? card.fileCheck?.verdict : undefined;
                   return (
                     <article key={card.id} className="card card-compact" aria-busy={busy === card.id}>
-                      <button type="button" className="card-toggle" aria-expanded={false} onClick={() => toggleCard(card.id)} title="Ver el pedido completo">
+                      <button type="button" className="card-toggle" onClick={() => setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
                         <span className="row">
                           <span className="num">{card.label}</span>
                           <span className="age" data-late={mins > LATE_MIN}>
@@ -373,7 +339,7 @@ export default function BoardPage() {
                           <span className="mini">
                             {(check === "error" || check === "review") && <span className={`dot ${check}`} title={card.fileCheck?.detail} />}
                             {card.quotedAmount && <span>{money.format(Number(card.quotedAmount))}</span>}
-                            {card.depositRequired && card.next === "DEPOSIT_RECEIVED" && <span className="warn">Seña</span>}
+                            {waitingDeposit && <span className="warn" title={depositLabel}>Seña{card.depositAmount ? ` ${money.format(Number(card.depositAmount))}` : ""}</span>}
                           </span>
                         </span>
                         {card.description && <span className="desc-line">{card.description}</span>}
@@ -389,13 +355,9 @@ export default function BoardPage() {
                 return (
                 <article key={card.id} className="card" aria-busy={busy === card.id}>
                   <header>
-                    {compact ? (
-                      <button type="button" className="num num-btn" aria-expanded onClick={() => toggleCard(card.id)} title="Achicar">
-                        {card.label} ▴
-                      </button>
-                    ) : (
-                      <span className="num">{card.label}</span>
-                    )}
+                    <button type="button" className="num num-btn" onClick={() => setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
+                      {card.label}
+                    </button>
                     <span className="age" data-late={mins > LATE_MIN} title={fullDate.format(new Date(card.createdAt))}>
                       <Clock size={12} aria-hidden /> {age(card.createdAt, now)}
                     </span>
@@ -421,9 +383,7 @@ export default function BoardPage() {
                     </span>
                     {card.linkCount > 0 && <span className="chip">{card.linkCount} link</span>}
                     {card.quotedAmount && <span className="chip chip-brand">{money.format(Number(card.quotedAmount))}</span>}
-                    {card.depositRequired && card.status !== "DEPOSIT_RECEIVED" && card.next === "DEPOSIT_RECEIVED" && (
-                      <span className="chip chip-warn">Requiere seña</span>
-                    )}
+                    {waitingDeposit && <span className="chip chip-warn">{depositLabel}</span>}
                     {card.material && <span className="chip">{card.material.name}</span>}
                     {card.sameMaterialCount > 0 && (
                       <span className="chip chip-brand">+{card.sameMaterialCount} con el mismo material</span>
@@ -489,17 +449,17 @@ export default function BoardPage() {
                   {(card.other.length > 0 || (isOwner && card.next === "DEPOSIT_RECEIVED")) && (
                     <div className="actions">
                       {card.other.includes("FILE_ERROR") && (
-                        <button className="btn btn-danger" disabled={busy === card.id} onClick={() => setDialog({ kind: "error", card })}>
+                        <button className="btn btn-danger" disabled={busy === card.id} onClick={() => setPanel({ id: card.id, mode: "error" })}>
                           Error de archivo
                         </button>
                       )}
                       {isOwner && card.next === "DEPOSIT_RECEIVED" && (
-                        <button className="btn btn-ghost" disabled={busy === card.id} onClick={() => setDialog({ kind: "force", card })}>
+                        <button className="btn btn-ghost" disabled={busy === card.id} onClick={() => setPanel({ id: card.id, mode: "force" })}>
                           Imprimir sin seña
                         </button>
                       )}
                       {card.other.includes("CANCELLED") && (
-                        <button className="btn btn-ghost" disabled={busy === card.id} onClick={() => setDialog({ kind: "cancel", card })}>
+                        <button className="btn btn-ghost" disabled={busy === card.id} onClick={() => setPanel({ id: card.id, mode: "cancel" })}>
                           Cancelar
                         </button>
                       )}
@@ -513,73 +473,17 @@ export default function BoardPage() {
         ))}
       </main>
 
-      {dialog && (
-        <div className="backdrop" onClick={(e) => e.target === e.currentTarget && setDialog(null)}>
-          <form className="dialog" onSubmit={submitDialog} role="dialog" aria-modal="true" aria-labelledby="dlg-title">
-            {dialog.kind === "quote" && (
-              <>
-                <h3 id="dlg-title">Cotizar {dialog.card.label}</h3>
-                <label className="field">
-                  Precio (pesos)
-                  <MoneyInput name="amount" placeholder="Ej.: 18.500,50" required autoFocus />
-                </label>
-                <label className="field">
-                  Listo para retirar (opcional)
-                  <input name="eta" type="datetime-local" />
-                </label>
-              </>
-            )}
-            {dialog.kind === "error" && (
-              <>
-                <h3 id="dlg-title">Error de archivo en {dialog.card.label}</h3>
-                <label className="field">
-                  Motivo
-                  <select name="reason" required defaultValue="">
-                    <option value="" disabled>
-                      Elegí el motivo
-                    </option>
-                    {reasons.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  Detalle para el cliente (opcional)
-                  <textarea name="note" rows={2} maxLength={500} />
-                </label>
-              </>
-            )}
-            {dialog.kind === "cancel" && (
-              <>
-                <h3 id="dlg-title">Cancelar {dialog.card.label}</h3>
-                <label className="field">
-                  Motivo
-                  <textarea name="note" rows={2} maxLength={500} required autoFocus />
-                </label>
-              </>
-            )}
-            {dialog.kind === "force" && (
-              <>
-                <h3 id="dlg-title">Imprimir {dialog.card.label} sin seña</h3>
-                <p style={{ margin: 0, fontSize: 14 }}>Queda registrado que lo autorizaste vos.</p>
-                <label className="field">
-                  Motivo (opcional)
-                  <textarea name="note" rows={2} maxLength={500} />
-                </label>
-              </>
-            )}
-            <div className="row">
-              <button type="button" className="btn btn-ghost" onClick={() => setDialog(null)}>
-                Volver
-              </button>
-              <button className="btn btn-primary" disabled={busy === dialog.card.id}>
-                Confirmar
-              </button>
-            </div>
-          </form>
-        </div>
+      {panel && (
+        <OrderPanel
+          key={`${panel.id}-${panel.mode}`}
+          jobId={panel.id}
+          initialMode={panel.mode}
+          machines={board?.machines ?? []}
+          reasons={reasons}
+          isOwner={isOwner}
+          onClose={() => setPanel(null)}
+          onChanged={() => void load()}
+        />
       )}
 
       {toast && (

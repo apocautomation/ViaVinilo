@@ -186,6 +186,30 @@ describe("cambios de estado", () => {
     expect(row.depositPaidAt).not.toBeNull();
   });
 
+  it("D-079: la seña se pide al cotizar; el pedido queda esperando ese monto y el cambio queda auditado", async () => {
+    const job = await newJob();
+    const mayor = await http("production").post(`/jobs/${job.id}/transition`, { to: "QUOTED", quotedAmount: "20.000", depositAmount: "25.000" });
+    expect(mayor.status).toBe(422);
+    expect(mayor.body.message).toBe("La seña no puede ser mayor que el precio");
+
+    const res = await http("production").post(`/jobs/${job.id}/transition`, { to: "QUOTED", quotedAmount: "20.000", depositAmount: "10.000" });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: "QUOTED", quotedAmount: "20000", depositRequired: true, depositAmount: "10000", next: "DEPOSIT_RECEIVED" });
+    const audit = await prisma.auditLog.findFirst({ where: { entityId: job.id, action: "deposit" } });
+    expect(audit?.after).toEqual({ depositAmount: "10000" });
+    // R-JOB-3 sigue valiendo: sin la seña no se imprime.
+    expect((await http("production").post(`/jobs/${job.id}/transition`, { to: "PRINTED" })).status).toBe(422);
+    const board = await http("production").get("/jobs/board?sector=DTF");
+    const card = board.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards).find((c: { id: string }) => c.id === job.id);
+    expect(card).toMatchObject({ depositRequired: true, depositAmount: "10000" });
+  });
+
+  it("D-079: cotizar sin seña deja el pedido listo para imprimir, aunque antes la pidiera", async () => {
+    const job = await newJob("DTF", { depositRequired: true });
+    const res = await http("production").post(`/jobs/${job.id}/transition`, { to: "QUOTED", quotedAmount: "20.000", depositAmount: null });
+    expect(res.body).toMatchObject({ status: "QUOTED", depositRequired: false, depositAmount: null, next: "PRINTED" });
+  });
+
   it("R-JOB-3: solo el dueño puede forzar la impresión sin seña, y queda auditado", async () => {
     const job = await newJob("DTF", { depositRequired: true });
     await http("production").post(`/jobs/${job.id}/transition`, { to: "QUOTED", quotedAmount: "10000" });
