@@ -664,4 +664,14 @@ describe("listado de pedidos del ERP (Ventas → Pedidos)", () => {
     const byNumber = await http("owner").get(`/jobs?tab=ALL&search=${otroSector.number}`);
     expect(byNumber.body.items.map((j: { id: string }) => j.id)).toContain(otroSector.id);
   });
+
+  it("D-090: buscar un pedido por el nombre del cliente o por una letra no falla", async () => {
+    const job = await newJob();
+    const byName = await http("owner").get("/jobs?tab=ALL&pageSize=100&search=perez");
+    expect(byName.status).toBe(200);
+    expect(byName.body.items.map((j: { id: string }) => j.id)).toContain(job.id);
+    expect((await http("owner").get("/jobs?tab=ACTIVE&search=a")).status).toBe(200);
+    const mixed = await http("owner").get(`/jobs?tab=ALL&search=VV-${String(job.number).padStart(6, "0")}`);
+    expect(mixed.body.items.map((j: { id: string }) => j.id)).toContain(job.id);
+  });
 });

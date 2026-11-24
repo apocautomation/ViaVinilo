@@ -1396,6 +1396,12 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: migración `20261125010000_user_can_see_billing` (una columna, por defecto apagado). Se actualiza también el texto de "Qué puede hacer cada rol".
 - **Abierto**: el permiso solo cubre los totales de Inicio; los precios de cada pedido los siguen viendo todos los que ven el pedido, porque los necesitan para cotizar y cobrar la seña.
 
+### D-090 · 24/11/2026 · Revisión de producción · el buscador de Ventas → Pedidos fallaba al buscar por nombre
+- **Qué pasaba**: al buscar texto en Ventas → Pedidos ("pedro", "a") la API devolvía error 500 y la lista no cargaba. Se vio en los registros de producción el 24/11, justo después del despliegue de D-089, con alguien usando el buscador.
+- **Causa**: una expresión regular mal escrita (`/D/` en vez de `/\D/`) dejaba el nombre como si fuera un número de pedido. Buscar por número sí andaba, por eso el test que había no lo detectó. El error estaba desde que se hizo el listado; no lo introdujo ningún cambio del 24/11.
+- **Arreglo**: se corrige la expresión y se agrega un test que busca por nombre, por una letra y por "VV-000123".
+- **Impacto**: solo `GET /jobs` con `search`. Sin migración.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.
