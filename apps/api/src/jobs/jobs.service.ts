@@ -35,6 +35,9 @@ export interface BoardQuery {
   groupByMaterial?: boolean;
 }
 
+/** Columna del tablero para los cotizados que esperan la seña (D-081). */
+export const AWAITING_DEPOSIT_COLUMN = "AWAITING_DEPOSIT";
+
 export interface TransitionBody {
   to: JobStatus;
   reasonId?: string;
@@ -266,11 +269,20 @@ export class JobsService {
     return {
       sector: { id: sector.id, code: sector.code, name: sector.name },
       machines: sector.machines.map((m) => ({ id: m.machine.id, name: m.machine.name })).sort((a, b) => a.name.localeCompare(b.name)),
-      columns: columns.map((status) => ({
-        status,
-        label: JOB_STATUS_LABELS[status],
-        cards: cards.filter((c) => c.status === status),
-      })),
+      columns: columns.flatMap((status) => {
+        const own = cards.filter((c) => c.status === status);
+        const column = (key: string, label: string, list: typeof own) => ({ key, status, label, cards: list });
+        // D-081: los cotizados que esperan la seña van en su propia columna. No es un estado nuevo:
+        // el pedido sigue "Cotizado" hasta que se registra la seña.
+        if (status === "QUOTED" && sequence.includes("DEPOSIT_RECEIVED")) {
+          const waiting = (c: (typeof own)[number]) => c.depositRequired && !c.depositPaidAt;
+          return [
+            column("QUOTED", JOB_STATUS_LABELS.QUOTED, own.filter((c) => !waiting(c))),
+            column(AWAITING_DEPOSIT_COLUMN, "Esperando seña", own.filter(waiting)),
+          ];
+        }
+        return [column(status, JOB_STATUS_LABELS[status], own)];
+      }),
       version: await this.version(sector.id),
     };
   }

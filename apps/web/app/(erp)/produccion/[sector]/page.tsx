@@ -40,7 +40,8 @@ interface Card {
 interface Board {
   sector: { code: string; name: string };
   machines: { id: string; name: string }[];
-  columns: { status: Status; label: string; cards: Card[] }[];
+  /** `key` distingue "Cotizado" de "Esperando seña" (D-081): las dos son del estado QUOTED. */
+  columns: { key: string; status: Status; label: string; cards: Card[] }[];
 }
 
 interface Sector {
@@ -238,7 +239,7 @@ export default function BoardPage() {
   const isOwner = user?.roles.includes("OWNER") ?? false;
   const total = board?.columns.reduce((n, c) => n + c.cards.length, 0) ?? 0;
 
-  const flow = board?.columns.filter((c) => c.status !== "FILE_ERROR" && c.status !== "PENDING_SIGNUP") ?? [];
+  const flow = board?.columns.filter((c) => c.status !== "FILE_ERROR" && c.status !== "PENDING_SIGNUP" && c.key === c.status) ?? [];
   const stepOf = (s: Status) => flow.findIndex((c) => c.status === s);
 
   return (
@@ -300,15 +301,15 @@ export default function BoardPage() {
       <main className="board">
         {board?.columns.map((col) => (
           <section
-            key={col.status}
+            key={col.key}
             className="column"
             aria-label={col.label}
-            style={{ ["--col" as string]: STATUS_COLOR[col.status] }}
+            style={{ ["--col" as string]: col.key === "AWAITING_DEPOSIT" ? "var(--color-warning)" : STATUS_COLOR[col.status] }}
           >
             <div className="column-head">
               <span className="column-dot" />
               <h2>{col.label}</h2>
-              {stepOf(col.status) >= 0 && <span className="column-step">Paso {stepOf(col.status) + 1}</span>}
+              {col.key === col.status && stepOf(col.status) >= 0 && <span className="column-step">Paso {stepOf(col.status) + 1}</span>}
               <span className="column-count">{col.cards.length}</span>
             </div>
             <div className="cards">

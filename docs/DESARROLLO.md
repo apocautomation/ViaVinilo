@@ -1273,7 +1273,7 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
     - La seña no puede ser mayor que el precio.
   - **Fecha en día/mes/año y 24 h**: el campo "Listo para retirar" usaba el selector del navegador, que en la PC de la demo mostraba mes/día y AM/PM. Ahora se escribe `24/11/2026` y `18:00`; siempre es hora de Salta.
 - **Definiciones de la reunión que quedan para los PR siguientes** (en este orden):
-  1. **Columna "Esperando seña"** en el tablero, entre Cotizado y Seña recibida.
+  1. **Columna "Esperando seña"** en el tablero, entre Cotizado y Seña recibida. **Hecho en D-081.**
   2. **Sectores reales (resuelve I-26)**: Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; Sublimación y Calandrado aparte. Sin Embroidery ("vamos a tener solo TPU"). Látex deja de ser un tablero propio.
   3. **Sucursal de retiro** (Av. Chile o San Juan) elegida al hacer el pedido, visible en la tarjeta. Hay una camioneta que cruza pedidos dos veces por día; el asistente no decide el lugar.
   4. **Trabajos por cliente**: ver todos los pedidos de un cliente en todos los sectores, para que caja los junte.
@@ -1290,6 +1290,12 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Por qué**: Ezequiel pidió que el archivo con error pase solo a "Archivo con error" (D-079). Con el paso automático prendido, esos 4 clientes habrían recibido un aviso de error equivocado. El paso automático sigue saliendo solo con el caso claro: una sola medida, con unidad, posible, y resolución menor a la mitad del mínimo.
 - **Impacto**: `checkFile` en `packages/contracts`. Sin migración. Al desplegar se vuelven a controlar los pedidos en "Archivo recibido" que estaban marcados con error.
 - **Abierto**: `TODO(spec): I-24` — los topes (3,2 m y 50 m) son provisorios hasta tener el ancho real de cada máquina (I-10). El paso automático se prende desde Configuración.
+
+### D-081 · 24/11/2026 · Reunión con Verónica y Ricardo · columna "Esperando seña" en el tablero
+- **Decisión**: el tablero muestra una columna **Esperando seña** entre "Cotizado" y "Seña recibida", con los pedidos cotizados a los que se les pidió seña y todavía no la dejaron. Los cotizados sin seña quedan en "Cotizado", listos para imprimir.
+- **Cómo**: no es un estado nuevo. El pedido sigue "Cotizado" hasta que se registra la seña; la API separa la columna según `depositRequired` y `depositPaidAt` (cada columna trae un `key`). Así no cambian las reglas de pasos (R-JOB-3), los avisos al cliente ni la app, y no hace falta migración.
+- **Por qué**: en la reunión del 24/11 se acordó "una columnita más: cotizado, esperando seña y seña recibida", para ver de un vistazo qué pedidos están frenados por la seña (D-079).
+- **Impacto**: `GET /jobs/board` devuelve una columna más en los sectores cuya secuencia tiene seña. El resumen de Inicio no cambia: sigue contando esos pedidos como cotizados.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
