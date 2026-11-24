@@ -145,6 +145,7 @@ export async function processBotReplies(
       quotedAmount: j.quotedAmount?.toString() ?? null,
       depositRequired: j.depositRequired,
       depositPaid: j.depositPaidAt !== null,
+      depositAmount: j.depositAmount?.toString() ?? null,
       estimatedReadyAt: j.estimatedReadyAt,
       createdAt: j.createdAt,
       fileIssue:

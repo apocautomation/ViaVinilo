@@ -15,6 +15,8 @@ export interface BotJob {
   quotedAmount: string | null;
   depositRequired: boolean;
   depositPaid: boolean;
+  /** Monto de la seña pedida (D-093). */
+  depositAmount?: string | null;
   estimatedReadyAt: Date | null;
   createdAt: Date;
   /** Por qué está en "Archivo con error" (D-092): motivo y detalle del control. */

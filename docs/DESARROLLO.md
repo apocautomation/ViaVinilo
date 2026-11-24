@@ -1429,6 +1429,13 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: sin migración. `bot-dry-run` acepta pedidos de ejemplo para probar el bot real con un pedido en error.
 - **Abierto**: los pedidos que ya estaban en Gran Formato y DTF no se reclasifican solos; se puede correr una pasada sobre los existentes. `TODO(spec): I-10` — las palabras se ajustan cuando Ricardo pase cómo nombran los clientes cada servicio.
 
+### D-093 · 24/11/2026 · Ezequiel (prueba del bot con el modelo real) · más formas de preguntar por el archivo, y precio y seña en el pedido cotizado
+- **Fuente**: prueba del bot en el servidor con el modelo real (`bot-dry-run`, sin tocar la base) después de D-092.
+- **Más formas de preguntar por el archivo**: "¿qué le pasa a mi archivo?", "¿por qué no avanza?", "mi archivo sirve así?", "el pedido está trabado" también van al flujo fijo con el estado real. En la prueba, "qué le pasa a mi archivo, por qué no avanza?" la había contestado la IA en 9,6 segundos y había marcado el chat para un asesor sin decírselo al cliente.
+- **Pedido cotizado**: a "¿está listo mi pedido?" el bot contestaba solo "Cotizado". Ahora dice el precio y, si falta, la seña con su monto, y ofrece el alias para pagarla.
+- **Impacto**: sin migración. Solo flujos fijos del bot.
+- **Abierto**: las preguntas generales siguen yendo a la IA. En la prueba, "¿qué diferencia hay entre DTF y sublimación?" recibió una explicación imprecisa: es el límite del modelo local chico (D-057). Se resuelve cargando esas respuestas como fijas cuando la Ayuda sea editable (Etapa 2).
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

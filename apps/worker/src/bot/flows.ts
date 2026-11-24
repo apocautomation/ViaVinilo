@@ -42,7 +42,7 @@ const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo
  */
 /** Se prueba sobre el texto sin tildes: "\\b" no corta bien después de una vocal acentuada. */
 const FILE_QUESTION =
-  /\b(archivos?|disenos?|mail|correo)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archivos?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b/i;
+  /\b(archivos?|disenos?|mail|correo)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archivos?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b|\bque (le )?(pasa|paso|onda)\b.{0,30}\b(archivos?|disenos?|pedidos?|trabajos?)\b|\b(archivos?|disenos?|pedidos?|trabajos?)\b.{0,30}\b(no avanza|sigue igual|trabado|frenado|parado)\b|\bpor ?que no (avanza|sale|lo hacen|lo imprimen)\b|\b(mi|mis) (archivos?|disenos?)\b.*\?/i;
 const plain = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 /** Un trabajo nuevo: pide imprimir, manda medidas o un archivo, o avisa que adjunta (D-060, D-061). */
 const NEW_JOB =
@@ -128,6 +128,8 @@ function howToPay(serviceId: string | null): string {
   return `${blocks.join("\n\n")}\n\nMandá el comprobante por este chat. En el mostrador se paga en efectivo o débito.`;
 }
 
+const ars = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+
 /** Un pedido en una línea, con lo que el cliente necesita saber del archivo (D-092). */
 function jobLine(j: BotJob): string {
   const base = `${j.label} (${j.sector}${j.description ? `, ${j.description}` : ""})`;
@@ -138,6 +140,14 @@ function jobLine(j: BotJob): string {
     if (j.fileCheck === "ok") return `${base}: recibimos el archivo y el control automático dio bien. Falta que lo coticemos`;
     if (j.fileCheck === "review") return `${base}: recibimos el archivo y lo está revisando el equipo antes de cotizar`;
     return `${base}: recibimos el archivo. Lo revisamos y te pasamos el precio`;
+  }
+  if (j.status === "Cotizado" && j.quotedAmount) {
+    // D-093: el cliente pregunta "¿está listo?" y lo que le falta saber es el precio y la seña.
+    const price = `cotizado en ${ars.format(Number(j.quotedAmount))}`;
+    if (j.depositRequired && !j.depositPaid) {
+      return `${base}: ${price}. Para empezar falta la seña${j.depositAmount ? ` de ${ars.format(Number(j.depositAmount))}` : ""}; si querés los datos para pagarla, pedime el alias`;
+    }
+    return `${base}: ${price}`;
   }
   return `${base}: ${j.status}`;
 }
