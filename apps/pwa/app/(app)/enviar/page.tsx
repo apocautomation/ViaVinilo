@@ -157,7 +157,7 @@ export default function EnviarPage() {
             </div>
           )}
 
-          <VariantPicker sectorCode={sectorCode} value={variant} onChange={setVariant} onList={setVariants} title="¿Qué material o terminación?" />
+          <VariantPicker sectorCode={sectorCode} value={variant} onChange={setVariant} onList={setVariants} title="¿Qué opción de impresión?" />
 
           <h2 className="section-title">2 · Medidas y cantidad</h2>
           <div className="compose-measure">
@@ -218,7 +218,7 @@ export default function EnviarPage() {
           <button className="btn btn-primary btn-block" disabled={!ready}>
             <Send size={18} /> {progress !== null ? `Enviando… ${Math.round(progress * 100)}%` : "Enviar el trabajo"}
           </button>
-          {!ready && progress === null && <p className="muted compose-missing">Para enviar falta: {[!sectorCode && "el servicio", !variantOk && "el material", !measureOk && "las medidas", !copiesOk && "las copias", !file && "el archivo"].filter(Boolean).join(", ")}.</p>}
+          {!ready && progress === null && <p className="muted compose-missing">Para enviar falta: {[!sectorCode && "el servicio", !variantOk && "la opción de impresión", !measureOk && "las medidas", !copiesOk && "las copias", !file && "el archivo"].filter(Boolean).join(", ")}.</p>}
         </form>
 
         <Link href="/ayuda#archivos" className="btn btn-ghost btn-block">

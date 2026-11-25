@@ -88,7 +88,7 @@ export class CatalogController {
         return v;
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otro material");
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otra opción");
       throw err;
     }
   }
@@ -102,7 +102,7 @@ export class CatalogController {
     @CurrentUser() user: AuthUser,
   ) {
     const before = await this.prisma.sectorVariant.findUnique({ where: { id } });
-    if (!before) throw new NotFoundException("Ese material no existe");
+    if (!before) throw new NotFoundException("Esa opción no existe");
     try {
       return await this.prisma.$transaction(async (tx) => {
         const v = await tx.sectorVariant.update({ where: { id }, data: body, select: { id: true, code: true, name: true, active: true, sortOrder: true } });
@@ -113,7 +113,7 @@ export class CatalogController {
         return v;
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otro material");
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otra opción");
       throw err;
     }
   }

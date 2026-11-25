@@ -135,7 +135,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-25 | Cómo se reconoce la seña (D-050) | "Cuando el cliente pase el comprobante, pasa a Seña recibida": falta definir si alcanza con que mande una imagen o si alguien la verifica. | E1 | Abierto. Propuesta: el asesor ve el comprobante en Conversaciones y toca "Seña recibida" (un clic, queda auditado). La lectura automática del monto queda para después. |
 | I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | **Resuelto en D-082** (definido el 24/11): Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; sin Embroidery. |
 | I-27 | Seña por servicio en la Ayuda de la app (D-053) | Los agentes de Runamatic no coinciden: los de sector piden 50% siempre; el agente "SISTEMA NUEVO" la pide según metros (DTF Textil, Sublimación y Calandra desde 10 m; DTF UV desde 3 m; TPU siempre). La Ayuda muestra la del agente más nuevo. | E1 | Abierto. Confirmar con Verónica y corregir `apps/pwa/app/(app)/ayuda/content.ts`. |
-| I-28 | Materiales de cada tablero (D-095) | Ricardo manda un Excel con las opciones de cada producto (por ejemplo las telas de Calandra). Los códigos de DTF Textil (`DTF-GLI`, etc.) los puse yo y son provisorios. | E1 | Abierto. Cargar el Excel en Producción → Materiales por tablero (o por importación) y confirmar los códigos con Ricardo. |
+| I-28 | Materiales de cada tablero (D-095) | Ricardo manda un Excel con las opciones de cada producto (por ejemplo las telas de Calandra). Los códigos de DTF Textil (`DTF-GLI`, etc.) los puse yo y son provisorios. | E1 | Abierto. Cargar el Excel en Producción → Opciones de impresión (o por importación) y confirmar los códigos con Ricardo. |
 
 ## 4. Bitácora de decisiones
 
@@ -1511,6 +1511,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 ### D-100 · 25/11/2026 · Ezequiel · "¿en qué sucursal?" con un pedido listo responde dónde se retira ese pedido
 - **Qué pasaba**: probado con el modelo real después de D-099, a "¿en qué sucursal?" la IA buscaba los horarios y daba las dos sucursales, sin decir cuál era la del pedido.
 - **Arreglo**: si el cliente tiene un pedido "Terminado, listo para retirar" y pregunta dónde ("¿en qué sucursal?", "¿dónde lo retiro?"), la pregunta va a `ver_mis_pedidos` y se responde con la sucursal de ese pedido. Si la IA no consulta el pedido, va la respuesta armada con la sucursal. "¿Hasta qué hora abren?" sigue yendo a los horarios, y sin pedido listo se muestran las dos sucursales.
+- **Impacto**: sin migración.
+### D-102 · 25/11/2026 · Ezequiel · "Materiales por tablero" pasa a llamarse "Opciones de impresión"
+- **Qué**: el apartado de Producción y todo lo que ve la gente (tablero, panel del pedido, app de clientes, mensajes de error y la línea del chat al mandar un trabajo) dice "Opción de impresión" en vez de "Material". La dirección pasa a `/produccion/opciones`; la vieja (`/produccion/materiales`) redirige.
+- **Por qué**: "Materiales" se confundía con el stock. No es stock: es la lista de opciones con que se hace un pedido (Glitter, Reflectivo, la tela de Calandra), sin cantidades ni movimientos. El stock es de la Etapa 3; ahí cada opción se va a poder vincular a su insumo para descontar lo que se consume.
+- **Qué no cambia**: los nombres internos del código (`SectorVariant`, `variant`, `material`) y la pregunta del bot "¿de qué material es el trabajo?" (lona, vinilo, tela), que sirve para elegir la casilla y es otra cosa.
 - **Impacto**: sin migración.
 
 ### D-101 · 25/11/2026 · Ezequiel · voseo con tilde y batería de casos del bot

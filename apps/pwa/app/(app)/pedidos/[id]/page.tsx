@@ -179,7 +179,7 @@ export default function PedidoPage() {
           <dl className="kv">
             {o.material && (
               <>
-                <dt>Material</dt>
+                <dt>Opción de impresión</dt>
                 <dd>{o.material}</dd>
               </>
             )}

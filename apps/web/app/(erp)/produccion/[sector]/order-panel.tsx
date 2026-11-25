@@ -255,7 +255,7 @@ export function OrderPanel(props: {
                 </dd>
                 {job.material && (
                   <>
-                    <dt>Material</dt>
+                    <dt>Opción de impresión</dt>
                     <dd>{job.material.name}</dd>
                   </>
                 )}
@@ -338,11 +338,11 @@ export function OrderPanel(props: {
 
             {(job.variants.length > 0 || job.variant) && (
               <section className="order-block">
-                <h3>Material</h3>
+                <h3>Opción de impresión</h3>
                 <select
                   value={job.variant?.id ?? ""}
                   disabled={busy || job.status === "DELIVERED" || job.status === "CANCELLED"}
-                  aria-label="Material del pedido"
+                  aria-label="Opción de impresión del pedido"
                   onChange={(e) => void run(() => api(`/jobs/${jobId}/variant`, { method: "PATCH", body: JSON.stringify({ variantId: e.target.value || null }) }))}
                 >
                   <option value="">Sin definir</option>
