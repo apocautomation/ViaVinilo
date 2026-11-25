@@ -9,6 +9,7 @@ import { api, downloadFile, getUser, watchBoard, type SessionUser } from "../../
 import { Help } from "../../help";
 import { ars } from "../../ui";
 import { OrderPanel, type PanelMode } from "./order-panel";
+import { groupByMaterial as groupCardsByMaterial } from "./material-groups";
 
 type Status =
   | "PENDING_SIGNUP" | "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED"
@@ -396,7 +397,25 @@ export default function BoardPage() {
                   Sin órdenes
                 </div>
               )}
-              {col.cards.map((card) => {
+              {/* D-110: con "Agrupar por opción", los trabajos de la misma tela van uno abajo del otro bajo su color. */}
+              {(groupByMaterial ? groupCardsByMaterial(col.cards) : [{ key: "all", code: null, title: "", color: null, cards: col.cards }]).map((group) => (
+                <div
+                  key={group.key}
+                  className={groupByMaterial ? "mat-group" : "mat-all"}
+                  data-none={groupByMaterial && !group.color ? "true" : undefined}
+                  style={group.color ? { ["--mat" as string]: group.color } : undefined}
+                >
+                  {groupByMaterial && (
+                    <div className="mat-group-head">
+                      <span className="mat-swatch" aria-hidden />
+                      {group.code && <b>{group.code}</b>}
+                      <span className="mat-title">{group.title}</span>
+                      <span className="mat-count" aria-label={`${group.cards.length} ${group.cards.length === 1 ? "trabajo" : "trabajos"}`}>
+                        {group.cards.length}
+                      </span>
+                    </div>
+                  )}
+              {group.cards.map((card) => {
                 const mins = minutesSince(card.createdAt, now);
                 const step = stepOf(card.status);
                 const waitingDeposit = card.depositRequired && !card.depositPaidAt && card.next === "DEPOSIT_RECEIVED";
@@ -483,7 +502,8 @@ export default function BoardPage() {
                     ) : (
                       card.material && <span className="chip">{card.material.name}</span>
                     )}
-                    {card.sameMaterialCount > 0 && (
+                    {/* D-110: agrupado, el encabezado del grupo ya dice cuántos son. */}
+                    {!groupByMaterial && card.sameMaterialCount > 0 && (
                       <span className="chip chip-brand">+{card.sameMaterialCount} con la misma opción</span>
                     )}
                     {card.estimatedReadyAt && (
@@ -557,6 +577,8 @@ export default function BoardPage() {
                 </article>
                 );
               })}
+                </div>
+              ))}
             </div>
           </section>
         ))}
