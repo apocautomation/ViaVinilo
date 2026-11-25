@@ -136,6 +136,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | **Resuelto en D-082** (definido el 24/11): Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; sin Embroidery. |
 | I-27 | Seña por servicio en la Ayuda de la app (D-053) | Los agentes de Runamatic no coinciden: los de sector piden 50% siempre; el agente "SISTEMA NUEVO" la pide según metros (DTF Textil, Sublimación y Calandra desde 10 m; DTF UV desde 3 m; TPU siempre). La Ayuda muestra la del agente más nuevo. | E1 | Abierto. Confirmar con Verónica y corregir `apps/pwa/app/(app)/ayuda/content.ts`. |
 | I-28 | Opciones de impresión de cada tablero (D-095, D-108) | El catálogo ya está cargado con los Excel de Ricardo del 25/11 (DTF Textil, DTF UV, Calandrado y Sublimación, con SKU de Tango y anchos). Los códigos cortos (`SET`, `COOL` los dio Ricardo; el resto, como `GLI` o `TROP`, los propuse yo) faltan confirmar. Faltan los Excel de Gran Formato (Látex, Ecosolvente, UV), TPU y Cortes. | E1 | Abierto. Confirmar los códigos con Ricardo y cargar los tableros que faltan. |
+| I-29 | Numeración del código por tela (D-109, D-110) | En la imagen de Ricardo SET-0003 y COOL-0003 tienen el mismo número: parece una numeración aparte por tela, de 4 dígitos. Hoy el código usa el número del pedido (SET-000002 = VV-000002). | E1 | Abierto. Confirmar con Ricardo antes de cambiarlo. |
 
 ## 4. Bitácora de decisiones
 
@@ -1567,6 +1568,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Decisiones (por defecto, a confirmar con Ricardo)**: es el **mismo número** del pedido, no una numeración aparte por tela (así no hay dos pedidos con el mismo número y se cruza fácil con lo que dice el cliente). Seis dígitos, como el `VV-`. El **cliente sigue viendo `VV-`** en la app, el bot y los mails: el código por tela es para el taller.
 - **En espera**: que el sistema junte solo los trabajos por volumen de tela (ver D-108).
 - **Impacto**: sin migración. `formatJobCode` y `parseJobCode` en contracts; la tarjeta y el detalle del pedido traen `code`.
+### D-110 · 25/11/2026 · Ricardo (WhatsApp del 25/11, con una imagen) · agrupar por tela es solo visual
+- **Respuesta a D-108 "En espera"**: "la agrupación solo sería visual, poner un trabajo abajo del otro". Mandó de ejemplo una lista con SET-0003 a SET-0007 en gris, COOL-0003 y COOL-0004 en amarillo y COR-0003 y COR-0004 en rojo. No se juntan pedidos ni cotizaciones: cada trabajo sigue siendo un pedido aparte.
+- **Qué**: con "Agrupar por opción" tildado, cada columna del tablero muestra los trabajos de la misma opción uno abajo del otro, dentro de un bloque con un color, el código ("SET"), el nombre y cuántos son. La barrita de cada tarjeta toma el color de su tela. Los bloques van por código; "Sin opción elegida" al final. Dentro de cada bloque, por orden de llegada. Los colores se reparten en orden dentro de la columna, así dos bloques seguidos nunca tienen el mismo color (con 39 telas no alcanza un color fijo por tela).
+- **Abierto (a confirmar con Ricardo)**: en su imagen SET-0003 y COOL-0003 tienen el mismo número, o sea una **numeración aparte por tela** y de cuatro dígitos. Hoy (D-109) el código usa el número del pedido con seis dígitos. Cambiarlo es un contador por opción y una migración; no se hace hasta que lo confirme. `TODO(spec): I-29`.
+- **Impacto**: sin migración. Solo el tablero del ERP.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

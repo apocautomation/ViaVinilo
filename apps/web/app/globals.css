@@ -864,6 +864,56 @@ table.data tfoot td {
   color: var(--color-text);
   font-size: 13.5px;
 }
+/* D-110: agrupación visual por opción de impresión: los trabajos de la misma tela, uno abajo del otro. */
+/* Sin agrupar, el contenedor no existe para el layout: las tarjetas quedan como siempre. */
+.mat-all {
+  display: contents;
+}
+.mat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mat, transparent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mat, var(--color-border)) 45%, transparent);
+}
+.mat-group[data-none="true"] {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--color-border);
+}
+/* La barrita de la tarjeta toma el color de la tela en vez del de la columna. */
+.mat-group .card::before {
+  background: var(--mat, var(--col, transparent));
+  width: 5px;
+}
+.mat-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 2px 4px;
+}
+.mat-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--mat, var(--color-border));
+  flex: none;
+}
+.mat-title {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.mat-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* D-109: el VV- que ve el cliente, chico al lado del código de la opción ("SET-000002"). */
 .card .num-vv {
   margin-left: 6px;
