@@ -242,6 +242,11 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
   if ((STATUS.test(plain(text)) || FILE_QUESTION.test(plain(text))) && !NEW_JOB.test(text)) {
     const active = c.jobs.filter((j) => j.status !== "Entregado" && j.status !== "Cancelado");
     if (active.length === 0) {
+      // D-103: si el último ya se entregó, se dice; la IA contestaba "todavía no está lo tuyo".
+      const delivered = c.jobs.find((j) => j.status === "Entregado");
+      if (delivered) {
+        return `No tenés pedidos en curso: el último, ${delivered.label} (${delivered.sector}), ya lo entregamos. Si querés hacer otro, mandá el archivo con el clip 📎 de este chat y te pasamos el precio.`;
+      }
       return "Todavía no veo pedidos tuyos en curso. Si mandaste el archivo recién, puede tardar unos minutos en aparecer. Si todavía no lo mandaste, usá el clip 📎 de este chat y te pasamos el precio.";
     }
     const after = c.noticesOn ? " Cuando cambie, te llega un aviso por acá y por mail." : "";

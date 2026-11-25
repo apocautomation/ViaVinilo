@@ -58,7 +58,8 @@ export async function decideAnswer(input: {
   // D-101: con varios pedidos en curso y sin decir cuál, va la lista armada con la pregunta "¿por cuál?".
   // La IA contestaba por uno solo y prometía mandar el presupuesto.
   const active = input.jobs.filter((j) => j.status !== "Entregado" && j.status !== "Cancelado");
-  if (flow && active.length > 1 && asksAboutOrders(input.text) && jobNumberIn(input.text) === null && !input.turns.some((t) => t.role === "assistant" && /¿Por cuál me consultás\?/.test(t.content))) {
+  // D-103: sin pedidos en curso la respuesta es un dato (no hay, o el último ya se entregó): va la armada.
+  if (flow && (active.length > 1 || active.length === 0) && asksAboutOrders(input.text) && jobNumberIn(input.text) === null && !input.turns.some((t) => t.role === "assistant" && /¿Por cuál me consultás\?/.test(t.content))) {
     return { reply: flow, handoff: false, reason: null, source: "flow" };
   }
   const kit = buildToolKit({ jobs: input.jobs, boards: input.boards, noticesOn: input.noticesOn, now: input.now });

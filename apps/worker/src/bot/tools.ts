@@ -110,7 +110,15 @@ export function buildToolKit(c: ToolContext): ToolKit {
           if (!one) return JSON.stringify({ error: `No hay un pedido número ${n} a nombre de este cliente.`, pedidos_en_curso: active.slice(0, 5).map(shape) });
           return JSON.stringify({ pedido: shape(one) });
         }
+        const delivered = c.jobs.filter((j) => j.status === "Entregado");
         return JSON.stringify({
+          // D-103: sin pedidos en curso, la frase ya armada (la IA decía "todavía no está lo tuyo" de uno entregado).
+          resumen:
+            active.length === 0
+              ? delivered.length
+                ? `No tiene pedidos en curso. El último, ${delivered[0]!.label} (${delivered[0]!.sector}), ya se entregó.`
+                : "No tiene pedidos en curso ni entregados recientes."
+              : undefined,
           pedidos_en_curso: active.slice(0, 5).map(shape),
           total_en_curso: active.length,
           entregados_recientes: c.jobs.filter((j) => j.status === "Entregado").slice(0, 2).map((j) => ({ pedido: j.label, servicio: j.sector, estado: "Entregado: ya lo retiró, no está pendiente" })),
