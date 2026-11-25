@@ -72,7 +72,8 @@ export function ollamaLlm(config: LlmConfig, fetchImpl: typeof fetch = fetch): L
           model: config.model,
           messages: history,
           stream: false,
-          keep_alive: "30m",
+          // D-098: cargado todo el día; recargarlo tarda ~90 s en este servidor.
+          keep_alive: "24h",
           // Sin herramientas en la última ronda: tiene que contestar.
           ...(kit && !last ? { tools: toolSpecs(kit) } : {}),
           ...(kit ? {} : { format: "json" }),

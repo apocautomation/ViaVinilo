@@ -1,11 +1,11 @@
 import type { PrismaClient } from "@prisma/client";
 import { formatJobNumber, JOB_STATUS_LABELS, SECTOR_CODES } from "@viavinilo/contracts";
-import { ASK_MATERIAL, asksAboutOrders, boardFor, fixedFlow, serviceFor, type ExtraBoard } from "./flows";
+import { ASK_MATERIAL, boardFor, fixedFlow, isQuestion, serviceFor, toolFor, type ExtraBoard } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildAgentPrompt, type BotJob } from "./prompt";
 import { buildToolKit } from "./tools";
-import { dropNoticePromises, dropSentencesWith, fixMailboxes } from "./guard";
+import { dropNoticePromises, dropSentencesWith, fixMailboxes, plainText, stripToolText } from "./guard";
 import { toVoseo } from "./voseo";
 
 const HISTORY = 12;
@@ -49,7 +49,7 @@ export async function decideAnswer(input: {
     boards: input.boards,
     now: input.now,
   });
-  const kit = buildToolKit({ jobs: input.jobs, boards: input.boards, noticesOn: input.noticesOn });
+  const kit = buildToolKit({ jobs: input.jobs, boards: input.boards, noticesOn: input.noticesOn, now: input.now });
   let answer: BotAnswer;
   try {
     answer = await input.llm(input.turns, kit);
@@ -58,11 +58,25 @@ export async function decideAnswer(input: {
     if (flow) return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
     throw err;
   }
-  // D-097: sobre un pedido o un archivo la IA tiene que haber mirado los pedidos. Si no, no se le cree.
-  if (!answer.handoff && asksAboutOrders(input.text) && !kit.used.includes("ver_mis_pedidos") && flow) {
-    return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
+  // D-098: si escribió la llamada a una herramienta en el texto, se saca; si era derivar, se deriva.
+  const stripped = stripToolText(answer.reply);
+  if (stripped.handoff && !answer.handoff) {
+    return { reply: handoffReply(input.now), handoff: true, reason: stripped.handoff, source: "handoff", tools: [...kit.used, "derivar_a_asesor"] };
   }
-  let reply = fixMailboxes(toVoseo(answer.reply));
+  if (!answer.handoff) {
+    // D-097, D-098: cada pregunta tiene su herramienta. Si la IA no la usó, su respuesta no sale de los
+    // datos del sistema: va la respuesta armada. Si no hay armada y no usó ninguna, lo ve un asesor.
+    const needed = toolFor(input.text);
+    if (needed && !kit.used.includes(needed) && flow) return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
+    if (!kit.used.length && isQuestion(input.text) && !flow) {
+      return { reply: handoffReply(input.now), handoff: true, reason: "Pregunta que el bot no puede responder con datos del sistema", source: "handoff", tools: kit.used };
+    }
+  }
+  if (!stripped.text) {
+    if (flow) return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
+    throw new Error("El modelo respondió solo con una herramienta");
+  }
+  let reply = plainText(fixMailboxes(toVoseo(stripped.text)));
   // D-092: si la IA va a repetir lo mismo que ya dijo, no está entendiendo: lo ve un asesor.
   const same = (t: string) => t.toLowerCase().replace(/[^\p{L}\d]+/gu, " ").trim();
   const said = input.turns.filter((t) => t.role === "assistant").slice(-4).map((t) => same(t.content));

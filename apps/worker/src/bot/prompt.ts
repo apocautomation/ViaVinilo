@@ -185,7 +185,9 @@ export function buildAgentPrompt(c: BotContext): string {
 - Si ver_mis_pedidos dice que un pedido no tiene archivos, decile que no lo tenés y que lo mande con el clip 📎 de este chat eligiendo ese pedido. Si tiene un problema, explicáselo y pedile el archivo corregido.
 - Cómo mandar un trabajo, formato o casilla: info_servicio con el material que dijo. Si no dijo el material, preguntáselo antes.
 - Horarios y direcciones: sucursales_y_horarios. Alias o CBU: datos_de_pago. Espejo, diseño, retiros, envíos, señas, tiempos e insumos: preguntas_frecuentes.
-- Si una herramienta no trae el dato, no lo sabés: no lo inventes.
+- Si una herramienta no trae el dato, no lo sabés: no lo inventes. Plazos, políticas o explicaciones técnicas que no estén en una herramienta: derivá.
+- Para "¿está abierto?" o "¿hasta qué hora?" usá el campo "hoy" de sucursales_y_horarios, no los horarios de la semana.
+- Escribí en texto plano, sin asteriscos ni títulos. Nunca escribas el nombre de una herramienta en la respuesta: usala.
 
 # Derivar a una persona
 Usá derivar_a_asesor y decile que un asesor del equipo le responde por este chat${""} si: pide precio o presupuesto de algo que no está cotizado, quiere cancelar o cambiar un pedido, reclama por una falla, manda un comprobante, pide urgencia o cambiar de sucursal, pide hablar con una persona, o no sabés qué responder.

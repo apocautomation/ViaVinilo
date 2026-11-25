@@ -77,8 +77,8 @@ describe("bot del chat de la app (D-056)", () => {
     await botOn();
     const other = await prisma.customer.create({ data: { status: "ACTIVE", firstName: "Otro" } });
     const otherConv = await prisma.conversation.create({ data: { customerId: other.id } });
-    await prisma.message.create({ data: { conversationId: otherConv.id, direction: "IN", channel: "APP", body: "¿Qué diferencia hay entre DTF y sublimación?", botStatus: "PENDING" } });
-    await customerWrites("¿Qué diferencia hay entre DTF y sublimación?");
+    await prisma.message.create({ data: { conversationId: otherConv.id, direction: "IN", channel: "APP", body: "Soy nueva, les cuento que trabajo con remeras estampadas", botStatus: "PENDING" } });
+    await customerWrites("Soy nueva, les cuento que trabajo con remeras estampadas");
     const { llm, calls } = fakeLlm({ reply: "Hola!" });
     expect(await processBotReplies(prisma, llm)).toMatchObject({ answered: 1, skipped: 1 });
     expect(calls).toHaveLength(1);
@@ -87,7 +87,7 @@ describe("bot del chat de la app (D-056)", () => {
 
   it("D-056: prendido responde en el chat con los pedidos reales del cliente y una sola vez", async () => {
     await botOn();
-    const msg = await customerWrites("¿Qué diferencia hay entre DTF y sublimación?");
+    const msg = await customerWrites("Soy nueva, les cuento que trabajo con remeras estampadas");
     const { llm, calls, kits, results } = fakeLlm({ reply: "Sí, tu pedido de DTF está listo para retirar.", tools: [["ver_mis_pedidos", {}]] });
     expect((await processBotReplies(prisma, llm)).answered).toBe(1);
     expect((await processBotReplies(prisma, llm)).answered).toBe(0);
@@ -98,7 +98,7 @@ describe("bot del chat de la app (D-056)", () => {
     expect(system).toContain("ver_mis_pedidos");
     expect(kits[0]!.definitions.map((d) => d.name)).toEqual(["ver_mis_pedidos", "info_servicio", "sucursales_y_horarios", "datos_de_pago", "preguntas_frecuentes", "derivar_a_asesor"]);
     expect(results[0]).toMatch(/"estado":"Terminado, listo para retirar"/);
-    expect(calls[0]!.at(-1)).toEqual({ role: "user", content: "¿Qué diferencia hay entre DTF y sublimación?" });
+    expect(calls[0]!.at(-1)).toEqual({ role: "user", content: "Soy nueva, les cuento que trabajo con remeras estampadas" });
 
     const reply = await prisma.message.findFirstOrThrow({ where: { fromBot: true } });
     expect(reply).toMatchObject({ direction: "OUT", channel: "APP", body: "Sí, tu pedido de DTF está listo para retirar.", authorId: null });
@@ -122,7 +122,7 @@ describe("bot del chat de la app (D-056)", () => {
     const t = Date.now();
     await prisma.message.create({ data: { conversationId, direction: "IN", channel: "APP", body: "hola", createdAt: new Date(t - 5000) } });
     await prisma.message.create({ data: { conversationId, direction: "OUT", channel: "APP", body: "¡Hola Ana!", fromBot: true, createdAt: new Date(t - 4000) } });
-    await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t - 1000));
+    await customerWrites("soy nueva, les cuento que trabajo con remeras estampadas", new Date(t - 1000));
     const { llm, calls } = fakeLlm({ reply: "¿Tienes el archivo? Envíalo a látex@viavinilo.com" });
     await processBotReplies(prisma, llm);
     expect(calls[0]![0]!.content).toContain("no saludes de nuevo");
@@ -181,7 +181,7 @@ describe("bot del chat de la app (D-056)", () => {
     await prisma.message.create({ data: { conversationId, direction: "IN", channel: "APP", body: "algo viejo", createdAt: new Date(t - 9000) } });
     await prisma.message.create({ data: { conversationId, direction: "OUT", channel: "APP", body: "respuesta vieja", fromBot: true, createdAt: new Date(t - 8000) } });
     await prisma.conversation.update({ where: { id: conversationId }, data: { botResetAt: new Date(t - 5000) } });
-    await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t - 1000));
+    await customerWrites("soy nueva, les cuento que trabajo con remeras estampadas", new Date(t - 1000));
     const { llm, calls } = fakeLlm({ reply: "Te cuento." });
     await processBotReplies(prisma, llm);
     const turns = calls[0]!;
@@ -222,7 +222,7 @@ describe("bot del chat de la app (D-056)", () => {
 
   it("D-056: si la IA falla no responde nada y el mensaje queda para el equipo", async () => {
     await botOn();
-    const msg = await customerWrites("¿Qué diferencia hay entre DTF y sublimación?");
+    const msg = await customerWrites("Soy nueva, les cuento que trabajo con remeras estampadas");
     const r = await processBotReplies(prisma, async () => {
       throw new Error("timeout");
     });
@@ -302,9 +302,9 @@ describe("el bot informa el estado real del archivo (D-092)", () => {
     await botOn();
     const { llm } = fakeLlm({ reply: "No tengo ese dato, ¿me contás un poco más?" });
     const t0 = Date.now();
-    await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t0));
+    await customerWrites("soy nueva, les cuento que trabajo con remeras estampadas", new Date(t0));
     expect(await processBotReplies(prisma, llm)).toMatchObject({ answered: 1, handoffs: 0 });
-    await customerWrites("¿y cuál dura más en la ropa?", new Date(t0 + 1000));
+    await customerWrites("y también hago buzos para egresados", new Date(t0 + 1000));
     expect(await processBotReplies(prisma, llm)).toMatchObject({ handoffs: 1 });
     const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
     expect(conv).toMatchObject({ needsHuman: true, botEnabled: false, needsHumanReason: "El bot iba a repetir la misma respuesta" });
@@ -343,5 +343,38 @@ describe("IA local con herramientas (D-097)", () => {
     expect((bodies[0]!.tools as unknown[]).length).toBe(1);
     const second = bodies[1]!.messages as { role: string; content: string }[];
     expect(second.at(-1)).toMatchObject({ role: "tool", content: '{"visto":{"numero":7}}' });
+  });
+});
+
+describe("ajustes de la IA con herramientas (D-098)", () => {
+  const base = { firstName: "Ana", alreadyTalking: true, noticesOn: false, jobs: [], turns: [], now: new Date("2026-11-25T14:30:00-03:00") };
+  it("D-098: una pregunta que la IA contesta sin ninguna herramienta no se le cree: si no hay respuesta armada, deriva", async () => {
+    const { llm } = fakeLlm({ reply: "El DTF es una sublimación de tintes." });
+    const a = await decideAnswer({ ...base, text: "¿qué diferencia hay entre DTF y sublimación?", llm });
+    expect(a).toMatchObject({ handoff: true, source: "handoff" });
+  });
+  it("D-098: si la pregunta tiene su herramienta y no la usó, va la respuesta armada (horarios, formato)", async () => {
+    const { llm } = fakeLlm({ reply: "La de San Juan abre hasta las 13:00." });
+    const a = await decideAnswer({ ...base, text: "hasta qué hora abren hoy la de san juan?", llm });
+    expect(a.source).toBe("flow");
+    expect(a.reply).toContain("08:30 a 19:30");
+    const f = await decideAnswer({ ...base, text: "quiero imprimir 20 remeras, cómo te mando el archivo?", llm: fakeLlm({ reply: "PNG o JPEG." }).llm });
+    expect(f.reply).toContain("PNG con fondo transparente");
+  });
+  it("D-098: si escribe la llamada a derivar en el texto, deriva igual y no se la muestra al cliente", async () => {
+    const { llm } = fakeLlm({ reply: 'No, no podemos guardarlo. Contactá a un asesor._derivar_a_asesor{"motivo":"Extender plazo"}', tools: [["ver_mis_pedidos", {}]] });
+    const a = await decideAnswer({ ...base, text: "¿me pueden guardar el pedido una semana más?", llm });
+    expect(a).toMatchObject({ handoff: true, reason: "Extender plazo" });
+    expect(a.reply).not.toContain("derivar_a_asesor");
+  });
+  it("D-098: saca asteriscos y la herramienta de horarios dice cómo está hoy", async () => {
+    const { llm } = fakeLlm({ reply: "El alias es **VIAPRINT.MACRO**.", tools: [["datos_de_pago", { servicio: "lona" }]] });
+    const a = await decideAnswer({ ...base, text: "pasame el alias para la seña de la lona", llm });
+    expect(a.reply).toBe("El alias es VIAPRINT.MACRO.");
+    const h = fakeLlm({ reply: "ok", tools: [["sucursales_y_horarios", {}]] });
+    await decideAnswer({ ...base, text: "dónde quedan?", llm: h.llm });
+    expect(h.results[0]).toContain("miércoles");
+    expect(h.results[0]).toContain("ahora está abierta, hoy cierra a las 19:30");
+    expect(h.results[0]).toContain("ahora está abierta, hoy cierra a las 17:00");
   });
 });
