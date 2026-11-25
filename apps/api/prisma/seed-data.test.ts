@@ -43,10 +43,10 @@ describe("seed", () => {
     expect(new Set(FILE_ERROR_REASONS.map((r) => r.code)).size).toBe(FILE_ERROR_REASONS.length);
   });
 
-  it("D-095: siembra los materiales de DTF Textil con código único", () => {
-    const dtf = SECTOR_VARIANTS.filter((v) => v.sector === "DTF");
-    expect(dtf).toHaveLength(9);
+  it("D-108: siembra el catálogo de los Excel de Ricardo, con código único y SKU de Tango", () => {
+    expect(SECTOR_VARIANTS.filter((v) => v.sector === "DTF")).toHaveLength(7);
+    expect(SECTOR_VARIANTS.filter((v) => v.sector === "CALANDRADO")).toHaveLength(39);
     expect(new Set(SECTOR_VARIANTS.map((v) => v.code)).size).toBe(SECTOR_VARIANTS.length);
-    expect(dtf.find((v) => v.name === "Glitter")?.code).toBe("DTF-GLI");
+    expect(SECTOR_VARIANTS.find((v) => v.name === "Glitter")).toMatchObject({ sector: "DTF", code: "GLI", tangoSku: "IMDT00009", width: "60", usableWidth: "58" });
   });
 });

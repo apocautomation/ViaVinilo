@@ -7,6 +7,15 @@ import { ZodBody } from "../common/zod";
 import { PrismaService } from "../prisma/prisma.service";
 import { SectorAccess } from "./sector-access";
 
+/** Código o SKU repetido (D-108): dice cuál de los dos. */
+function duplicateVariant(err: unknown): unknown {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    const target = String((err.meta as { target?: unknown } | undefined)?.target ?? "");
+    return new ConflictException(target.includes("tangoSku") ? "Ese código de Tango ya lo tiene otra opción" : "Ese código ya lo usa otra opción");
+  }
+  return err;
+}
+
 /** Datos de referencia para el tablero: sectores visibles para el usuario y motivos de error. */
 @Controller()
 export class CatalogController {
@@ -53,7 +62,7 @@ export class CatalogController {
       include: {
         _count: { select: { jobs: true } },
         stages: { orderBy: { position: "asc" } },
-        variants: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true, active: true, sortOrder: true } },
+        variants: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true, active: true, sortOrder: true, tangoSku: true, width: true, usableWidth: true } },
       },
     });
     const names = new Map(sectors.map((s) => [s.id, s.name]));
@@ -75,21 +84,24 @@ export class CatalogController {
   /** Agrega un material u opción de impresión a un tablero (D-095). Queda auditado. */
   @Post("sectors/:id/variants")
   @Roles("OWNER")
-  async createVariant(@Param("id") sectorId: string, @ZodBody(createVariantSchema) body: { code: string; name: string }, @CurrentUser() user: AuthUser) {
+  async createVariant(
+    @Param("id") sectorId: string,
+    @ZodBody(createVariantSchema) body: { code: string; name: string; tangoSku?: string | null; width?: string | null; usableWidth?: string | null },
+    @CurrentUser() user: AuthUser,
+  ) {
     const sector = await this.prisma.sector.findUnique({ where: { id: sectorId }, select: { id: true, _count: { select: { variants: true } } } });
     if (!sector) throw new NotFoundException("Ese tablero no existe");
     try {
       return await this.prisma.$transaction(async (tx) => {
         const v = await tx.sectorVariant.create({
-          data: { sectorId, code: body.code, name: body.name, sortOrder: sector._count.variants + 1 },
-          select: { id: true, code: true, name: true, active: true, sortOrder: true },
+          data: { sectorId, ...body, sortOrder: sector._count.variants + 1 },
+          select: { id: true, code: true, name: true, active: true, sortOrder: true, tangoSku: true, width: true, usableWidth: true },
         });
-        await this.audit.log({ entity: "SectorVariant", entityId: v.id, action: "create", userId: user.id, after: { sectorId, code: v.code, name: v.name } }, tx);
+        await this.audit.log({ entity: "SectorVariant", entityId: v.id, action: "create", userId: user.id, after: { sectorId, code: v.code, name: v.name, tangoSku: v.tangoSku } }, tx);
         return v;
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otra opción");
-      throw err;
+      throw duplicateVariant(err);
     }
   }
 
@@ -98,23 +110,23 @@ export class CatalogController {
   @Roles("OWNER")
   async updateVariant(
     @Param("id") id: string,
-    @ZodBody(updateVariantSchema) body: { code?: string; name?: string; active?: boolean; sortOrder?: number },
+    @ZodBody(updateVariantSchema)
+    body: { code?: string; name?: string; active?: boolean; sortOrder?: number; tangoSku?: string | null; width?: string | null; usableWidth?: string | null },
     @CurrentUser() user: AuthUser,
   ) {
     const before = await this.prisma.sectorVariant.findUnique({ where: { id } });
     if (!before) throw new NotFoundException("Esa opción no existe");
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const v = await tx.sectorVariant.update({ where: { id }, data: body, select: { id: true, code: true, name: true, active: true, sortOrder: true } });
+        const v = await tx.sectorVariant.update({ where: { id }, data: body, select: { id: true, code: true, name: true, active: true, sortOrder: true, tangoSku: true, width: true, usableWidth: true }, });
         await this.audit.log(
-          { entity: "SectorVariant", entityId: id, action: "update", userId: user.id, before: { code: before.code, name: before.name, active: before.active }, after: { code: v.code, name: v.name, active: v.active } },
+          { entity: "SectorVariant", entityId: id, action: "update", userId: user.id, before: { code: before.code, name: before.name, active: before.active, tangoSku: before.tangoSku }, after: { code: v.code, name: v.name, active: v.active, tangoSku: v.tangoSku } },
           tx,
         );
         return v;
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ese código ya lo usa otra opción");
-      throw err;
+      throw duplicateVariant(err);
     }
   }
 

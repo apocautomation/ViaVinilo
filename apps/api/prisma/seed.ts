@@ -32,12 +32,20 @@ async function main() {
       await prisma.sector.update({ where: { code: s.code }, data: { parentId: s.parent ? sectorIds.get(s.parent)! : null } });
     }
 
-    // D-095: materiales u opciones de impresión. Si ya existe el código, no se toca (lo edita el dueño).
+    // D-095, D-108: opciones de impresión (catálogo de los Excel de Ricardo). Si ya existe el código, no se toca (lo edita el dueño).
     for (const v of SECTOR_VARIANTS) {
       await prisma.sectorVariant.upsert({
         where: { code: v.code },
         update: {},
-        create: { sectorId: sectorIds.get(v.sector)!, code: v.code, name: v.name, sortOrder: v.sortOrder },
+        create: {
+          sectorId: sectorIds.get(v.sector)!,
+          code: v.code,
+          name: v.name,
+          tangoSku: v.tangoSku,
+          width: v.width,
+          usableWidth: v.usableWidth,
+          sortOrder: v.sortOrder,
+        },
       });
     }
 

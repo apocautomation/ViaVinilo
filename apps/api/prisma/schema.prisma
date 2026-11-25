@@ -360,9 +360,14 @@ model SectorVariant {
   id        String     @id @default(cuid())
   sectorId  String
   sector    Sector     @relation(fields: [sectorId], references: [id], onDelete: Cascade)
-  /// Código que identifica la opción en el pedido ("DTF-GLI"). Único en todo el sistema.
+  /// Código corto que identifica la opción en el pedido ("SET"). Único en todo el sistema.
   code      String     @unique
   name      String
+  /// Código del artículo en Tango (D-108). Sirve para la E3 (stock y facturación).
+  tangoSku    String?  @unique
+  /// Ancho del material y ancho útil de impresión en cm (D-108); texto porque A4 es "21x29,7".
+  width       String?
+  usableWidth String?
   active    Boolean    @default(true)
   sortOrder Int        @default(0)
   jobs      JobOrder[]

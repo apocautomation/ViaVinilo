@@ -48,6 +48,24 @@ export function VariantPicker({
   }, [sectorCode]);
 
   if (!variants.length) return null;
+  // D-108: con muchas opciones (Calandrado tiene 39 telas) los botones no entran: va una lista.
+  if (variants.length > 8) {
+    return (
+      <>
+        {title && <p className="sheet-label">{title}</p>}
+        <div className="field">
+          <select value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} aria-label={title || "Opción de impresión"}>
+            <option value="">Elegí una opción…</option>
+            {variants.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       {title && <p className="sheet-label">{title}</p>}
