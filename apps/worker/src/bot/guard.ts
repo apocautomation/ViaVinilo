@@ -38,9 +38,20 @@ export function dropFiller(text: string): string {
     text.replace(opener, ""),
     // "No se requiere seña": de los servicios fuera de las reglas de seña no se sabe; con las reglas, la
     // respuesta armada ya explica cuándo lleva.
-    /¿Quer[eé]s que te (ayude|ayudemos|prepare|preparemos|arme|armemos|corrija|corrijamos)\b|\b(en|el|del) resumen\b|\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\w*[^.!?]{0,15}\bse[ñn]a\b|\bse[ñn]a\b[^.!?]{0,10}\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\b|\bsin se[ñn]a\b|\bno figura en las reglas\b|\bno (digas|menciones|hables|prometas)\b/i,
+    /¿Quer[eé]s que te (ayude|ayudemos|prepare|preparemos|arme|armemos|corrija|corrijamos)\b|\b(en|el|del) resumen\b|\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\w*[^.!?]{0,15}\bse[ñn]a\b|\bse[ñn]a\b[^.!?]{0,10}\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\b|\bsin se[ñn]a\b|\bno figura en las reglas\b|\bno (digas|menciones|hables|prometas)\b|¿Quer[eé]s (saber|que te (diga|pase|pasemos|cuente)) (cu[aá]nto (sale|cuesta|es)|el precio|el presupuesto)/i,
   );
   return out || text;
+}
+
+/**
+ * Si la respuesta nombra una sucursal sin su link del mapa (D-106), se agrega al final. La IA a veces
+ * decía "si querés el mapa, mandame el link" o no lo pasaba: se saca esa frase y van los links.
+ */
+export function ensureMapLinks(text: string): string {
+  const missing = help.BRANCHES.filter((b) => text.includes(b.name) && !text.includes(b.mapUrl));
+  if (!missing.length) return text;
+  const cleaned = dropSentencesWith(text, /\b(mapa|links?)\b/i) || text;
+  return `${cleaned}\n\nMapa:\n${missing.map((b) => `${b.name}: ${b.mapUrl}`).join("\n")}`;
 }
 
 export function dropNoticePromises(text: string): string {
@@ -73,5 +84,9 @@ export function plainText(text: string): string {
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/__(.+?)__/g, "$1")
     .replace(/^#{1,6}\s+/gm, "")
+    // D-106: "[Sucursal Centro](https://…)" no se ve como link en el chat: "Sucursal Centro: https://…".
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, "$1: $2")
+    // D-106: el punto pegado al link ("…Gpsviavinilo.") lo rompe en muchos chats.
+    .replace(/(https?:\/\/\S*?)[.,;:]+(?=\s|$)/g, "$1")
     .trim();
 }
