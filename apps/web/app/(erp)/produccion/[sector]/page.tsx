@@ -336,8 +336,8 @@ export default function BoardPage() {
           </select>
         )}
         {(board?.variants.length ?? 0) > 0 && (
-          <select value={variant} onChange={(e) => setVariant(e.target.value)} aria-label="Filtrar por material">
-            <option value="">Todos los materiales</option>
+          <select value={variant} onChange={(e) => setVariant(e.target.value)} aria-label="Filtrar por opción de impresión">
+            <option value="">Todas las opciones</option>
             {board?.variants.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.code} · {v.name}
@@ -355,7 +355,7 @@ export default function BoardPage() {
         </select>
         <label className="toggle">
           <input type="checkbox" checked={groupByMaterial} onChange={(e) => setGroupByMaterial(e.target.checked)} />
-          Agrupar por material
+          Agrupar por opción
         </label>
         <label className="toggle">
           <input type="checkbox" checked={compact} onChange={(e) => toggleCompact(e.target.checked)} />
@@ -478,7 +478,7 @@ export default function BoardPage() {
                       card.material && <span className="chip">{card.material.name}</span>
                     )}
                     {card.sameMaterialCount > 0 && (
-                      <span className="chip chip-brand">+{card.sameMaterialCount} con el mismo material</span>
+                      <span className="chip chip-brand">+{card.sameMaterialCount} con la misma opción</span>
                     )}
                     {card.estimatedReadyAt && (
                       <span className="chip">

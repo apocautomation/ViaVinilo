@@ -108,7 +108,7 @@ export class ConversationFilesService {
     if (!sector) throw new BadRequestException("Elegí un servicio");
     // D-095: el material tiene que ser de ese servicio y estar activo.
     const variant = !chosen && input.variant ? await this.prisma.sectorVariant.findFirst({ where: { id: input.variant, sectorId: sector.id, active: true }, select: { id: true, name: true } }) : null;
-    if (!chosen && input.variant && !variant) throw new BadRequestException("Ese material no es de este servicio");
+    if (!chosen && input.variant && !variant) throw new BadRequestException("Esa opción de impresión no es de este servicio");
 
     const conversationId = await this.conversationOf(customerId);
     const stored = await this.store(`app/${customerId}`, file);
@@ -119,7 +119,7 @@ export class ConversationFilesService {
     const measure = input.widthCm && input.heightCm ? `${cm(input.widthCm)} x ${cm(input.heightCm)} cm` : null;
     const copies = input.copies ? `${input.copies} ${input.copies === 1 ? "copia" : "copias"}` : null;
     const summary = [measure, copies].filter(Boolean).join(" · ");
-    const materialLine = () => (variant ? `Material: ${variant.name}` : "");
+    const materialLine = () => (variant ? `Opción de impresión: ${variant.name}` : "");
     const specs = {
       channel: "app",
       note,

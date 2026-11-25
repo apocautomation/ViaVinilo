@@ -360,13 +360,13 @@ describe("archivos en Conversaciones (D-062)", () => {
     expect(job.variantId).toBe(gli.id);
     expect((await as("customer").get(`/app/jobs/${job.number}`)).body.material).toBe("Glitter");
     const thread = await as("customer").get("/app/chat");
-    expect(thread.body.messages.at(-1).body).toContain("Material: Glitter");
+    expect(thread.body.messages.at(-1).body).toContain("Opción de impresión: Glitter");
 
     const ajeno = await prisma.sector.create({ data: { code: "OTRO_TAB", name: "Otro" } });
     const ajenoVar = await prisma.sectorVariant.create({ data: { sectorId: ajeno.id, code: "C-AJE", name: "Ajeno" } });
     const bad = await http().post("/app/chat/files").set("Authorization", `Bearer ${tokens.customer}`).field("sector", "DTF").field("variant", ajenoVar.id).attach("file", pdf, "Mal.pdf");
     expect(bad.status).toBe(400);
-    expect(bad.body.message).toBe("Ese material no es de este servicio");
+    expect(bad.body.message).toBe("Esa opción de impresión no es de este servicio");
   });
 
   it("D-062: no acepta archivos que no son de impresión", async () => {

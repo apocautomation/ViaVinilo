@@ -734,7 +734,7 @@ export class JobsService {
     if (!job) throw new NotFoundException("No encontramos esa orden");
     await this.access.assert(user, job.sectorId);
     const variant = variantId ? await this.prisma.sectorVariant.findFirst({ where: { id: variantId, sectorId: job.sectorId } }) : null;
-    if (variantId && !variant) throw new BadRequestException("Ese material no es de este tablero");
+    if (variantId && !variant) throw new BadRequestException("Esa opción de impresión no es de este tablero");
     if (job.variantId !== (variant?.id ?? null)) {
       await this.prisma.$transaction(async (tx) => {
         await tx.jobOrder.update({ where: { id }, data: { variantId: variant?.id ?? null } });

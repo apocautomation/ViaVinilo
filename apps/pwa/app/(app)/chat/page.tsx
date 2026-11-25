@@ -150,7 +150,7 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
           value={variant}
           onChange={setVariant}
           onList={setVariants}
-          title="¿Qué material o terminación?"
+          title="¿Qué opción de impresión?"
         />
         <p className="sheet-label">2 · Medidas y cantidad</p>
         <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: 58 × 100 cm, 2 copias" />
