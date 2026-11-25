@@ -72,6 +72,37 @@ describe("Configuración: usuarios, roles y tableros (D-067)", () => {
     expect((await as("owner").post("/admin/users", { name: "Otro", email: "otro@viavinilo.test", roles: ["ATTENTION"], password: "corta" })).status).toBe(400);
   });
 
+  it("D-114: sin contraseña, la persona recibe un link por mail y crea la suya; el link sirve una vez y reenviar anula el anterior", async () => {
+    const res = await as("owner").post("/admin/users", { name: "Vendedora", email: "vendedora@viavinilo.test", roles: ["ATTENTION"] });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ loginReady: false, invitePending: true, canSeeBilling: false });
+    const tokenOf = async () => {
+      const mail = await prisma.outboundEmail.findFirstOrThrow({ where: { to: "vendedora@viavinilo.test", kind: "staff-invite" }, orderBy: { createdAt: "desc" } });
+      return /\/activar\/([\w-]+)/.exec(mail.text)![1]!;
+    };
+    const first = await tokenOf();
+    // Hasta que crea la contraseña no puede entrar.
+    expect((await http().post("/auth/login").send({ email: "vendedora@viavinilo.test", password: "cualquier-cosa-larga" })).status).toBe(401);
+
+    // Reenviar anula el link anterior.
+    expect((await as("owner").post(`/admin/users/${res.body.id}/invite`)).status).toBe(200);
+    const second = await tokenOf();
+    expect(second).not.toBe(first);
+    expect((await http().post("/auth/activate").send({ token: first, password: "mi-clave-de-ventas" })).status).toBe(401);
+
+    const ok = await http().post("/auth/activate").send({ token: second, password: "mi-clave-de-ventas" });
+    expect(ok.status).toBe(200);
+    expect(ok.body.user).toMatchObject({ email: "vendedora@viavinilo.test", roles: ["ATTENTION"] });
+    expect((await http().post("/auth/activate").send({ token: second, password: "otra-clave-larga" })).status).toBe(401);
+    expect((await http().post("/auth/login").send({ email: "vendedora@viavinilo.test", password: "mi-clave-de-ventas" })).status).toBe(200);
+
+    const list = await as("owner").get("/admin/users");
+    expect(list.body.find((u: { id: string }) => u.id === res.body.id)).toMatchObject({ loginReady: true, invitePending: false });
+    expect(await prisma.auditLog.count({ where: { entity: "User", entityId: res.body.id, action: "password_by_link" } })).toBe(1);
+    // Solo el dueño invita.
+    expect((await as("attention").post(`/admin/users/${res.body.id}/invite`)).status).toBe(403);
+  });
+
   it("D-067: cambiarle los tableros y el rol se aplica al toque y queda en auditoría", async () => {
     const res = await as("owner").patch(`/admin/users/${impresorId}`, { sectorIds: [dtfId, granId] });
     expect(res.body.sectors).toHaveLength(2);

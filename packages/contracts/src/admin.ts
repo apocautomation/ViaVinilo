@@ -21,7 +21,11 @@ export const createUserSchema = z.object({
   sectorIds: sectorIdsSchema.default([]),
   /** Puede ver los totales en pesos de Inicio (D-089). El dueño los ve siempre. */
   canSeeBilling: z.boolean().default(false),
-  password: staffPasswordSchema,
+  /**
+   * D-114: sin contraseña, el sistema le manda un mail con un link para que la cree la persona (lo
+   * recomendado: nadie más la conoce). Con contraseña, se la pasa el dueño en persona.
+   */
+  password: staffPasswordSchema.optional(),
 });
 export type CreateUserInput = z.input<typeof createUserSchema>;
 
@@ -39,6 +43,9 @@ export const updateUserSchema = z
 
 export const setStaffPasswordSchema = z.object({ password: staffPasswordSchema });
 
+/** D-114: la persona crea su contraseña con el link que le llegó por mail. */
+export const staffActivateSchema = z.object({ token: z.string().min(20).max(200), password: staffPasswordSchema });
+
 /** Qué puede hacer cada rol hoy. Es informativo: lo que manda es el control de la API. */
 export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   OWNER: [
@@ -51,7 +58,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ATTENTION: [
     "Conversaciones: responder por la app o por mail, y prender el bot en un chat",
     "Clientes: altas, aprobar o rechazar, editar e invitar a la app",
-    "Pedidos de todos los tableros: ver, cotizar y mover",
+    "Pedidos de todos los tableros: ver, cotizar y mover, con el precio de cada uno",
+    "No ve los totales vendidos de Inicio, salvo que el dueño le dé ese permiso",
   ],
   PRODUCTION: ["Ver y mover los pedidos de sus tableros", "Descargar el archivo del pedido y corregir la medida", "Asignar la máquina"],
 };

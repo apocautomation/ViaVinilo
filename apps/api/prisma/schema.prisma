@@ -312,9 +312,23 @@ model User {
   approvedCustomers Customer[]   @relation("CustomerApprovedBy")
   auditLogs         AuditLog[]
   messages          Message[]
+  activations       UserActivation[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   deletedAt         DateTime?
+}
+
+/// Link para que alguien del equipo cree su contraseña del ERP (D-114). Se guarda solo el hash.
+model UserActivation {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model UserSector {

@@ -52,7 +52,7 @@ export default function LoginPage() {
       <div className="login-form-wrap">
         <form onSubmit={submit}>
           <h1>Ingresá a tu cuenta</h1>
-          <p className="sub">Usá el email y la contraseña que te dio el dueño.</p>
+          <p className="sub">Usá tu email y tu contraseña. Si todavía no la creaste, buscá el mail «Tu acceso al sistema».</p>
           <label className="field">
             Email
             <input name="email" type="email" autoComplete="username" required autoFocus />

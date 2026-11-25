@@ -84,6 +84,8 @@ services:
       TZ: America/Argentina/Salta
       NODE_ENV: production
       API_PORT: "3001"
+      # D-114: dirección del ERP para el link de "Creá tu contraseña" de las invitaciones del equipo.
+      ERP_PUBLIC_URL: ${ERP_PUBLIC_URL:-https://erp.viavinilo.tech}
       BOT_API_URL: http://ollama:11434/v1
       BOT_MODEL: ${BOT_MODEL:-qwen3:8b}
     ports:

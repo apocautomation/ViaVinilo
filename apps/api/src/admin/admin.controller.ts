@@ -28,7 +28,7 @@ export class AdminController {
 
   @Post("users")
   createUser(
-    @ZodBody(createUserSchema) body: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; canSeeBilling?: boolean; password: string },
+    @ZodBody(createUserSchema) body: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; canSeeBilling?: boolean; password?: string },
     @CurrentUser() user: AuthUser,
   ) {
     return this.admin.createUser(body, user.id);
@@ -41,6 +41,13 @@ export class AdminController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.admin.updateUser(id, body, user.id);
+  }
+
+  /** D-114: manda (o vuelve a mandar) el mail para que la persona cree su contraseña. */
+  @Post("users/:id/invite")
+  @HttpCode(200)
+  invite(@Param("id") id: string, @CurrentUser() user: AuthUser) {
+    return this.admin.invite(id, user.id);
   }
 
   @Post("users/:id/password")

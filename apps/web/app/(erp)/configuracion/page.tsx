@@ -26,6 +26,10 @@ interface StaffUser {
   canSeeBilling: boolean;
   active: boolean;
   sectors: SectorRef[];
+  /** D-114: ya tiene contraseña (entró alguna vez o se la puso el dueño). */
+  loginReady: boolean;
+  /** D-114: tiene una invitación por mail vigente sin usar. */
+  invitePending: boolean;
 }
 interface Machine {
   id: string;
@@ -70,7 +74,9 @@ function UserDialog({ user, sectors, onClose, onSaved }: { user: StaffUser | nul
   const [roles, setRoles] = useState<UserRole[]>(user?.roles ?? ["PRODUCTION"]);
   const [sectorIds, setSectorIds] = useState<string[]>(user?.sectors.map((s) => s.id) ?? []);
   const [canSeeBilling, setCanSeeBilling] = useState(user?.canSeeBilling ?? false);
-  const [password, setPassword] = useState(user ? "" : generatePassword());
+  // D-114: lo recomendado es invitar por mail y que la persona cree su contraseña (nadie más la sabe).
+  const [invite, setInvite] = useState(!user);
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const onlyProduction = roles.length > 0 && roles.every((r) => r === "PRODUCTION");
@@ -85,8 +91,12 @@ function UserDialog({ user, sectors, onClose, onSaved }: { user: StaffUser | nul
         if (password) await api(`/admin/users/${user.id}/password`, { method: "POST", body: JSON.stringify({ password }) });
         onSaved(password ? "Usuario guardado y contraseña cambiada. Pasásela en persona." : "Usuario guardado.");
       } else {
-        await api("/admin/users", { method: "POST", body: JSON.stringify({ name, email, roles, sectorIds, canSeeBilling, password }) });
-        onSaved(`Usuario creado. Pasale su email y la contraseña en persona; después no se vuelve a mostrar.`);
+        await api("/admin/users", { method: "POST", body: JSON.stringify({ name, email, roles, sectorIds, canSeeBilling, ...(invite ? {} : { password }) }) });
+        onSaved(
+          invite
+            ? `Usuario creado. Le mandamos un mail a ${email} para que cree su contraseña (el link vale 72 horas).`
+            : "Usuario creado. Pasale su email y la contraseña en persona; después no se vuelve a mostrar.",
+        );
       }
     } catch (err) {
       setError(errorText(err));
@@ -137,15 +147,30 @@ function UserDialog({ user, sectors, onClose, onSaved }: { user: StaffUser | nul
             </label>
           )}
         </div>
-        <label className="field">
-          {user ? "Nueva contraseña (dejala vacía para no cambiarla)" : "Contraseña"}
-          <div className="contact-row">
-            <input className="mono" value={password} onChange={(e) => setPassword(e.target.value)} required={!user} minLength={10} placeholder="Mínimo 10 caracteres" autoComplete="off" />
-            <button type="button" className="btn btn-ghost" onClick={() => setPassword(generatePassword())}>
-              Generar
-            </button>
+        {!user && (
+          <div className="field">
+            Contraseña
+            <label className="check">
+              <input type="radio" name="access" checked={invite} onChange={() => setInvite(true)} />
+              Mandarle un mail para que cree la suya (recomendado: nadie más la sabe)
+            </label>
+            <label className="check">
+              <input type="radio" name="access" checked={!invite} onChange={() => (setInvite(false), setPassword(password || generatePassword()))} />
+              Ponerla yo y pasársela en persona
+            </label>
           </div>
-        </label>
+        )}
+        {(user || !invite) && (
+          <label className="field">
+            {user ? "Nueva contraseña (dejala vacía para no cambiarla)" : "Contraseña"}
+            <div className="contact-row">
+              <input className="mono" value={password} onChange={(e) => setPassword(e.target.value)} required={!user} minLength={10} placeholder="Mínimo 10 caracteres" autoComplete="off" />
+              <button type="button" className="btn btn-ghost" onClick={() => setPassword(generatePassword())}>
+                Generar
+              </button>
+            </div>
+          </label>
+        )}
         {error && <p className="error">{error}</p>}
         <div className="form-actions">
           <button type="button" className="btn btn-ghost" onClick={onClose}>
@@ -279,11 +304,23 @@ export default function ConfiguracionPage() {
                       <td>{u.roles.some((r) => r !== "PRODUCTION") ? "Todos" : u.sectors.map((s) => s.name).join(", ") || <span className="muted">Ninguno</span>}</td>
                       <td>
                         <Badge tone={u.active ? "ok" : "neutral"}>{u.active ? "Activo" : "Desactivado"}</Badge>
+                        {u.active && !u.loginReady && (
+                          <div className="cell-sub">{u.invitePending ? "Esperando que cree su contraseña" : "Sin contraseña: mandale la invitación"}</div>
+                        )}
                       </td>
                       <td className="row-actions">
                         <button className="btn btn-ghost" onClick={() => setEditing(u)}>
                           Editar
                         </button>
+                        {u.active && (
+                          <button
+                            className="btn btn-ghost"
+                            title="Le manda un mail con un link para crear (o cambiar) su contraseña. Anula el link anterior."
+                            onClick={() => void run(() => api(`/admin/users/${u.id}/invite`, { method: "POST" }), `Le mandamos el mail a ${u.email} (el link vale 72 horas).`)}
+                          >
+                            {u.loginReady ? "Mandar link de contraseña" : "Reenviar invitación"}
+                          </button>
+                        )}
                         <button className="btn btn-ghost" onClick={() => void run(() => api(`/admin/users/${u.id}`, { method: "PATCH", body: JSON.stringify({ active: !u.active }) }))}>
                           {u.active ? "Desactivar" : "Activar"}
                         </button>
