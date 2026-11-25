@@ -386,4 +386,16 @@ describe("ajustes de la IA con herramientas (D-098)", () => {
     const sinMirar = await decideAnswer({ ...base, alreadyTalking: false, jobs, text: "Hola que tal mi pedido ya esta para retirar", llm: fakeLlm({ reply: "Sí." }).llm });
     expect(sinMirar.reply).toMatch(/^¡Hola Ana! Tu pedido: VV-000564 \(DTF Textil\): está listo para retirar en Sucursal Centro/);
   });
+
+  it("D-101: 'gracias' cierra con la respuesta fija; la respuesta arranca en mayúscula; numero 0 es 'sin número'", async () => {
+    const t = await decideAnswer({ ...base, text: "gracias!!", llm: fakeLlm({ reply: "de nada! ¿Cómo puedo ayudarte?" }).llm });
+    expect(t).toMatchObject({ source: "flow", reply: "¡De nada! Cualquier cosa, escribime por acá." });
+    const h = await decideAnswer({ ...base, alreadyTalking: false, text: "hola", llm: fakeLlm({ reply: "hola Ana, ¿en qué te ayudo?" }).llm });
+    expect(h.reply).toBe("Hola Ana, ¿en qué te ayudo?");
+    const jobs = [{ label: "VV-000103", sector: "DTF Textil", status: "Archivo recibido", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: [], hasLinks: true }];
+    const z = fakeLlm({ reply: "ok", tools: [["ver_mis_pedidos", { numero: 0 }]] });
+    await decideAnswer({ ...base, jobs, text: "llegó lo que les mandé por link?", llm: z.llm });
+    expect(z.results[0]).not.toContain("No hay un pedido");
+    expect(z.results[0]).toContain("VV-000103");
+  });
 });

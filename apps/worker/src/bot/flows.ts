@@ -32,7 +32,7 @@ export function boardFor(text: string, boards: ExtraBoard[] = []): ExtraBoard | 
 const HOW_TO_SEND = (email: string | null) =>
   email ? `Mandá el archivo con el clip 📎 de este chat o por mail a ${email}` : "Mandá el archivo con el clip 📎 de este chat";
 
-const GREETING = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis|qu[eé] tal)[\s!.,¿?]*$/i;
+const GREETING = /^\s*(h?ola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis|qu[eé] tal)[\s!.,¿?]*$/i;
 /** Cierre corto: "gracias", "ok", "dale", "listo"… No es un pedido ni una pregunta. */
 const THANKS = /^\s*(much[ií]simas |muchas |mil )?(gracias|ok(ey)?|oka|dale|listo|perfecto|genial|buen[ií]simo|b[aá]rbaro|joya|de una)\b[^?]{0,25}$/i;
 const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo retiro|retiro)|estado de mi|mi pedido|c[oó]mo va|lo puedo retirar)\b/i;
@@ -42,7 +42,7 @@ const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo
  */
 /** Se prueba sobre el texto sin tildes: "\\b" no corta bien después de una vocal acentuada. */
 const FILE_QUESTION =
-  /\b(archivos?|disenos?|mail|correo|pedidos?|orden(es)?)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archivos?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b|\bque (le )?(pasa|paso|onda)\b.{0,30}\b(archivos?|disenos?|pedidos?|trabajos?)\b|\b(archivos?|disenos?|pedidos?|trabajos?)\b.{0,30}\b(no avanza|sigue igual|trabado|frenado|parado)\b|\bpor ?que no (avanza|sale|lo hacen|lo imprimen)\b|\b(mi|mis) (archivos?|disenos?)\b.*\?/i;
+  /\b(archi[bv]os?|disenos?|mail|correo|pedidos?|orden(es)?)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archi[bv]os?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b|\bque (le )?(pasa|paso|onda)\b.{0,30}\b(archivos?|disenos?|pedidos?|trabajos?)\b|\b(archivos?|disenos?|pedidos?|trabajos?)\b.{0,30}\b(no avanza|sigue igual|trabado|frenado|parado)\b|\bpor ?que no (avanza|sale|lo hacen|lo imprimen)\b|\b(mi|mis) (archivos?|disenos?)\b.*\?/i;
 const plain = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 /** Un trabajo nuevo: pide imprimir, manda medidas o un archivo, o avisa que adjunta (D-060, D-061). */
 const NEW_JOB =
@@ -211,6 +211,9 @@ export function toolFor(text: string, jobs?: BotJob[]): string | null {
 
 /** Es una pregunta (D-098): si la IA la contesta sin ninguna herramienta, no tiene de dónde sacar el dato. */
 export const isQuestion = (text: string) => ASKS.test(text) && !GREETING.test(text) && !THANKS.test(text);
+
+/** "gracias", "ok dale" (D-101): se cierra con la respuesta fija; la IA volvía a ofrecer ayuda. */
+export const isThanks = (text: string) => THANKS.test(text);
 
 /** Devuelve la respuesta fija, o null si el mensaje no es de estos flujos (lo responde la IA). */
 export function fixedFlow(text: string, c: FlowContext): string | null {

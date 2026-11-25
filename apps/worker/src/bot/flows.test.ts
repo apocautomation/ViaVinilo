@@ -112,6 +112,12 @@ describe("flujos fijos del bot (D-060)", () => {
     expect(fixedFlow("en que sucursal?", ctx)).toMatch(/^Tenemos dos sucursales/);
   });
 
+  it("D-101: entiende errores de tipeo comunes en la pregunta por el archivo", () => {
+    const jobs = [{ label: "VV-000101", sector: "DTF Textil", status: "Archivo recibido", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: ["logo.png"], fileCheck: "ok" as const }];
+    expect(toolFor("ola tenes mi archibo?", jobs)).toBe("ver_mis_pedidos");
+    expect(fixedFlow("ola tenes mi archibo?", { ...ctx, jobs })).toContain("recibimos el archivo y el control automático dio bien (logo.png)");
+  });
+
   it("D-060: lo demás lo responde la IA", () => {
     expect(fixedFlow("¿qué diferencia hay entre DTF y sublimación?", ctx)).toBeNull();
   });

@@ -100,7 +100,9 @@ export function buildToolKit(c: ToolContext): ToolKit {
     kit.used.push(name);
     switch (name) {
       case "ver_mis_pedidos": {
-        const n = typeof args.numero === "number" ? args.numero : typeof args.numero === "string" ? jobNumberIn(`pedido ${args.numero}`) : null;
+        const raw = typeof args.numero === "number" ? args.numero : typeof args.numero === "string" ? jobNumberIn(`pedido ${args.numero}`) : null;
+        // D-101: el modelo a veces manda 0 o un negativo cuando no hay número: es lo mismo que no mandarlo.
+        const n = raw !== null && raw > 0 ? raw : null;
         if (n !== null) {
           const one = c.jobs.find((j) => Number(j.label.replace(/\D/g, "")) === n);
           if (!one) return JSON.stringify({ error: `No hay un pedido número ${n} a nombre de este cliente.`, pedidos_en_curso: active.slice(0, 5).map(shape) });

@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { formatJobNumber, JOB_STATUS_LABELS, SECTOR_CODES } from "@viavinilo/contracts";
-import { ASK_MATERIAL, boardFor, fixedFlow, isQuestion, serviceFor, toolFor, type ExtraBoard } from "./flows";
+import { ASK_MATERIAL, boardFor, fixedFlow, isQuestion, isThanks, serviceFor, toolFor, type ExtraBoard } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildAgentPrompt, type BotJob } from "./prompt";
@@ -52,6 +52,7 @@ export async function decideAnswer(input: {
   // D-099: si el cliente arrancó con "hola" y es el primer mensaje, la respuesta armada también saluda.
   const greets = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis)\b/i.test(input.text) && !input.alreadyTalking;
   const flow = fixedReply && greets && !/^¡Hola/.test(fixedReply) ? `¡Hola${input.firstName ? ` ${input.firstName}` : ""}! ${fixedReply}` : fixedReply;
+  if (flow && isThanks(input.text)) return { reply: flow, handoff: false, reason: null, source: "flow" };
   const kit = buildToolKit({ jobs: input.jobs, boards: input.boards, noticesOn: input.noticesOn, now: input.now });
   let answer: BotAnswer;
   try {
@@ -80,6 +81,8 @@ export async function decideAnswer(input: {
     throw new Error("El modelo respondió solo con una herramienta");
   }
   let reply = plainText(fixMailboxes(toVoseo(stripped.text)));
+  // D-101: el modelo a veces arranca en minúscula ("hola Lucía").
+  reply = reply.replace(/^([¡¿"]?)(\p{Ll})/u, (_m, p: string, c: string) => p + c.toUpperCase());
   // D-092: si la IA va a repetir lo mismo que ya dijo, no está entendiendo: lo ve un asesor.
   const same = (t: string) => t.toLowerCase().replace(/[^\p{L}\d]+/gu, " ").trim();
   const said = input.turns.filter((t) => t.role === "assistant").slice(-4).map((t) => same(t.content));
