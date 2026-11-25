@@ -69,7 +69,7 @@ export async function decideAnswer(input: {
   if (!answer.handoff) {
     // D-097, D-098: cada pregunta tiene su herramienta. Si la IA no la usó, su respuesta no sale de los
     // datos del sistema: va la respuesta armada. Si no hay armada y no usó ninguna, lo ve un asesor.
-    const needed = toolFor(input.text);
+    const needed = toolFor(input.text, input.jobs);
     if (needed && !kit.used.includes(needed) && flow) return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
     if (!kit.used.length && isQuestion(input.text) && !flow) {
       return { reply: handoffReply(input.now), handoff: true, reason: "Pregunta que el bot no puede responder con datos del sistema", source: "handoff", tools: kit.used };

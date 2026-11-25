@@ -1508,6 +1508,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Medición del 25/11 después de D-098** (12 mensajes, `bot-dry-run`): las 12 respuestas correctas, incluidos horario de hoy, espejo y derivar. Tiempos: 3 a 17 s sin herramientas o con respaldo, 12 a 53 s consultando pedidos. Ollama usó 7,4 de 10 GB. La medición corrió a la par de un chat real, lo que la hizo más lenta.
 - **Impacto**: sin migración.
 
+### D-100 · 25/11/2026 · Ezequiel · "¿en qué sucursal?" con un pedido listo responde dónde se retira ese pedido
+- **Qué pasaba**: probado con el modelo real después de D-099, a "¿en qué sucursal?" la IA buscaba los horarios y daba las dos sucursales, sin decir cuál era la del pedido.
+- **Arreglo**: si el cliente tiene un pedido "Terminado, listo para retirar" y pregunta dónde ("¿en qué sucursal?", "¿dónde lo retiro?"), la pregunta va a `ver_mis_pedidos` y se responde con la sucursal de ese pedido. Si la IA no consulta el pedido, va la respuesta armada con la sucursal. "¿Hasta qué hora abren?" sigue yendo a los horarios, y sin pedido listo se muestran las dos sucursales.
+- **Impacto**: sin migración.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

@@ -190,9 +190,16 @@ export function asksAboutOrders(text: string): boolean {
  * Qué herramienta tiene que haber usado la IA para responder este mensaje (D-098). Si no la usó, su
  * respuesta no se basa en datos del sistema y se reemplaza por la armada. Mismo orden que fixedFlow.
  */
-export function toolFor(text: string): string | null {
+/**
+ * "¿En qué sucursal?" o "¿dónde lo retiro?" con un pedido listo para retirar (D-100): se refiere a su
+ * pedido, no a las sucursales en general. "¿Hasta qué hora abren?" sigue siendo de horarios.
+ */
+const asksWhereToPickUp = (text: string, jobs?: BotJob[]) =>
+  ASKS.test(text) && (WHERE.test(text) || /\bretir\w*/i.test(text)) && !HOURS.test(text) && !!jobs?.some((j) => j.status === "Terminado, listo para retirar");
+
+export function toolFor(text: string, jobs?: BotJob[]): string | null {
   if (GREETING.test(text) || THANKS.test(text)) return null;
-  if (asksAboutOrders(text)) return "ver_mis_pedidos";
+  if (asksAboutOrders(text) || asksWhereToPickUp(text, jobs)) return "ver_mis_pedidos";
   const asks = ASKS.test(text);
   if (asks && PAY.test(text)) return "datos_de_pago";
   if (asks && (MIRROR.test(text) || DESIGN.test(text) || DEPOSIT.test(text) || THIRD_PARTY.test(text) || SUPPLIES.test(text) || TIMES.test(text))) return "preguntas_frecuentes";
@@ -258,6 +265,10 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
   }
   if (asks && CONTACT.test(text)) {
     return "Atendemos por este chat de la app. Si necesitás hablar con una persona, decime y te paso con un asesor.";
+  }
+  if (asksWhereToPickUp(text, c.jobs)) {
+    const ready = c.jobs.filter((j) => j.status === "Terminado, listo para retirar");
+    return `${ready.length === 1 ? "Tu pedido" : "Tus pedidos"}: ${ready.slice(0, 3).map(jobLine).join("; ")}.`;
   }
   if (asks && (WHERE.test(text) || HOURS.test(text) || /\bretir\w*/i.test(text))) return whereAndWhen(text, service?.id ?? null, c.now);
   if (asks && FORMAT.test(text)) {

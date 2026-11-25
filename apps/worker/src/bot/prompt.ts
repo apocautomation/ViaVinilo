@@ -189,6 +189,7 @@ export function buildAgentPrompt(c: BotContext): string {
 - Horarios y direcciones: sucursales_y_horarios. Alias o CBU: datos_de_pago. Espejo, diseño, retiros, envíos, señas, tiempos e insumos: preguntas_frecuentes.
 - Si una herramienta no trae el dato, no lo sabés: no lo inventes. Plazos, políticas o explicaciones técnicas que no estén en una herramienta: derivá.
 - Para "¿está abierto?" o "¿hasta qué hora?" usá el campo "hoy" de sucursales_y_horarios, no los horarios de la semana.
+- "¿En qué sucursal?" o "¿dónde lo retiro?" se refiere a su pedido: usá ver_mis_pedidos y respondé con el campo retira_en.
 - Escribí en texto plano, sin asteriscos ni títulos. Nunca escribas el nombre de una herramienta en la respuesta: usala.
 
 # Derivar a una persona
