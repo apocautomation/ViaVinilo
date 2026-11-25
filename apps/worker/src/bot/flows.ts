@@ -32,17 +32,17 @@ export function boardFor(text: string, boards: ExtraBoard[] = []): ExtraBoard | 
 const HOW_TO_SEND = (email: string | null) =>
   email ? `Mandá el archivo con el clip 📎 de este chat o por mail a ${email}` : "Mandá el archivo con el clip 📎 de este chat";
 
-const GREETING = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis|qu[eé] tal)[\s!.,¿?]*$/i;
+const GREETING = /^\s*(h?ola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis|qu[eé] tal)[\s!.,¿?]*$/i;
 /** Cierre corto: "gracias", "ok", "dale", "listo"… No es un pedido ni una pregunta. */
 const THANKS = /^\s*(much[ií]simas |muchas |mil )?(gracias|ok(ey)?|oka|dale|listo|perfecto|genial|buen[ií]simo|b[aá]rbaro|joya|de una)\b[^?]{0,25}$/i;
-const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo retiro|retiro)|estado de mi|mi pedido|c[oó]mo va|lo puedo retirar)\b/i;
+const STATUS = /\b(est[aá] listo|ya est[aá]|cu[aá]ndo (est[aá]|va a estar|lo retiro|retiro)|estado de mi|mi pedido|c[oó]mo va|lo puedo retirar|lo puedo pasar a buscar|cu[aá]ndo (lo|la|los|las) (imprimen|hacen|tienen|terminan|entregan))\b/i;
 /**
  * Pregunta por su archivo (D-092): "¿tenés mi archivo?", "¿llegó?", "¿está correcto?", "¿tiene algún
  * error?". Se contesta con el estado real del pedido; la IA inventaba "apenas llegue lo veo".
  */
 /** Se prueba sobre el texto sin tildes: "\\b" no corta bien después de una vocal acentuada. */
 const FILE_QUESTION =
-  /\b(archivos?|disenos?|mail|correo|pedidos?|orden(es)?)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archivos?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b|\bque (le )?(pasa|paso|onda)\b.{0,30}\b(archivos?|disenos?|pedidos?|trabajos?)\b|\b(archivos?|disenos?|pedidos?|trabajos?)\b.{0,30}\b(no avanza|sigue igual|trabado|frenado|parado)\b|\bpor ?que no (avanza|sale|lo hacen|lo imprimen)\b|\b(mi|mis) (archivos?|disenos?)\b.*\?/i;
+  /\b(archi[bv]os?|disenos?|mail|correo|pedidos?|orden(es)?)\b.{0,40}\b(llego|recib\w+|tenes|tienen|vieron|viste|esta (bien|correcto|ok|mal)|sirve|error|problema)\b|\b(llego|recib\w+|tenes|tienen|vieron|viste)\b.{0,40}\b(archi[bv]os?|disenos?|mail|correo)\b|^\s*¿?\s*(esta|estaba|quedo|salio) (todo )?(bien|correcto|ok|mal)\b|\b(tiene|tenia|tuvo|hay|hubo) (algun )?(error|problema)\b|\bque (le )?(pasa|paso|onda)\b.{0,30}\b(archivos?|disenos?|pedidos?|trabajos?)\b|\b(archivos?|disenos?|pedidos?|trabajos?)\b.{0,30}\b(no avanza|sigue igual|trabado|frenado|parado)\b|\bpor ?que no (avanza|sale|lo hacen|lo imprimen)\b|\b(mi|mis) (archivos?|disenos?)\b.*\?/i;
 const plain = (t: string) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 /** Un trabajo nuevo: pide imprimir, manda medidas o un archivo, o avisa que adjunta (D-060, D-061). */
 const NEW_JOB =
@@ -52,11 +52,16 @@ const NEW_JOB =
 const ASKS =
   /\?|^\s*(d[oó]nde|qu[eé]|cu[aá]l|cu[aá]ndo|cu[aá]nto|a qu[eé] hora|hasta qu[eé] hora|c[oó]mo|puedo|se puede|tienen|hay|hacen|venden|abren|me pas[aá]s|me pod[eé]s|pasame)\b/i;
 const WHERE = /\b(d[oó]nde|direcci[oó]n|ubicaci[oó]n|sucursal(es)?|c[oó]mo llego|mapa)\b/i;
+/** "Retirar" dicho de otras formas (D-101): "lo paso a buscar", "¿lo puedo pasar a buscar?". */
+const PICKUP = /\b(retir\w*|pas(o|ar|amos|an) a buscar\w*|buscarl[oa]s?)\b/i;
 const HOURS = /\b(horarios?|abren|cierran|atienden|abiert[oa]s?|hasta qu[eé] hora|a qu[eé] hora)\b/i;
 const SATURDAY = /\bs[aá]bados?\b/i;
 const TODAY = /\b(hoy|ahora)\b/i;
 const MIRROR = /\b(espejo|espejad\w*)\b/i;
-const DESIGN = /\b(dise[ñn]\w*|vectoriz\w*|retoc\w*|arregl\w* (el|mi) archivo|(sacar|quitar)\w* el fondo)\b/i;
+const DESIGN_WORDS = /\b(dise[ñn]\w*|vectoriz\w*|retoc\w*|arregl\w* (el|mi) archivo|(sacar|quitar)\w* el fondo)\b/i;
+/** "¿Cómo te mando el diseño?" es mandar un trabajo, no pedir que lo diseñen (D-101). */
+const SEND_DESIGN = /\b(mand\w*|env[ií]\w*|pas\w*|sub\w*|adjunt\w*) (el|mi|los|mis|un|unos|tu|este) dise[ñn]/i;
+const DESIGN = { test: (t: string) => DESIGN_WORDS.test(t) && !SEND_DESIGN.test(t) };
 const PAY = /\b(alias|cbu|c[oó]mo (pago|se paga|abono|transfiero)|(medios?|formas?) de pago|d[oó]nde (pago|transfiero|deposito)|datos (bancarios|para transferir|de pago|de la cuenta)|para transferir|mercado ?pago)\b/i;
 const DEPOSIT = /\bse[ñn]as?\b/i;
 const THIRD_PARTY = /\b(cadete|uber|moto|comisionista|otra persona|un tercero|un amigo|mi (hermano|hermana|pareja|empleado))\b/i;
@@ -176,9 +181,13 @@ export function jobLine(j: BotJob): string {
     if (j.depositRequired && !j.depositPaid) {
       return `${base}: ${price}. Para empezar falta la seña${j.depositAmount ? ` de ${ars.format(Number(j.depositAmount))}` : ""}; si querés los datos para pagarla, pedime el alias`;
     }
-    return `${base}: ${price}`;
+    // D-101: "¿cuándo lo imprimen?" con un pedido cotizado: lo que falta saber es que ya entra a producción.
+    return `${base}: ${price}. Entra a producción por orden de llegada (24 a 48 h hábiles)`;
   }
-  return `${base}: ${j.status}`;
+  // D-101: con el estado solo ("Impreso") la IA decía que ya estaba listo para retirar.
+  if (j.status === "Entregado") return `${base}: ya lo entregamos`;
+  if (j.status === "Cancelado") return `${base}: está cancelado`;
+  return `${base}: ${j.status}. Todavía no está listo para retirar`;
 }
 
 /** Pregunta por el estado de un pedido o por su archivo (D-097): la IA no puede contestarla sin mirar los pedidos. */
@@ -195,7 +204,7 @@ export function asksAboutOrders(text: string): boolean {
  * pedido, no a las sucursales en general. "¿Hasta qué hora abren?" sigue siendo de horarios.
  */
 const asksWhereToPickUp = (text: string, jobs?: BotJob[]) =>
-  ASKS.test(text) && (WHERE.test(text) || /\bretir\w*/i.test(text)) && !HOURS.test(text) && !!jobs?.some((j) => j.status === "Terminado, listo para retirar");
+  ASKS.test(text) && (WHERE.test(text) || PICKUP.test(text)) && !HOURS.test(text) && !!jobs?.some((j) => j.status === "Terminado, listo para retirar");
 
 export function toolFor(text: string, jobs?: BotJob[]): string | null {
   if (GREETING.test(text) || THANKS.test(text)) return null;
@@ -204,7 +213,7 @@ export function toolFor(text: string, jobs?: BotJob[]): string | null {
   if (asks && PAY.test(text)) return "datos_de_pago";
   if (asks && (MIRROR.test(text) || DESIGN.test(text) || DEPOSIT.test(text) || THIRD_PARTY.test(text) || SUPPLIES.test(text) || TIMES.test(text))) return "preguntas_frecuentes";
   if (asks && SHIPPING.test(text) && !/\barchivos?\b/i.test(text)) return "preguntas_frecuentes";
-  if (asks && (WHERE.test(text) || HOURS.test(text) || /\bretir\w*/i.test(text))) return "sucursales_y_horarios";
+  if (asks && (WHERE.test(text) || HOURS.test(text) || PICKUP.test(text))) return "sucursales_y_horarios";
   if ((asks && FORMAT.test(text)) || NEW_JOB.test(text)) return "info_servicio";
   return null;
 }
@@ -212,9 +221,18 @@ export function toolFor(text: string, jobs?: BotJob[]): string | null {
 /** Es una pregunta (D-098): si la IA la contesta sin ninguna herramienta, no tiene de dónde sacar el dato. */
 export const isQuestion = (text: string) => ASKS.test(text) && !GREETING.test(text) && !THANKS.test(text);
 
+/** "gracias", "ok dale" (D-101): se cierra con la respuesta fija; la IA volvía a ofrecer ayuda. */
+export const isThanks = (text: string) => THANKS.test(text);
+
 /** Devuelve la respuesta fija, o null si el mensaje no es de estos flujos (lo responde la IA). */
 export function fixedFlow(text: string, c: FlowContext): string | null {
   const name = c.firstName ? ` ${c.firstName}` : "";
+  // D-101: "???" o solo signos.
+  if (!/[\p{L}\d]/u.test(text)) {
+    // Un 👍 o 🙏 solo es un cierre, no una consulta.
+    if (/\p{Extended_Pictographic}/u.test(text)) return "¡Dale! Cualquier cosa, escribime por acá.";
+    return "Contame qué necesitás: el estado de un pedido, cómo mandar un archivo, horarios de las sucursales o datos de pago.";
+  }
 
   if (GREETING.test(text)) {
     return c.alreadyTalking ? "¿En qué te ayudo?" : `¡Hola${name}! Soy el asistente de Via Vinilo. ¿En qué te ayudo?`;
@@ -270,7 +288,7 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
     const ready = c.jobs.filter((j) => j.status === "Terminado, listo para retirar");
     return `${ready.length === 1 ? "Tu pedido" : "Tus pedidos"}: ${ready.slice(0, 3).map(jobLine).join("; ")}.`;
   }
-  if (asks && (WHERE.test(text) || HOURS.test(text) || /\bretir\w*/i.test(text))) return whereAndWhen(text, service?.id ?? null, c.now);
+  if (asks && (WHERE.test(text) || HOURS.test(text) || PICKUP.test(text))) return whereAndWhen(text, service?.id ?? null, c.now);
   if (asks && FORMAT.test(text)) {
     if (!service) return "¿Para qué servicio es? (DTF, DTF UV, calandra, sublimación, lona o vinilo, rígidos, látex o corte). Así te paso el formato exacto.";
     const warn = service.warnings?.length ? `\n${service.warnings.join(" ")}` : "";

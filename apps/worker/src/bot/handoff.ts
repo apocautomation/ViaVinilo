@@ -4,8 +4,8 @@
  */
 const RULES: { reason: string; re: RegExp }[] = [
   { reason: "Quiere cancelar o cambiar un pedido", re: /\b(cancel\w*|anul\w*|dar de baja|cambiar (el|mi) pedido|modificar (el|mi) pedido)\b/i },
-  { reason: "Reclamo por una falla", re: /\b(reclam\w*|falla\w*|fallado|defect\w*|salió mal|salio mal|vino mal|se despeg\w*|se borr\w*|manch\w*)\b/i },
-  { reason: "Pide precio o presupuesto", re: /\b(precio\w*|cu[aá]nto (sale|cuesta|vale|es|ser[ií]a)|presupuesto\w*|cotiz\w*|lista de precios)\b/i },
+  { reason: "Reclamo por una falla", re: /\b(reclam\w*|falla\w*|fallado|defect\w*|salió mal|salio mal|vino mal|se despeg\w*|despegad\w*|desastre|arruin\w*|(vino|lleg[oó]) rot\w*|mal impres\w*|se borr\w*|manch\w*)\b/i },
+  { reason: "Pide precio o presupuesto", re: /\b(precio\w*|cu[aá]nto (sale|cuesta|vale|es|ser[ií]a)(?! (la |de )?se[ñn]as?\b)|presupuesto\w*|cotiz\w*|lista de precios)\b/i },
   { reason: "Manda un comprobante de pago", re: /\b(comprobante|ya (te |les )?(transfer[ií]|pagu[eé]|deposit[eé])|(te|les) (transfer[ií]|pagu[eé]|deposit[eé])|pagu[eé] la seña|seña pagada)/i },
   {
     reason: "Pide urgencia o que lo manden a otra sucursal",

@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { formatJobNumber, JOB_STATUS_LABELS, SECTOR_CODES } from "@viavinilo/contracts";
-import { ASK_MATERIAL, boardFor, fixedFlow, isQuestion, serviceFor, toolFor, type ExtraBoard } from "./flows";
+import { ASK_MATERIAL, asksAboutOrders, boardFor, fixedFlow, isQuestion, isThanks, jobNumberIn, serviceFor, toolFor, type ExtraBoard } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildAgentPrompt, type BotJob } from "./prompt";
@@ -52,6 +52,15 @@ export async function decideAnswer(input: {
   // D-099: si el cliente arrancó con "hola" y es el primer mensaje, la respuesta armada también saluda.
   const greets = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis)\b/i.test(input.text) && !input.alreadyTalking;
   const flow = fixedReply && greets && !/^¡Hola/.test(fixedReply) ? `¡Hola${input.firstName ? ` ${input.firstName}` : ""}! ${fixedReply}` : fixedReply;
+  if (flow && isThanks(input.text)) return { reply: flow, handoff: false, reason: null, source: "flow" };
+  // D-101: "???" o solo signos: se le pide que cuente qué necesita (la IA no tiene de dónde sacar nada).
+  if (flow && !/[\p{L}\d]/u.test(input.text)) return { reply: flow, handoff: false, reason: null, source: "flow" };
+  // D-101: con varios pedidos en curso y sin decir cuál, va la lista armada con la pregunta "¿por cuál?".
+  // La IA contestaba por uno solo y prometía mandar el presupuesto.
+  const active = input.jobs.filter((j) => j.status !== "Entregado" && j.status !== "Cancelado");
+  if (flow && active.length > 1 && asksAboutOrders(input.text) && jobNumberIn(input.text) === null && !input.turns.some((t) => t.role === "assistant" && /¿Por cuál me consultás\?/.test(t.content))) {
+    return { reply: flow, handoff: false, reason: null, source: "flow" };
+  }
   const kit = buildToolKit({ jobs: input.jobs, boards: input.boards, noticesOn: input.noticesOn, now: input.now });
   let answer: BotAnswer;
   try {
@@ -80,6 +89,12 @@ export async function decideAnswer(input: {
     throw new Error("El modelo respondió solo con una herramienta");
   }
   let reply = plainText(fixMailboxes(toVoseo(stripped.text)));
+  // D-101: el modelo a veces arranca en minúscula ("hola Lucía").
+  reply = reply.replace(/^([¡¿"]?)(\p{Ll})/u, (_m, p: string, c: string) => p + c.toUpperCase());
+  // D-101: "Buen día, Lucía! ¿en qué…" → "¡Buen día, Lucía! ¿En qué…".
+  reply = reply.replace(/¿\s*(\p{Ll})/gu, (_m, c: string) => `¿${c.toUpperCase()}`);
+  reply = reply.replace(/^(Hola|Buen d[ií]a|Buenas(?: tardes| noches)?)([^!?¡¿.\n]{0,30})!/u, "¡$1$2!");
+  reply = reply.replace(/^(Hola|Buen d[ií]a|Buenas(?: tardes| noches)?)((?: \p{Lu}\p{L}+)?), ¿/u, "¡$1$2! ¿");
   // D-092: si la IA va a repetir lo mismo que ya dijo, no está entendiendo: lo ve un asesor.
   const same = (t: string) => t.toLowerCase().replace(/[^\p{L}\d]+/gu, " ").trim();
   const said = input.turns.filter((t) => t.role === "assistant").slice(-4).map((t) => same(t.content));

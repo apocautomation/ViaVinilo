@@ -12,4 +12,18 @@ describe("el bot habla de vos (D-060)", () => {
     expect(toVoseo("Tus consultas las respondemos. Tenés que mandar el archivo.")).toBe("Tus consultas las respondemos. Tenés que mandar el archivo.");
     expect(toVoseo("Las tiendas abren")).toBe("Las tiendas abren");
   });
+
+  it("D-101: pone la tilde al voseo que el modelo escribe sin tilde, y pasa el usted del asesor a vos", () => {
+    expect(toVoseo("Podes retirarlo de lunes a viernes. Si queres, tenes el alias.")).toBe("Podés retirarlo de lunes a viernes. Si querés, tenés el alias.");
+    expect(toVoseo("Un asesor del equipo le responde por este mismo chat.")).toBe("Un asesor del equipo te responde por este mismo chat.");
+    expect(toVoseo("Si querés, le avisamos.")).toBe("Si querés, te avisamos.");
+    // No toca palabras que son otra cosa.
+    expect(toVoseo("Estas son las sucursales. Las pagas del mes.")).toBe("Estas son las sucursales. Las pagas del mes.");
+    expect(toVoseo("A Juan le responde Ana.")).toBe("A Juan le responde Ana.");
+  });
+
+  it("D-101: pasa a vos el imperativo de 'tú' antes de lo que se pide", () => {
+    expect(toVoseo("Con el clip (elige el servicio, escribe medidas y cantidad).")).toBe("Con el clip (elegí el servicio, escribí medidas y cantidad).");
+    expect(toVoseo("El equipo elige el color.")).toBe("El equipo elige el color.");
+  });
 });

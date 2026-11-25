@@ -292,8 +292,9 @@ describe("el bot informa el estado real del archivo (D-092)", () => {
       expect(r.body).toContain("Mandalo corregido con el clip");
       expect(r.body).not.toMatch(/apenas llegue/i);
     }
-    // La IA respondió sin mirar los pedidos: se descartó su respuesta inventada.
-    expect(calls).toHaveLength(2);
+    // El cliente tiene otros pedidos: la primera va con la lista y "¿por cuál?" sin IA (D-101). En la
+    // segunda la IA respondió sin mirar los pedidos: se descartó su respuesta inventada.
+    expect(calls).toHaveLength(1);
     await prisma.jobEvent.deleteMany({ where: { jobId: job.id } });
     await prisma.jobOrder.delete({ where: { id: job.id } });
   });
@@ -385,5 +386,31 @@ describe("ajustes de la IA con herramientas (D-098)", () => {
     expect(results[0]).toContain('"retira_en":"Sucursal Centro, San Juan 714, Salta"');
     const sinMirar = await decideAnswer({ ...base, alreadyTalking: false, jobs, text: "Hola que tal mi pedido ya esta para retirar", llm: fakeLlm({ reply: "Sí." }).llm });
     expect(sinMirar.reply).toMatch(/^¡Hola Ana! Tu pedido: VV-000564 \(DTF Textil\): está listo para retirar en Sucursal Centro/);
+  });
+
+  it("D-101: 'gracias' cierra con la respuesta fija; la respuesta arranca en mayúscula; numero 0 es 'sin número'", async () => {
+    const t = await decideAnswer({ ...base, text: "gracias!!", llm: fakeLlm({ reply: "de nada! ¿Cómo puedo ayudarte?" }).llm });
+    expect(t).toMatchObject({ source: "flow", reply: "¡De nada! Cualquier cosa, escribime por acá." });
+    const h = await decideAnswer({ ...base, alreadyTalking: false, text: "hola", llm: fakeLlm({ reply: "hola Ana, ¿en qué te ayudo?" }).llm });
+    expect(h.reply).toBe("¡Hola Ana! ¿En qué te ayudo?");
+    const jobs = [{ label: "VV-000103", sector: "DTF Textil", status: "Archivo recibido", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: [], hasLinks: true }];
+    const z = fakeLlm({ reply: "ok", tools: [["ver_mis_pedidos", { numero: 0 }]] });
+    await decideAnswer({ ...base, jobs, text: "llegó lo que les mandé por link?", llm: z.llm });
+    expect(z.results[0]).not.toContain("No hay un pedido");
+    expect(z.results[0]).toContain("VV-000103");
+  });
+
+  it("D-101: con varios pedidos y sin decir cuál, va la lista con '¿por cuál?'; el pedido sin listo no da sucursal", async () => {
+    const job = (n: string, status: string) => ({ label: n, sector: "DTF Textil", status, description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: ["a.png"] });
+    const jobs = [job("VV-000111", "Archivo recibido"), job("VV-000112", "Impreso")];
+    const r = await decideAnswer({ ...base, jobs, text: "tenes mi archivo?", llm: fakeLlm({ reply: "No, todavía no está listo." }).llm });
+    expect(r.source).toBe("flow");
+    expect(r.reply).toContain("¿Por cuál me consultás?");
+    const k = fakeLlm({ reply: "ok", tools: [["ver_mis_pedidos", {}]] });
+    await decideAnswer({ ...base, jobs: [job("VV-000108", "Impreso")], text: "y ahora en qué está?", llm: k.llm });
+    expect(k.results[0]).toContain('"listo_para_retirar":false');
+    expect(k.results[0]).not.toContain('"retira_en"');
+    const g = await decideAnswer({ ...base, alreadyTalking: false, text: "buen día! tengo una consulta", llm: fakeLlm({ reply: "Buen día, Ana! ¿en qué te ayudo?" }).llm });
+    expect(g.reply).toBe("¡Buen día, Ana! ¿En qué te ayudo?");
   });
 });
