@@ -413,4 +413,18 @@ describe("ajustes de la IA con herramientas (D-098)", () => {
     const g = await decideAnswer({ ...base, alreadyTalking: false, text: "buen día! tengo una consulta", llm: fakeLlm({ reply: "Buen día, Ana! ¿en qué te ayudo?" }).llm });
     expect(g.reply).toBe("¡Buen día, Ana! ¿En qué te ayudo?");
   });
+
+  it("D-103: si el único pedido ya se entregó, lo dice (sin IA); sin ningún pedido, no promete nada", async () => {
+    const delivered = { label: "VV-000110", sector: "DTF Textil", status: "Entregado", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: ["x.png"] };
+    const ai = fakeLlm({ reply: "No, todavía no está lo tuyo. ¿Podés mandarme el archivo?" });
+    const r = await decideAnswer({ ...base, jobs: [delivered], text: "ya está lo mío?", llm: ai.llm });
+    expect(r.source).toBe("flow");
+    expect(r.reply).toBe("No tenés pedidos en curso: el último, VV-000110 (DTF Textil), ya lo entregamos. Si querés hacer otro, mandá el archivo con el clip 📎 de este chat y te pasamos el precio.");
+    expect(ai.calls).toHaveLength(0);
+    const none = await decideAnswer({ ...base, jobs: [], text: "ya está listo mi pedido?", llm: fakeLlm({ reply: "Sí, ya está listo." }).llm });
+    expect(none.reply).toMatch(/^Todavía no veo pedidos tuyos en curso/);
+    const k = fakeLlm({ reply: "ok", tools: [["ver_mis_pedidos", {}]] });
+    await decideAnswer({ ...base, jobs: [delivered], text: "che, y lo que pedí?", llm: k.llm });
+    expect(k.results[0]).toContain("El último, VV-000110 (DTF Textil), ya se entregó.");
+  });
 });
