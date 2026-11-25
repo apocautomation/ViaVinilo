@@ -321,6 +321,55 @@ describe("comando /reset por mail (D-061)", () => {
 });
 
 describe("mails que no son pedidos", () => {
+  it("D-111: pedir cancelar sin archivo no crea pedido y va a Conversaciones para una persona", async () => {
+    const raw = await buildMail({
+      from: "cancela@cliente.test",
+      to: "dtf@viavinilo.test",
+      subject: "CANCELAR PEDIDO DE LAS 15:43 POR ERROR",
+      text: "Hay un error en el pedido que hice a las 15:43, cancelar ese pedido. Vuelvo a enviar el archivo corregido.",
+      messageId: nextId(),
+    });
+    const out = await ingestMail(deps(), dtf, raw);
+    expect(out.result).toBe("CANCEL_REQUEST");
+    expect(await prisma.jobOrder.count({ where: { sourceMessageId: out.messageId } })).toBe(0);
+    expect(await prisma.mailIngestLog.findFirstOrThrow({ where: { messageId: out.messageId } })).toMatchObject({ result: "CANCEL_REQUEST" });
+    const conv = await prisma.conversation.findFirstOrThrow({ where: { contactEmail: "cancela@cliente.test" }, include: { messages: true } });
+    expect(conv).toMatchObject({ needsHuman: true, needsHumanReason: "Pide por mail cancelar un pedido" });
+    expect(conv.messages[0]).toMatchObject({ subject: "CANCELAR PEDIDO DE LAS 15:43 POR ERROR" });
+  });
+
+  it("D-111: pedir cancelar con un archivo crea el pedido igual ('cancelen el anterior, va este'), avisado en la tarjeta y en Conversaciones", async () => {
+    const raw = await buildMail({
+      from: "cancela2@cliente.test",
+      to: "dtf@viavinilo.test",
+      subject: "dtf 0,58x1mt",
+      text: "Va el archivo\nCANCELAR EL ANTERIOR",
+      messageId: nextId(),
+      attachments: [fakePdf("nuevo.pdf")],
+    });
+    const out = await ingestMail(deps(), dtf, raw);
+    expect(["CREATED", "PENDING_SIGNUP"]).toContain(out.result);
+    const job = await prisma.jobOrder.findFirstOrThrow({ where: { sourceMessageId: out.messageId } });
+    expect(job.description).toBe("Pide cancelar un pedido · dtf 0,58x1mt");
+    const conv = await prisma.conversation.findFirstOrThrow({ where: { customerId: job.customerId } });
+    expect(conv).toMatchObject({ needsHuman: true, needsHumanReason: "Pide por mail cancelar un pedido" });
+  });
+
+  it("D-111: contestar con el archivo corregido un mail titulado 'PEDIDO CANCELADO' crea el pedido, con lo que escribió el cliente", async () => {
+    const raw = await buildMail({
+      from: "reenvia@cliente.test",
+      to: "dtf@viavinilo.test",
+      subject: "Re: PEDIDO CANCELADO",
+      text: "Te lo vuelvo a enviar.\n\nEl jue, 19 nov 2026 a las 20:42, DTF (<dtf@viavinilo.test>)\nescribió:\n\n> Tu archivo excede el ancho. ¿Podés enviarlo corregido?",
+      messageId: nextId(),
+      attachments: [fakePdf("corregido.pdf")],
+    });
+    const out = await ingestMail(deps(), dtf, raw);
+    expect(["CREATED", "PENDING_SIGNUP"]).toContain(out.result);
+    const job = await prisma.jobOrder.findFirstOrThrow({ where: { sourceMessageId: out.messageId } });
+    expect(job.description).toBe("Te lo vuelvo a enviar. (en respuesta a «PEDIDO CANCELADO»)");
+  });
+
   it("I-15: un mail sin adjuntos ni links no crea orden y queda en el log", async () => {
     const raw = await buildMail({
       from: "juan@remeras.test",

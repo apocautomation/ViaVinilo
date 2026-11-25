@@ -47,7 +47,8 @@ export const preview = (text: string) => text.replace(/\s+/g, " ").trim().slice(
 
 /**
  * Guarda un mail entrante en el hilo del cliente (D-041, D-045): con o sin adjuntos, cree o no una
- * orden. Es idempotente: el mismo mail leído dos veces en la misma casilla no se repite.
+ * orden. Es idempotente: el mismo mail leído dos veces en la misma casilla no se repite. Devuelve el
+ * hilo (D-111: para marcarlo cuando el cliente pide cancelar), o null si el mail no tiene remitente.
  */
 export async function recordInboundMail(
   prisma: PrismaClient,
@@ -60,9 +61,9 @@ export async function recordInboundMail(
     /** Quién mandó el mail de verdad, si no es el cliente (un reenvío desde una casilla nuestra, D-057). */
     senderEmail?: string | null;
   },
-): Promise<void> {
+): Promise<string | null> {
   const { sector, mail } = input;
-  if (!mail.fromEmail) return;
+  if (!mail.fromEmail) return null;
   const conversationId = await conversationFor(prisma, {
     customerId: input.customerId,
     email: mail.fromEmail,
@@ -87,7 +88,7 @@ export async function recordInboundMail(
       },
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return conversationId;
     throw err;
   }
   await prisma.conversation.update({
@@ -98,4 +99,5 @@ export async function recordInboundMail(
       staffUnread: { increment: 1 },
     },
   });
+  return conversationId;
 }

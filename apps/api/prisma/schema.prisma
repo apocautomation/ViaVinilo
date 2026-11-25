@@ -543,6 +543,7 @@ enum MailIngestResult {
   REJECTED_BLOCKED // cliente bloqueado (I-14)
   COMMAND // un comando como "/reset" (D-061): no crea orden
   RESENT // archivo corregido: se sumó a la orden que estaba en "Archivo con error" (D-065)
+  CANCEL_REQUEST // pide cancelar un pedido: no crea orden, va a Conversaciones para una persona (D-111)
   ERROR
 }
 
