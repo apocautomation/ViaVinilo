@@ -79,7 +79,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
 export function botConfig(env: NodeJS.ProcessEnv): LlmConfig | null {
   const baseUrl = env.BOT_API_URL?.trim();
   const apiKey = env.OPENAI_API_KEY?.trim();
-  if (baseUrl) return { baseUrl, apiKey: apiKey || "ollama", model: env.BOT_MODEL?.trim() || "qwen2.5:3b" };
+  if (baseUrl) return { baseUrl, apiKey: apiKey || "ollama", model: env.BOT_MODEL?.trim() || "qwen3:8b" };
   if (apiKey) return { baseUrl: "https://api.openai.com/v1", apiKey, model: env.BOT_MODEL?.trim() || "gpt-4.1-mini" };
   return null;
 }

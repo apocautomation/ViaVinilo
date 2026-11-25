@@ -19,7 +19,7 @@ x-app: &app
     NODE_ENV: production
     # Bot del chat de la app con IA local (D-057). Se pisan acá para que no dependan del .env.
     BOT_API_URL: http://ollama:11434/v1
-    BOT_MODEL: ${BOT_MODEL:-qwen2.5:3b}
+    BOT_MODEL: ${BOT_MODEL:-qwen3:8b}
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_started }
@@ -85,7 +85,7 @@ services:
       NODE_ENV: production
       API_PORT: "3001"
       BOT_API_URL: http://ollama:11434/v1
-      BOT_MODEL: ${BOT_MODEL:-qwen2.5:3b}
+      BOT_MODEL: ${BOT_MODEL:-qwen3:8b}
     ports:
       - "127.0.0.1:3001:3001"
     volumes:

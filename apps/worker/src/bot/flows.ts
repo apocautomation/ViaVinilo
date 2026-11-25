@@ -137,7 +137,7 @@ export function jobNumberIn(text: string): number | null {
 }
 
 /** Un pedido en una línea, con lo que el cliente necesita saber del archivo (D-092, D-094). */
-function jobLine(j: BotJob): string {
+export function jobLine(j: BotJob): string {
   const base = `${j.label} (${j.sector}${j.description ? `, ${j.description}` : ""})`;
   const clip = `con el clip 📎 de este chat, eligiendo el pedido ${j.label}`;
   const names = j.files?.length ? ` (${j.files.slice(0, 2).join(", ")}${j.files.length > 2 ? ` y ${j.files.length - 2} más` : ""})` : "";
@@ -165,6 +165,11 @@ function jobLine(j: BotJob): string {
     return `${base}: ${price}`;
   }
   return `${base}: ${j.status}`;
+}
+
+/** Pregunta por el estado de un pedido o por su archivo (D-097): la IA no puede contestarla sin mirar los pedidos. */
+export function asksAboutOrders(text: string): boolean {
+  return (STATUS.test(text) || FILE_QUESTION.test(plain(text)) || jobNumberIn(text) !== null) && !NEW_JOB.test(text);
 }
 
 /** Devuelve la respuesta fija, o null si el mensaje no es de estos flujos (lo responde la IA). */
