@@ -312,7 +312,7 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
     if (!service) {
       return ASK_MATERIAL;
     }
-    return `¡Dale! ${HOW_TO_SEND(service.email)} (${service.name}) con tus datos: nombre, medidas y cantidad, y en qué sucursal lo retirás. Formato: ${service.formats}. Cuando lo recibimos lo revisamos y te pasamos el precio.`;
+    return `¡Dale! ${HOW_TO_SEND(service.email)} (${service.name}) con tus datos: nombre, medidas y cantidad, y en qué sucursal lo retirás. Formato: ${service.formats}.${service.requirements.length ? ` ${service.requirements.join(" ")}` : ""} Cuando lo recibimos lo revisamos y te pasamos el precio.`;
   }
 
   return null;

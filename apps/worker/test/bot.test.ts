@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { ollamaLlm, openAiLlm, parseAnswer, type ChatTurn, type Llm } from "../src/bot/llm";
 import type { ToolKit } from "../src/bot/tools";
 import { decideAnswer, processBotReplies } from "../src/bot/reply";
+import { ASK_MATERIAL } from "../src/bot/flows";
 import { startTestDb } from "./test-db";
 
 let prisma: PrismaClient;
@@ -443,5 +444,29 @@ describe("ajustes de la IA con herramientas (D-098)", () => {
     expect(ai.calls).toHaveLength(0);
     const none = await decideAnswer({ ...base, jobs, turns, text: "el 999", llm: fakeLlm({ reply: "x" }).llm });
     expect(none.reply).toMatch(/^No encuentro un pedido con el número 999/);
+  });
+
+  it("D-105: 'lona' después de '¿de qué material?' da casilla, formato y requisitos (sin IA)", async () => {
+    const turns = [
+      { role: "user" as const, content: "quiero imprimir algo" },
+      { role: "assistant" as const, content: ASK_MATERIAL },
+      { role: "user" as const, content: "lona" },
+    ];
+    const ai = fakeLlm({ reply: "Mandala a granformato@viavinilo.com." });
+    const r = await decideAnswer({ ...base, turns, text: "lona", llm: ai.llm });
+    expect(r.source).toBe("flow");
+    expect(r.reply).toContain("granformato@viavinilo.com");
+    expect(r.reply).toContain("Formato: PDF");
+    expect(r.reply).toContain("Resolución de 100 a 300 dpi.");
+    expect(ai.calls).toHaveLength(0);
+  });
+
+  it("D-105: si la IA da la casilla del trabajo nuevo sin el formato, se agrega con los requisitos", async () => {
+    const ai = fakeLlm({ reply: "Mandala por mail a granformato@viavinilo.com con las medidas.", tools: [["info_servicio", { servicio: "lona" }]] });
+    const r = await decideAnswer({ ...base, text: "necesito imprimir una lona de 3x1", llm: ai.llm });
+    expect(r.source).toBe("ai");
+    expect(r.reply).toBe("Mandala por mail a granformato@viavinilo.com con las medidas. Formato: PDF (fuentes a curvas), JPG o TIF. Resolución de 100 a 300 dpi. Verificá el ancho útil de la lona o el vinilo. Mínimo 50 cm.");
+    const ok = fakeLlm({ reply: "Mandala a granformato@viavinilo.com en PDF, JPG o TIF.", tools: [["info_servicio", { servicio: "lona" }]] });
+    expect((await decideAnswer({ ...base, text: "necesito imprimir una lona de 3x1", llm: ok.llm })).reply).toBe("Mandala a granformato@viavinilo.com en PDF, JPG o TIF.");
   });
 });

@@ -150,7 +150,8 @@ export function buildToolKit(c: ToolContext): ToolKit {
           casilla: s.email,
           como_mandarlo: "Con el clip 📎 del chat (elegí el servicio, escribí medidas y cantidad) o por mail a la casilla con nombre, medidas, cantidad y sucursal.",
           se_retira_en: `${branch.name}, ${branch.address}`,
-          sena: depositRuleFor(s.name) ?? "No figura en las reglas de seña: no digas que lleva ni que no lleva.",
+          // D-105: sin regla de seña no se manda nada (la IA copiaba la aclaración en la respuesta).
+          sena: depositRuleFor(s.name) ?? undefined,
         });
       }
       case "sucursales_y_horarios": {

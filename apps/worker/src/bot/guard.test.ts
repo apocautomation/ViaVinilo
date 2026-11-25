@@ -19,6 +19,7 @@ describe("controles sobre la respuesta del bot (D-060)", () => {
     expect(dropFiller("Lo está revisando el equipo.")).toBe("Lo está revisando el equipo.");
     expect(dropFiller("Se retira en Planta Av. Chile. No se requiere seña.")).toBe("Se retira en Planta Av. Chile.");
     expect(dropFiller("Mandalo por mail. La seña no aplica.")).toBe("Mandalo por mail.");
+    expect(dropFiller("Se retira en Planta Av. Chile. No figura en las reglas de seña: no digas que lleva ni que no lleva. Formato: PDF.")).toBe("Se retira en Planta Av. Chile. Formato: PDF.");
     expect(dropFiller("Para empezar falta la seña de $20.000.")).toBe("Para empezar falta la seña de $20.000.");
   });
 });

@@ -1537,6 +1537,12 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Otros detalles**: "decime el alias" → "pedime el alias"; las instrucciones de cómo mandar el trabajo que recibe la IA van en vos ("elegí el servicio"); un archivo que revisa el equipo dice "todavía no se sabe si está bien" (la IA afirmaba que no tenía problemas).
 - **Sin cambio**: "¿ya me aprobaron la cuenta?" sigue derivando a un asesor (lo esperado en la batería).
 - **Impacto**: sin migración.
+### D-105 · 25/11/2026 · Ezequiel · "lona" después de "¿de qué material?" da el formato
+- **Qué**: si el bot preguntó "¿de qué material es el trabajo?" y el cliente contesta con el material ("lona", "remeras"), va la respuesta armada del trabajo nuevo: casilla, formato y requisitos. Además, esa respuesta armada ahora incluye los requisitos del servicio (por ejemplo "Resolución de 100 a 300 dpi. Mínimo 50 cm."), no solo el formato.
+- **También cuando contesta la IA**: si la IA explica cómo mandar un trabajo nuevo (da la casilla del servicio) y no dice el formato, se agrega al final "Formato: … " con los requisitos. Pasaba con "necesito imprimir una lona de 3x1".
+- **Corrige D-104**: para los servicios sin regla de seña, `info_servicio` mandaba la aclaración "No figura en las reglas de seña: no digas que lleva ni que no lleva" y la IA la copió tal cual en una respuesta (látex). Ahora no se manda el campo; la instrucción está en el prompt y, por las dudas, se sacan de la respuesta las frases que suenan a instrucción interna ("no digas…", "no figura en las reglas").
+- **Por qué**: con "lona" sola la IA daba la casilla y la sucursal pero a veces no repetía el formato ni la resolución (último pendiente de la batería, D-104).
+- **Impacto**: sin migración.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

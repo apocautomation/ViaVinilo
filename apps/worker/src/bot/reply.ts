@@ -57,6 +57,12 @@ export async function decideAnswer(input: {
     const one = fixedFlow(`cómo va el pedido ${picked[1]}?`, ctx);
     if (one) return { reply: one, handoff: false, reason: null, source: "flow" };
   }
+  // D-105: "lona" justo después de "¿de qué material es el trabajo?" es el material del trabajo nuevo: va
+  // la respuesta armada con casilla, formato y requisitos (la IA a veces no repetía el formato).
+  if (lastBot?.content === ASK_MATERIAL && (serviceFor(input.text) || boardFor(input.text, input.boards)) && !isQuestion(input.text)) {
+    const job = fixedFlow(`quiero imprimir ${input.text}`, ctx);
+    if (job && job !== ASK_MATERIAL) return { reply: job, handoff: false, reason: null, source: "flow" };
+  }
   const fixedReply = fixedFlow(input.text, ctx);
   // D-099: si el cliente arrancó con "hola" y es el primer mensaje, la respuesta armada también saluda.
   const greets = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis)\b/i.test(input.text) && !input.alreadyTalking;
@@ -118,6 +124,15 @@ export async function decideAnswer(input: {
   if (/@viavinilo\.com/i.test(reply) && !kit.used.includes("info_servicio") && !serviceFor(input.text) && !boardFor(input.text, input.boards)) {
     reply = dropSentencesWith(reply, /@viavinilo\.com/i);
     if (!reply) return { reply: ASK_MATERIAL, handoff: false, reason: null, source: "flow" };
+  }
+  // D-105: si explica cómo mandar el trabajo (da la casilla del servicio) y no dice el formato, se agrega
+  // con los requisitos. La IA a veces daba casilla y sucursal sin formato ni resolución.
+  const service = serviceFor(input.text);
+  if (service && kit.used.includes("info_servicio") && reply.includes(service.email)) {
+    const formatWord = service.formats.split(/[\s,(]/)[0]!;
+    if (!reply.includes(formatWord)) {
+      reply = `${reply} Formato: ${service.formats}.${service.requirements.length ? ` ${service.requirements.join(" ")}` : ""}`;
+    }
   }
   return { ...answer, reply, source: "ai", tools: kit.used };
 }

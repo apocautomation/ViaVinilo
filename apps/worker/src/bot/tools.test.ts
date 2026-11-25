@@ -59,6 +59,7 @@ describe("herramientas del bot (D-097)", () => {
     const uv = JSON.parse(kit.run("info_servicio", { servicio: "tazas" }));
     expect(uv).toMatchObject({ servicio: "DTF UV", sena: "50% desde 3 m" });
     expect(uv.como_mandarlo).toContain("elegí el servicio");
-    expect(JSON.parse(kit.run("info_servicio", { servicio: "lona" })).sena).toMatch(/No figura en las reglas de seña/);
+    // D-105: sin regla de seña no se manda el campo (la IA copiaba la aclaración).
+    expect(JSON.parse(kit.run("info_servicio", { servicio: "lona" }))).not.toHaveProperty("sena");
   });
 });
