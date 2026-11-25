@@ -385,6 +385,19 @@ describe("mails que no son pedidos", () => {
     expect(log).toMatchObject({ result: "SKIPPED_NO_FILES", fromEmail: "juan@remeras.test", subject: "hola" });
   });
 
+  it("D-112: un aviso de 'Sin entregar' sin remitente es un rebote, no un error", async () => {
+    const raw = await buildMail({
+      to: "dtf@viavinilo.test",
+      subject: "Sin entregar: RE: dtf textil",
+      text: "No se pudo entregar el mensaje a los destinatarios.",
+      messageId: nextId(),
+      attachments: [fakePdf("original.pdf")],
+    });
+    const out = await ingestMail(deps(), dtf, raw);
+    expect(out.result).toBe("SKIPPED_AUTO_REPLY");
+    expect(await prisma.mailIngestLog.findFirstOrThrow({ where: { messageId: out.messageId } })).toMatchObject({ result: "SKIPPED_AUTO_REPLY", error: null });
+  });
+
   it("ignora respuestas automáticas y rebotes", async () => {
     const raw = await buildMail({
       from: "juan@remeras.test",

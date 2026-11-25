@@ -18,7 +18,15 @@ export interface VariantSeed {
 }
 
 type Row = [code: string, name: string, tangoSku: string, width: string, usableWidth: string];
-const rows = (list: Row[]): VariantSeed[] => list.map(([code, name, tangoSku, width, usableWidth]) => ({ code, name, tangoSku, width, usableWidth }));
+/** Vacío = sin dato (la tela del cliente no tiene SKU ni ancho propio). */
+const rows = (list: Row[]): VariantSeed[] =>
+  list.map(([code, name, tangoSku, width, usableWidth]) => ({
+    code,
+    name,
+    ...(tangoSku ? { tangoSku } : {}),
+    ...(width ? { width } : {}),
+    ...(usableWidth ? { usableWidth } : {}),
+  }));
 
 /**
  * Catálogo que pasó Ricardo el 25/11 en los Excel "DETALLE …" (D-108): nombre, ancho, ancho útil y código
@@ -77,6 +85,8 @@ export const DEFAULT_SECTOR_VARIANTS: Partial<Record<BaseSectorCode, VariantSeed
     ["TUCK", "Tucker", "TECA00017", "150", "145"],
     ["MPOC", "Modelo POC set de microfibra", "TECA00024", "160", "155"],
     ["MSET", "Modelo Jersey Set", "TECA00025", "160", "155"],
+    // D-113 (Verónica): la tela que trae el cliente se imprime aparte, no se junta con la de Via Vinilo.
+    ["TCLI", "Tela del cliente", "", "", ""],
   ]),
   SUBLIMACION: rows([
     ["P80A160", "Papel 80 gr (160 cm)", "IMSU00018", "160", "157"],

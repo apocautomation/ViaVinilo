@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asksToCancel, jobDescription, ownText } from "./intent";
+import { isBounce } from "./parse";
 
 const quoted = `Te lo vuelvo a enviar.
 
@@ -44,5 +45,14 @@ describe("intención del mail (D-111)", () => {
     expect(jobDescription("Fwd: DTF 58x100", "DTF UV\nva el archivo")).toBe("DTF 58x100");
     expect(jobDescription("Lona front 3 x 1", "Va el archivo")).toBe("Lona front 3 x 1");
     expect(jobDescription(null, "Va el archivo")).toBeNull();
+  });
+
+  it("D-112: reconoce los avisos de 'no entregado'; un cliente que escribe 'undeliverable' no es un rebote", () => {
+    expect(isBounce("Sin entregar: RESPUESTA", null)).toBe(true);
+    expect(isBounce("Undeliverable: DTF 58x100", "postmaster@servidor.test")).toBe(true);
+    expect(isBounce("Mail delivery failed: returning message to sender", "mailer-daemon@hostinger.test")).toBe(true);
+    expect(isBounce("RE: dtf textil", null)).toBe(false);
+    expect(isBounce("Undeliverable pero va el archivo", "cliente@remeras.test")).toBe(false);
+    expect(isBounce("cualquier asunto", "cliente@remeras.test", true)).toBe(true);
   });
 });

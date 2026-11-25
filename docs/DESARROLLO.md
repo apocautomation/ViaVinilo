@@ -1582,6 +1582,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Probado con los mails reales**: sobre los 914 mails que crearon pedidos, detecta 2 pedidos de cancelación (los dos correctos) y las 27 respuestas o reenvíos quedan con una descripción que se entiende.
 - **No se tocaron los pedidos ya creados**: VV-000123 (el que se creó con el pedido de cancelar) y VV-000203 (pedía cancelar el anterior) los tiene que revisar el taller.
 - **Impacto**: migración `20261125080000_mail_cancel_request` (valor nuevo del log de mails). Sin cambios en el ERP.
+### D-112 · 25/11/2026 · Desarrollo (repaso para la entrega de la E1) · los avisos de "no entregado" son rebotes, no errores
+- **Lo que se vio**: en el log de mails había 392 errores "El mail no tiene remitente", todos de `dtf@` entre el 20/11 y el 25/11. No eran pedidos perdidos: eran avisos de "Sin entregar: …" (216 de un mail titulado "RESPUESTA", que parece la respuesta automática de la casilla, y el resto respuestas a clientes, "RE: dtf textil"…). Llegan sin remitente, por eso caían como error.
+- **Qué**: un mail sin remitente (o de un servidor de correo) con un asunto de "no entregado" ("Sin entregar", "Undeliverable", "Mail delivery failed"…), o con un informe de entrega adjunto, se toma como respuesta automática: queda en el log como `SKIPPED_AUTO_REPLY` y no ensucia los errores. Coincide con los 392 casos reales. Un cliente que escriba "undeliverable" en un asunto no cuenta.
+- **Lo importante para el cliente (I-22)**: esos avisos confirman que **`dtf@` no puede enviar**: las respuestas que el equipo manda desde esa casilla no les llegan a los clientes. No es del sistema (el sistema manda desde `soporte@`). Lo tiene que resolver el cliente con Hostinger.
+- **Impacto**: sin migración. Los 392 registros viejos quedan como estaban en el log.
+
+### D-113 · 25/11/2026 · Verónica (WhatsApp) + Ezequiel · tela de Via Vinilo y tela del cliente en Calandrado
+- **Definición**: "Se cotizan separado, pero se imprimen y calandran por tela siempre y cuando sea con tela de Via Vinilo. Si es tela propia del cliente se imprime separado, así que se suele imprimir primero lo de los clientes que mandan su tela y seguido lo de Via". Ezequiel: el orden lo elige el empleado, puede tomar el pedido que quiera primero.
+- **Qué**: se suma en Calandrado la opción **"Tela del cliente"** (código `TCLI`, sin SKU ni ancho). Con "Agrupar por opción", esos trabajos quedan en su propio bloque, separados de las telas de Via Vinilo y de los que todavía no tienen opción. El sistema no impone un orden de impresión.
+- **Impacto**: migración `20261125090000_tela_del_cliente`. Seed actualizado. El dueño la puede renombrar o desactivar en Producción → Opciones de impresión.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
@@ -1594,8 +1604,8 @@ Actualizar cuando llegue cada cosa.
 | Nombres reales de las 16 máquinas y su sector | Seed de máquinas (I-10) | Pendiente |
 | Acceso al VPS de Hostinger | Alojar el sistema (D-007) | **Recibido el 19/11**: servidor preparado (D-035) |
 | Dominios para el ERP y la app de clientes | HTTPS, PWA y push (D-035) | **Recibido el 19/11**: `viavinilo.tech`, `www` y `erp` apuntan al VPS, con HTTPS (D-036) |
-| Casillas de mail por sector en Hostinger | Ingesta IMAP (D-027) y envío de mails (SMTP, D-037) | Pendiente |
-| Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Pendiente (actualización §6) |
+| Casillas de mail por sector en Hostinger | Ingesta IMAP (D-027) y envío de mails (SMTP, D-037) | **Recibidas**: las 6 casillas se leen cada minuto (D-043, D-078). `dtf@` sigue sin poder enviar (I-22, D-112) |
+| Datos de clientes de Runamatic y Tango | Migración del alta de clientes | Runamatic **importado** (D-048, D-049). Falta el acceso a Tango para el número de cliente |
 | Capturas del CRM de Runamatic con los estados por sector | Definir la secuencia de estados de cada sector | Pendiente (actualización §6) |
 
 **Expectativa a cuidar**: Ezequiel les dijo que "en lo posible el lunes" (23/11, inicio de la E1) vayan viendo algo. Con la regla "prometer de más en tiempo y entregar antes" (actualización §4), lo que se muestre ese día tiene que estar acotado, por ejemplo la app con la marca y el tablero vacío, y depende de tener el acceso a Hostinger y el logo antes.
