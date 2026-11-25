@@ -91,6 +91,16 @@ describe("flujos fijos del bot (D-060)", () => {
     expect(fixedFlow("tenes el archivo del pedido 99?", { ...ctx, jobs })).toMatch(/^No encuentro un pedido con el número 99 a tu nombre/);
   });
 
+  it("D-099: un pedido listo dice en qué sucursal se retira: la que eligió el cliente o, si no eligió, la del servicio", () => {
+    const base = { description: "remeras", quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), status: "Terminado, listo para retirar" };
+    const dtf = fixedFlow("ya está para retirar?", { ...ctx, jobs: [{ ...base, label: "VV-000564", sector: "DTF Textil", pickupBranch: "san-juan" }] });
+    expect(dtf).toContain("está listo para retirar en Sucursal Centro, San Juan 714");
+    const eligioChile = fixedFlow("ya está para retirar?", { ...ctx, jobs: [{ ...base, label: "VV-000565", sector: "DTF Textil", pickupBranch: "chile" }] });
+    expect(eligioChile).toContain("Planta Av. Chile, Av. Chile 1822");
+    const sinElegir = fixedFlow("ya está para retirar?", { ...ctx, jobs: [{ ...base, label: "VV-000566", sector: "Gran Formato" }] });
+    expect(sinElegir).toContain("Planta Av. Chile");
+  });
+
   it("D-060: lo demás lo responde la IA", () => {
     expect(fixedFlow("¿qué diferencia hay entre DTF y sublimación?", ctx)).toBeNull();
   });

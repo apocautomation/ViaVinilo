@@ -1,5 +1,5 @@
 import { help } from "@viavinilo/contracts";
-import { boardFor, jobLine, jobNumberIn, serviceFor, type ExtraBoard } from "./flows";
+import { boardFor, jobLine, jobNumberIn, pickupOf, serviceFor, type ExtraBoard } from "./flows";
 import type { BotJob } from "./prompt";
 
 /**
@@ -89,6 +89,8 @@ export function buildToolKit(c: ToolContext): ToolKit {
     problema_del_archivo: j.fileIssue ?? undefined,
     control_del_archivo: j.fileCheck === "ok" ? "dio bien" : j.fileCheck === "review" ? "lo revisa el equipo" : undefined,
     precio: j.quotedAmount ?? undefined,
+    // D-099: dónde lo retira (la que eligió el cliente o la del servicio).
+    retira_en: `${pickupOf(j).name}, ${pickupOf(j).address}`,
     sena: j.depositRequired ? (j.depositPaid ? "pagada" : `pendiente${j.depositAmount ? ` (${j.depositAmount})` : ""}`) : undefined,
     // La frase ya armada con los datos: la IA la puede usar tal cual o decirla con sus palabras.
     resumen: jobLine(j),

@@ -41,7 +41,7 @@ export async function decideAnswer(input: {
 }): Promise<BotAnswer & { source: "handoff" | "flow" | "ai"; tools?: string[] }> {
   const fixed = fixedHandoff(input.text);
   if (fixed) return { reply: handoffReply(input.now), handoff: true, reason: fixed, source: "handoff" };
-  const flow = fixedFlow(input.text, {
+  const fixedReply = fixedFlow(input.text, {
     firstName: input.firstName,
     alreadyTalking: input.alreadyTalking,
     noticesOn: input.noticesOn,
@@ -49,6 +49,9 @@ export async function decideAnswer(input: {
     boards: input.boards,
     now: input.now,
   });
+  // D-099: si el cliente arrancó con "hola" y es el primer mensaje, la respuesta armada también saluda.
+  const greets = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis)\b/i.test(input.text) && !input.alreadyTalking;
+  const flow = fixedReply && greets && !/^¡Hola/.test(fixedReply) ? `¡Hola${input.firstName ? ` ${input.firstName}` : ""}! ${fixedReply}` : fixedReply;
   const kit = buildToolKit({ jobs: input.jobs, boards: input.boards, noticesOn: input.noticesOn, now: input.now });
   let answer: BotAnswer;
   try {
@@ -189,6 +192,7 @@ export async function processBotReplies(
               .slice(0, 260) || null
           : null,
       fileCheck: j.status === "RECEIVED" ? ((j.fileCheck as { verdict?: BotJob["fileCheck"] } | null)?.verdict ?? null) : null,
+      pickupBranch: j.pickupBranch,
     }));
     const system = buildAgentPrompt({
       customerName: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.businessName || "Cliente",

@@ -144,7 +144,7 @@ describe("bot del chat de la app (D-056)", () => {
     // El saludo lo escribe la IA.
     expect(replies[0]).toBe("¡Hola Ana! Sí, ya está, pasá cuando quieras.");
     // Sobre el pedido no miró los pedidos: no se le cree y va el estado real.
-    expect(replies[1]).toMatch(/VV-\d+ \(DTF, Remeras logo\): Terminado, listo para retirar/);
+    expect(replies[1]).toMatch(/VV-\d+ \(DTF, Remeras logo\): está listo para retirar en Sucursal Centro/);
   });
 
   it("D-097: si la IA consulta los pedidos, su respuesta se usa tal cual; si usa derivar_a_asesor, deriva", async () => {
@@ -172,7 +172,7 @@ describe("bot del chat de la app (D-056)", () => {
     await customerWrites("¿ya está listo mi pedido?", new Date(t0));
     expect(await processBotReplies(prisma, broken)).toMatchObject({ answered: 1, failed: 0 });
     const last = await prisma.message.findFirstOrThrow({ where: { fromBot: true }, orderBy: { createdAt: "desc" } });
-    expect(last.body).toMatch(/Terminado, listo para retirar/);
+    expect(last.body).toMatch(/está listo para retirar en/);
   });
 
   it("D-061: después de un /reset el bot no recuerda nada anterior y vuelve a saludar", async () => {
@@ -376,5 +376,14 @@ describe("ajustes de la IA con herramientas (D-098)", () => {
     expect(h.results[0]).toContain("miércoles");
     expect(h.results[0]).toContain("ahora está abierta, hoy cierra a las 19:30");
     expect(h.results[0]).toContain("ahora está abierta, hoy cierra a las 17:00");
+  });
+
+  it("D-099: si el cliente saluda y pregunta, la respuesta armada también saluda; ver_mis_pedidos dice dónde se retira", async () => {
+    const jobs = [{ label: "VV-000564", sector: "DTF Textil", status: "Terminado, listo para retirar", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), pickupBranch: "san-juan" }];
+    const { llm, results } = fakeLlm({ reply: "Sí, ya está.", tools: [["ver_mis_pedidos", {}]] });
+    await decideAnswer({ ...base, alreadyTalking: false, jobs, text: "Hola que tal mi pedido ya esta para retirar", llm });
+    expect(results[0]).toContain('"retira_en":"Sucursal Centro, San Juan 714, Salta"');
+    const sinMirar = await decideAnswer({ ...base, alreadyTalking: false, jobs, text: "Hola que tal mi pedido ya esta para retirar", llm: fakeLlm({ reply: "Sí." }).llm });
+    expect(sinMirar.reply).toMatch(/^¡Hola Ana! Tu pedido: VV-000564 \(DTF Textil\): está listo para retirar en Sucursal Centro/);
   });
 });
