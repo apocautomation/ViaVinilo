@@ -76,6 +76,16 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 
 const isCentro = (id: string) => id === "dtf-textil" || id === "dtf-uv";
 
+/**
+ * Regla de seña de un servicio (D-104). Antes se buscaba por la primera palabra: "DTF UV" encontraba
+ * "DTF Textil" (10 m en vez de 3 m). "Sublimación y Calandra" vale para los dos; "Calandra (telas)" también.
+ */
+export function depositRuleFor(serviceName: string): string | null {
+  const name = serviceName.toLowerCase();
+  const hit = help.DEPOSITS.find((d) => d.service.toLowerCase().split(" y ").some((part) => name === part || name.startsWith(`${part} `)));
+  return hit?.rule ?? null;
+}
+
 export function buildToolKit(c: ToolContext): ToolKit {
   const kit: ToolKit = { definitions: TOOL_DEFINITIONS, used: [], handoff: null, run: () => "" };
   const active = c.jobs.filter((j) => j.status !== "Entregado" && j.status !== "Cancelado");
@@ -87,7 +97,7 @@ export function buildToolKit(c: ToolContext): ToolKit {
     archivos: j.files === undefined ? "sin dato" : j.files.length ? j.files : "ninguno",
     link_sin_bajar: j.hasLinks && j.files !== undefined && j.files.length === 0 ? true : undefined,
     problema_del_archivo: j.fileIssue ?? undefined,
-    control_del_archivo: j.fileCheck === "ok" ? "dio bien" : j.fileCheck === "review" ? "lo revisa el equipo" : undefined,
+    control_del_archivo: j.fileCheck === "ok" ? "dio bien" : j.fileCheck === "review" ? "lo revisa el equipo: todavía no se sabe si está bien" : undefined,
     precio: j.quotedAmount ?? undefined,
     // D-099: dónde lo retira. D-101: solo si está listo; si no, la IA decía "listo para retirar" de un pedido impreso.
     listo_para_retirar: j.status === "Terminado, listo para retirar",
@@ -138,9 +148,9 @@ export function buildToolKit(c: ToolContext): ToolKit {
           requisitos: s.requirements,
           importante: s.warnings ?? [],
           casilla: s.email,
-          como_mandarlo: "Con el clip 📎 del chat (elige el servicio, escribe medidas y cantidad) o por mail a la casilla con nombre, medidas, cantidad y sucursal.",
+          como_mandarlo: "Con el clip 📎 del chat (elegí el servicio, escribí medidas y cantidad) o por mail a la casilla con nombre, medidas, cantidad y sucursal.",
           se_retira_en: `${branch.name}, ${branch.address}`,
-          sena: help.DEPOSITS.find((d) => d.service.toLowerCase().includes(s.name.toLowerCase().split(" ")[0]!))?.rule ?? null,
+          sena: depositRuleFor(s.name) ?? "No figura en las reglas de seña: no digas que lleva ni que no lleva.",
         });
       }
       case "sucursales_y_horarios": {
