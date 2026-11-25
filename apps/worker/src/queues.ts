@@ -20,6 +20,8 @@ export const QUEUES = {
   push: "app-push",
   /** Descarga de archivos mandados por link de Drive u OneDrive (D-072). */
   links: "link-downloads",
+  /** Arranque del sistema: archiva lo anterior a la fecha de arranque, una sola vez (D-115). */
+  goLive: "go-live",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

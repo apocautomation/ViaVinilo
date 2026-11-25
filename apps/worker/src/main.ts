@@ -11,6 +11,7 @@ import { createSmtpNotifier } from "./mail/invite";
 import { processLinkDownloads } from "./links/process";
 import { processNotices } from "./notices";
 import { processPush, webPushSender } from "./push";
+import { archiveBeforeGoLive } from "./go-live";
 import { purgeOldFiles } from "./retention";
 import { hostingerSender, sendOutbox, smtpSender, type MailSender } from "./mail/outbox";
 import { pollAllMailboxes } from "./mail/poll";
@@ -132,6 +133,19 @@ async function main() {
   );
   retentionWorker.on("failed", (_job, err) => console.error("[retención] falló", err.message));
   await retentionQueue.upsertJobScheduler("file-retention", { pattern: "30 3 * * *", tz: "America/Argentina/Salta" }, { name: "purge" });
+
+  // Arranque (D-115): cada 5 minutos mira si llegó la fecha de arranque; archiva una sola vez.
+  const goLiveQueue = new Queue(QUEUES.goLive, { connection });
+  const goLiveWorker = new Worker(
+    QUEUES.goLive,
+    async () => {
+      const r = await archiveBeforeGoLive(prisma);
+      if (r) console.log(`[arranque] ${r.archived} pedidos anteriores al arranque quedaron archivados`);
+    },
+    { connection, concurrency: 1 },
+  );
+  goLiveWorker.on("failed", (_job, err) => console.error("[arranque] falló", err.message));
+  await goLiveQueue.upsertJobScheduler("go-live", { every: 5 * 60_000 }, { name: "go-live" });
 
   // Control automático del archivo (D-065): cada 20 s revisa los pedidos nuevos en "Archivo recibido".
   const fileCheckQueue = new Queue(QUEUES.fileCheck, { connection });

@@ -1602,6 +1602,13 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Invitación por mail**: hasta ahora, crear un usuario pedía escribirle la contraseña. Ahora lo recomendado es crearlo **sin contraseña**: el sistema le manda un mail (desde la casilla de avisos) con un link para que la cree la persona. Nadie más la sabe, ni el dueño ni quien desarrolla. El link vale 72 horas y sirve una vez; "Reenviar invitación" manda otro y anula el anterior (también sirve si alguien se olvida la contraseña). Se sigue pudiendo poner la contraseña a mano. En la lista de usuarios se ve quién todavía no creó la suya.
 - **Por qué**: así el equipo arranca con sus propias claves y queda registrado quién hace cada cosa; y los vendedores trabajan con el precio de cada pedido sin ver la facturación del negocio.
 - **Impacto**: migración `20261125100000_user_activation`. Variable nueva `ERP_PUBLIC_URL` (por defecto `https://erp.viavinilo.tech` en producción).
+### D-115 · 25/11/2026 · Ezequiel · arranque el viernes 27/11 con el tablero limpio
+- **Definición**: "Fecha de corte el viernes, lo empiezan a usar". Los usuarios del equipo los gestionan ellos desde Configuración (D-114).
+- **Qué**: a las 00:00 del viernes 27/11 (hora de Salta) el sistema archiva solo, una vez, los pedidos que entraron antes: unos 900, casi todos en "Archivo recibido", que se trabajaron por mail. Dejan de verse en los tableros, la app de clientes, el bot y los números de Inicio y del panel de tiempos, pero quedan en la base con su historial y un registro de auditoría cada uno (`archive_before_go_live`), así que se pueden volver a mostrar. No se le avisa nada a ningún cliente. El pedido de prueba VV-000564 no se toca.
+- **Cómo**: tarea del worker cada 5 minutos que lee el ajuste `goLive` (`{ "at": "2026-11-27T03:00:00.000Z", "keep": [564] }`); al terminar anota cuándo y cuántos archivó. Desde el viernes, lo que entra por mail es lo que se trabaja en el sistema.
+- **Para deshacer** (si hiciera falta): volver a poner `deletedAt` en null a los pedidos con ese registro en la auditoría.
+- **Ojo**: lo que entre el jueves a la noche también queda archivado (se trabaja por mail como hasta ahora). Para que alguien pueda crear usuarios hace falta que el cliente tenga al menos un usuario Dueño: hoy el único es Ezequiel.
+- **Impacto**: sin migración (el ajuste se carga en producción). Cola nueva del worker `go-live`.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
