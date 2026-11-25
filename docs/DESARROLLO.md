@@ -1472,6 +1472,21 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Arreglo**: los pedidos de ejemplo se arman completando solo lo que falta y pasando todo lo demás tal cual, así un dato nuevo del bot llega a la prueba sin tocarla. También acepta `alreadyTalking` y `noticesOn` por caso, y fechas como texto.
 - **Impacto**: solo la herramienta de prueba (`apps/worker/src/bot-dry-run.ts` y `bot/dry-run-jobs.ts`). No cambia cómo responde el bot.
 
+### D-097 · 24/11/2026 · Ezequiel · el bot pasa a ser una IA con herramientas, como el agente de Trip
+- **Pedido de Ezequiel**: "¿pero cómo sin pasar por la IA? ¿No estás corriendo una IA local, como en Trip?". Elige el esquema de Trip.
+- **Antes (D-060 a D-096)**: la IA local (`qwen2.5:3b`) solo contestaba lo que no cubrían las respuestas armadas por código (saludos, estado del pedido, archivos, horarios, pagos). Se hizo así porque el modelo chico inventaba.
+- **Ahora, como Trip**:
+  - La IA local responde todos los mensajes y **pide los datos con herramientas**: `ver_mis_pedidos` (estado, archivos, problema del archivo, precio y seña; por número si el cliente lo nombra), `info_servicio` (formato, requisitos, casilla, sucursal y seña de un servicio), `sucursales_y_horarios`, `datos_de_pago`, `preguntas_frecuentes` y `derivar_a_asesor`. Los datos salen del sistema y de la Ayuda, no del modelo.
+  - El prompt quedó corto: las reglas y quién es el cliente. Lo demás lo pide con las herramientas.
+  - **Modelo**: `qwen3:8b` (el mismo de Trip) por la API nativa de Ollama, con contexto de 8.192 tokens y hasta 4 rondas de herramientas por respuesta.
+- **Qué se mantiene**:
+  - La derivación fija a un asesor (precios sin cotizar, cancelar, reclamos, comprobantes, pedir una persona): no pasa por la IA.
+  - Los controles sobre lo que escribe: de "vos", casillas bien escritas, sin promesas de aviso si están apagados, y no repetir la misma respuesta.
+  - **Respaldo con los datos reales**: si la IA falla o tarda, o contesta sobre un pedido o un archivo **sin haber consultado `ver_mis_pedidos`**, va la respuesta armada por código (los flujos de D-060 a D-094). Así no se repite el "apenas llegue tu archivo lo veo" de la captura del 24/11.
+- **Sin OpenAI de respaldo**: Trip lo tiene; acá Ezequiel pidió antes que el bot corra solo en local (D-057). El código lo soporta si se carga `OPENAI_API_KEY` sin `BOT_API_URL`.
+- **Velocidad**: el servidor tiene 4 núcleos sin placa de video. Hay que medir `qwen3:8b` con `bot-dry-run` antes de prender el bot en más chats; con el 3B cada respuesta de la IA tardaba entre 6 y 10 segundos.
+- **Impacto**: sin migración. `BOT_MODEL` por defecto pasa a `qwen3:8b` (compose, `.env.example` y código); hay que bajar el modelo en el servidor (`ollama pull qwen3:8b`, unos 5 GB).
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

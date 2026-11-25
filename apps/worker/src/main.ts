@@ -2,8 +2,9 @@ import { PrismaClient } from "@prisma/client";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { loadConfig } from "./config";
-import { openAiLlm } from "./bot/llm";
-import { buildSystemPrompt } from "./bot/prompt";
+import { makeLlm } from "./bot/llm";
+import { buildAgentPrompt } from "./bot/prompt";
+import { buildToolKit } from "./bot/tools";
 import { processBotReplies } from "./bot/reply";
 import { processFileChecks } from "./file-check";
 import { createSmtpNotifier } from "./mail/invite";
@@ -79,7 +80,7 @@ async function main() {
   // Bot de la app (D-056): mira cada 5 s si hay mensajes que esperan respuesta. Arranca apagado:
   // solo responde si está prendido en el ERP (general y en el chat) y hay clave de IA.
   const botQueue = new Queue(QUEUES.bot, { connection });
-  const llm = config.bot ? openAiLlm(config.bot) : null;
+  const llm = config.bot ? makeLlm(config.bot) : null;
   const botWorker = new Worker(
     QUEUES.bot,
     async () => {
@@ -96,9 +97,9 @@ async function main() {
     await botQueue.upsertJobScheduler("bot-replies", { every: 5_000 }, { name: "reply" });
     console.log(`[worker] bot: listo con ${config.bot!.model} en ${new URL(config.bot!.baseUrl).host} (responde solo en los chats donde esté prendido)`);
     // D-057: precarga el modelo local con la parte fija del prompt, así el primer cliente no espera ~30 s.
-    const warm = buildSystemPrompt({ customerName: "Cliente", customerNumber: 0, pendingSignup: false, jobs: [], now: new Date() });
+    const warm = buildAgentPrompt({ customerName: "Cliente", customerNumber: 0, pendingSignup: false, jobs: [], now: new Date() });
     const t0 = Date.now();
-    llm([{ role: "system", content: warm }, { role: "user", content: "hola" }])
+    llm([{ role: "system", content: warm }, { role: "user", content: "hola" }], buildToolKit({ jobs: [], noticesOn: false }))
       .then(() => console.log(`[bot] modelo listo en ${Math.round((Date.now() - t0) / 1000)} s`))
       .catch((err: unknown) => console.error("[bot] no se pudo precargar el modelo:", err instanceof Error ? err.message : err));
   } else {

@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { openAiLlm, parseAnswer, type ChatTurn, type Llm } from "../src/bot/llm";
+import { ollamaLlm, openAiLlm, parseAnswer, type ChatTurn, type Llm } from "../src/bot/llm";
+import type { ToolKit } from "../src/bot/tools";
 import { decideAnswer, processBotReplies } from "../src/bot/reply";
 import { startTestDb } from "./test-db";
 
@@ -43,13 +44,22 @@ const botOn = () => prisma.conversation.update({ where: { id: conversationId }, 
 const customerWrites = (body: string, at = new Date()) =>
   prisma.message.create({ data: { conversationId, direction: "IN", channel: "APP", body, botStatus: "PENDING", createdAt: at } });
 
-function fakeLlm(answer: { reply: string; handoff?: boolean; reason?: string }) {
+/**
+ * IA de mentira. Con `tools`, antes de contestar usa esas herramientas como lo haría el modelo (D-097),
+ * y guarda lo que le devolvieron.
+ */
+function fakeLlm(answer: { reply: string; handoff?: boolean; reason?: string; tools?: [string, Record<string, unknown>][] }) {
   const calls: ChatTurn[][] = [];
-  const llm: Llm = async (turns) => {
+  const kits: ToolKit[] = [];
+  const results: string[] = [];
+  const llm: Llm = async (turns, kit) => {
     calls.push(turns);
+    if (kit) kits.push(kit);
+    for (const [name, args] of answer.tools ?? []) results.push(kit!.run(name, args));
+    if (kit?.handoff) return { reply: answer.reply, handoff: true, reason: kit.handoff.reason };
     return { reply: answer.reply, handoff: answer.handoff ?? false, reason: answer.reason ?? null };
   };
-  return { llm, calls };
+  return { llm, calls, kits, results };
 }
 
 describe("bot del chat de la app (D-056)", () => {
@@ -78,14 +88,16 @@ describe("bot del chat de la app (D-056)", () => {
   it("D-056: prendido responde en el chat con los pedidos reales del cliente y una sola vez", async () => {
     await botOn();
     const msg = await customerWrites("¿Qué diferencia hay entre DTF y sublimación?");
-    const { llm, calls } = fakeLlm({ reply: "Sí, tu pedido de DTF está listo para retirar." });
+    const { llm, calls, kits, results } = fakeLlm({ reply: "Sí, tu pedido de DTF está listo para retirar.", tools: [["ver_mis_pedidos", {}]] });
     expect((await processBotReplies(prisma, llm)).answered).toBe(1);
     expect((await processBotReplies(prisma, llm)).answered).toBe(0);
 
+    // D-097: el prompt es corto y los pedidos reales los pide con una herramienta.
     const system = calls[0]![0]!.content;
     expect(system).toContain("Ana Gómez");
-    expect(system).toMatch(/VV-\d+ · DTF · estado: Terminado, listo para retirar/);
-    expect(system).toContain("dtf@viavinilo.com");
+    expect(system).toContain("ver_mis_pedidos");
+    expect(kits[0]!.definitions.map((d) => d.name)).toEqual(["ver_mis_pedidos", "info_servicio", "sucursales_y_horarios", "datos_de_pago", "preguntas_frecuentes", "derivar_a_asesor"]);
+    expect(results[0]).toMatch(/"estado":"Terminado, listo para retirar"/);
     expect(calls[0]!.at(-1)).toEqual({ role: "user", content: "¿Qué diferencia hay entre DTF y sublimación?" });
 
     const reply = await prisma.message.findFirstOrThrow({ where: { fromBot: true } });
@@ -113,24 +125,54 @@ describe("bot del chat de la app (D-056)", () => {
     await customerWrites("¿qué diferencia hay entre DTF y sublimación?", new Date(t - 1000));
     const { llm, calls } = fakeLlm({ reply: "¿Tienes el archivo? Envíalo a látex@viavinilo.com" });
     await processBotReplies(prisma, llm);
-    expect(calls[0]![0]!.content).toContain("NO saludes de nuevo");
-    expect(calls[0]![0]!.content).toContain("Repetí las medidas EXACTAMENTE");
+    expect(calls[0]![0]!.content).toContain("no saludes de nuevo");
+    expect(calls[0]![0]!.content).toContain("Repetí las medidas exactamente");
     const reply = await prisma.message.findFirstOrThrow({ where: { fromBot: true, body: { not: "¡Hola Ana!" } } });
     expect(reply.body).toBe("¿Tenés el archivo? Mandalo a latex@viavinilo.com");
   });
 
-  it("D-060: saludo, trabajo nuevo y '¿está listo?' van por flujos fijos, sin IA", async () => {
+  it("D-097: la IA responde todo; si contesta sobre un pedido sin haberlo consultado, va la respuesta armada con los datos", async () => {
     await botOn();
-    const { llm, calls } = fakeLlm({ reply: "no debería usarse" });
-    for (const text of ["hola", "te paso imprimir dos lonas front 5.10 × 1.10 solvente", "¿ya está listo mi pedido?"]) {
-      await customerWrites(text);
-      await processBotReplies(prisma, llm);
-    }
-    expect(calls).toHaveLength(0);
+    const { llm, calls } = fakeLlm({ reply: "¡Hola Ana! Sí, ya está, pasá cuando quieras." });
+    const t0 = Date.now();
+    await customerWrites("hola", new Date(t0));
+    await processBotReplies(prisma, llm);
+    await customerWrites("¿ya está listo mi pedido?", new Date(t0 + 1000));
+    await processBotReplies(prisma, llm);
+    expect(calls).toHaveLength(2);
     const replies = (await prisma.message.findMany({ where: { fromBot: true }, orderBy: { createdAt: "asc" } })).map((m) => m.body);
-    expect(replies[0]).toBe("¡Hola Ana! Soy el asistente de Via Vinilo. ¿En qué te ayudo?");
-    expect(replies[1]).toContain("granformato@viavinilo.com");
-    expect(replies[2]).toMatch(/VV-\d+ \(DTF, Remeras logo\): Terminado, listo para retirar/);
+    // El saludo lo escribe la IA.
+    expect(replies[0]).toBe("¡Hola Ana! Sí, ya está, pasá cuando quieras.");
+    // Sobre el pedido no miró los pedidos: no se le cree y va el estado real.
+    expect(replies[1]).toMatch(/VV-\d+ \(DTF, Remeras logo\): Terminado, listo para retirar/);
+  });
+
+  it("D-097: si la IA consulta los pedidos, su respuesta se usa tal cual; si usa derivar_a_asesor, deriva", async () => {
+    await botOn();
+    const t0 = Date.now();
+    const conPedidos = fakeLlm({ reply: "Tu pedido de remeras ya está listo, podés pasar a buscarlo.", tools: [["ver_mis_pedidos", {}]] });
+    await customerWrites("¿ya está listo mi pedido?", new Date(t0));
+    expect(await processBotReplies(prisma, conPedidos.llm)).toMatchObject({ answered: 1 });
+    const last = await prisma.message.findFirstOrThrow({ where: { fromBot: true }, orderBy: { createdAt: "desc" } });
+    expect(last.body).toBe("Tu pedido de remeras ya está listo, podés pasar a buscarlo.");
+
+    const deriva = fakeLlm({ reply: "Te paso con un asesor del equipo.", tools: [["derivar_a_asesor", { motivo: "Quiere que le guarden el pedido una semana" }]] });
+    await customerWrites("¿me lo pueden guardar una semana más?", new Date(t0 + 1000));
+    expect(await processBotReplies(prisma, deriva.llm)).toMatchObject({ handoffs: 1 });
+    const conv = await prisma.conversation.findUniqueOrThrow({ where: { id: conversationId } });
+    expect(conv).toMatchObject({ needsHuman: true, botEnabled: false, needsHumanReason: "Quiere que le guarden el pedido una semana" });
+  });
+
+  it("D-097: si la IA falla, contesta la respuesta armada si la hay; si no, queda para el equipo", async () => {
+    await botOn();
+    const broken: Llm = async () => {
+      throw new Error("Ollama no responde");
+    };
+    const t0 = Date.now();
+    await customerWrites("¿ya está listo mi pedido?", new Date(t0));
+    expect(await processBotReplies(prisma, broken)).toMatchObject({ answered: 1, failed: 0 });
+    const last = await prisma.message.findFirstOrThrow({ where: { fromBot: true }, orderBy: { createdAt: "desc" } });
+    expect(last.body).toMatch(/Terminado, listo para retirar/);
   });
 
   it("D-061: después de un /reset el bot no recuerda nada anterior y vuelve a saludar", async () => {
@@ -145,7 +187,7 @@ describe("bot del chat de la app (D-056)", () => {
     const turns = calls[0]!;
     expect(turns.map((x) => x.content)).not.toContain("algo viejo");
     expect(turns.map((x) => x.content)).not.toContain("respuesta vieja");
-    expect(turns[0]!.content).toContain("Es el primer mensaje: saludá una sola vez");
+    expect(turns[0]!.content).toContain("Es el primer mensaje: saludá una vez");
   });
 
   it("D-057: cancelar, reclamos, precios, comprobantes o pedir una persona van a un asesor sin pasar por la IA", async () => {
@@ -223,7 +265,7 @@ describe("cliente de IA (D-056)", () => {
 });
 
 describe("el bot informa el estado real del archivo (D-092)", () => {
-  it("D-092: de punta a punta: con un pedido en 'Archivo con error', '¿tenés mi archivo?' y '¿está correcto?' explican el problema sin llamar a la IA", async () => {
+  it("D-092 y D-097: con un pedido en 'Archivo con error', '¿tenés mi archivo?' y '¿está correcto?' explican el problema aunque la IA invente", async () => {
     const reason = await prisma.fileErrorReason.create({ data: { code: "LOW_RESOLUTION", label: "Resolución baja" } });
     const job = await prisma.jobOrder.create({
       data: {
@@ -250,7 +292,8 @@ describe("el bot informa el estado real del archivo (D-092)", () => {
       expect(r.body).toContain("Mandalo corregido con el clip");
       expect(r.body).not.toMatch(/apenas llegue/i);
     }
-    expect(calls).toHaveLength(0);
+    // La IA respondió sin mirar los pedidos: se descartó su respuesta inventada.
+    expect(calls).toHaveLength(2);
     await prisma.jobEvent.deleteMany({ where: { jobId: job.id } });
     await prisma.jobOrder.delete({ where: { id: job.id } });
   });
@@ -267,5 +310,38 @@ describe("el bot informa el estado real del archivo (D-092)", () => {
     expect(conv).toMatchObject({ needsHuman: true, botEnabled: false, needsHumanReason: "El bot iba a repetir la misma respuesta" });
     const last = await prisma.message.findFirstOrThrow({ where: { conversationId, fromBot: true }, orderBy: { createdAt: "desc" } });
     expect(last.body).toMatch(/Te paso con un asesor/);
+  });
+});
+
+describe("IA local con herramientas (D-097)", () => {
+  it("D-097: con Ollama usa la API nativa, con herramientas y contexto de 8.192 tokens; le pasa el resultado y contesta", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const replies = [
+      { message: { content: "", tool_calls: [{ function: { name: "ver_mis_pedidos", arguments: { numero: 7 } } }] } },
+      { message: { content: "<think>miro</think>Tu pedido VV-000007 está listo." } },
+    ];
+    const fetchImpl = (async (url: string, init: { body: string }) => {
+      expect(url).toBe("http://ollama:11434/api/chat");
+      bodies.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(JSON.stringify(replies[bodies.length - 1]), { status: 200 });
+    }) as unknown as typeof fetch;
+    const llm = ollamaLlm({ baseUrl: "http://ollama:11434/v1", apiKey: "ollama", model: "qwen3:8b" }, fetchImpl);
+    const used: string[] = [];
+    const kit: ToolKit = {
+      definitions: [{ name: "ver_mis_pedidos", description: "x", parameters: { type: "object", properties: {} } }],
+      used,
+      handoff: null,
+      run: (name, args) => {
+        used.push(name);
+        return JSON.stringify({ visto: args });
+      },
+    };
+    const a = await llm([{ role: "system", content: "s" }, { role: "user", content: "¿está el 7?" }], kit);
+    expect(a).toEqual({ reply: "Tu pedido VV-000007 está listo.", handoff: false, reason: null });
+    expect(used).toEqual(["ver_mis_pedidos"]);
+    expect(bodies[0]).toMatchObject({ model: "qwen3:8b", think: false, options: { num_ctx: 8192 } });
+    expect((bodies[0]!.tools as unknown[]).length).toBe(1);
+    const second = bodies[1]!.messages as { role: string; content: string }[];
+    expect(second.at(-1)).toMatchObject({ role: "tool", content: '{"visto":{"numero":7}}' });
   });
 });

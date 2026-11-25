@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { openAiLlm } from "./bot/llm";
+import { makeLlm } from "./bot/llm";
 import { dryRunJobs, type DryRunJob } from "./bot/dry-run-jobs";
-import { buildSystemPrompt } from "./bot/prompt";
+import { buildAgentPrompt } from "./bot/prompt";
 import { decideAnswer } from "./bot/reply";
 import { botConfig } from "./config";
 
@@ -21,7 +21,8 @@ async function main() {
   if (!file) throw new Error("Falta el archivo con los mensajes");
   const config = botConfig(process.env);
   if (!config) throw new Error("No hay IA configurada (BOT_API_URL u OPENAI_API_KEY)");
-  const llm = openAiLlm(config);
+  const llm = makeLlm(config);
+  console.log(`Modelo: ${config.model}`);
   const cases = JSON.parse(readFileSync(file, "utf8")) as {
     text: string;
     firstName?: string;
@@ -35,7 +36,7 @@ async function main() {
     const jobs = dryRunJobs(c.jobs, now);
     const alreadyTalking = c.alreadyTalking ?? false;
     const noticesOn = c.noticesOn ?? false;
-    const system = buildSystemPrompt({ customerName: firstName ?? "Cliente", customerNumber: 0, pendingSignup: false, jobs, now, alreadyTalking, noticesOn });
+    const system = buildAgentPrompt({ customerName: firstName ?? "Cliente", customerNumber: 0, pendingSignup: false, jobs, now, alreadyTalking, noticesOn });
     const t0 = Date.now();
     const a = await decideAnswer({
       text: c.text,
@@ -52,7 +53,8 @@ async function main() {
     });
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
     console.log(`\n#${i + 1} CLIENTE: ${c.text.replace(/\s+/g, " ").slice(0, 300)}`);
-    console.log(`   BOT [${a.source}${a.handoff ? `, deriva: ${a.reason}` : ""}, ${secs} s]: ${a.reply}`);
+    const tools = a.tools?.length ? `, herramientas: ${a.tools.join(" + ")}` : "";
+    console.log(`   BOT [${a.source}${tools}${a.handoff ? `, deriva: ${a.reason}` : ""}, ${secs} s]: ${a.reply}`);
   }
 }
 

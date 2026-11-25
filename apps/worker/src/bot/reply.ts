@@ -1,9 +1,10 @@
 import type { PrismaClient } from "@prisma/client";
 import { formatJobNumber, JOB_STATUS_LABELS, SECTOR_CODES } from "@viavinilo/contracts";
-import { ASK_MATERIAL, boardFor, fixedFlow, serviceFor, type ExtraBoard } from "./flows";
+import { ASK_MATERIAL, asksAboutOrders, boardFor, fixedFlow, serviceFor, type ExtraBoard } from "./flows";
 import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
-import { buildSystemPrompt, type BotJob } from "./prompt";
+import { buildAgentPrompt, type BotJob } from "./prompt";
+import { buildToolKit } from "./tools";
 import { dropNoticePromises, dropSentencesWith, fixMailboxes } from "./guard";
 import { toVoseo } from "./voseo";
 
@@ -19,11 +20,13 @@ const PREVIEW_CHARS = 140;
 const preview = (t: string) => t.replace(/\s+/g, " ").trim().slice(0, PREVIEW_CHARS);
 
 /**
- * Cómo decide el bot la respuesta a un mensaje (D-060, D-061). La usan el worker y la prueba de
+ * Cómo decide el bot la respuesta a un mensaje (D-060, D-061, D-097). La usan el worker y la prueba de
  * punta a punta (bot-dry-run), para que lo probado sea exactamente lo que corre.
  * 1. Derivación fija a un asesor (cancelar, reclamos, precios, comprobantes, pedir una persona).
- * 2. Flujos fijos (saludo, trabajo nuevo, "¿está listo?", formatos, sucursales, tiempos).
- * 3. La IA, con controles sobre lo que escribe (vos, casillas, promesas de aviso).
+ * 2. La IA local responde y pide los datos con herramientas (pedidos, servicios, sucursales, pagos),
+ *    como el agente de Trip. Controles sobre lo que escribe: vos, casillas, promesas de aviso, repetir.
+ * 3. Respaldo fijo: si la IA falla, o contesta sobre un pedido o un archivo sin haberlo consultado,
+ *    va la respuesta armada con los datos del sistema (los flujos fijos de D-060).
  */
 export async function decideAnswer(input: {
   text: string;
@@ -35,7 +38,7 @@ export async function decideAnswer(input: {
   turns: ChatTurn[];
   llm: Llm;
   now: Date;
-}): Promise<BotAnswer & { source: "handoff" | "flow" | "ai" }> {
+}): Promise<BotAnswer & { source: "handoff" | "flow" | "ai"; tools?: string[] }> {
   const fixed = fixedHandoff(input.text);
   if (fixed) return { reply: handoffReply(input.now), handoff: true, reason: fixed, source: "handoff" };
   const flow = fixedFlow(input.text, {
@@ -46,8 +49,19 @@ export async function decideAnswer(input: {
     boards: input.boards,
     now: input.now,
   });
-  if (flow) return { reply: flow, handoff: false, reason: null, source: "flow" };
-  const answer = await input.llm(input.turns);
+  const kit = buildToolKit({ jobs: input.jobs, boards: input.boards, noticesOn: input.noticesOn });
+  let answer: BotAnswer;
+  try {
+    answer = await input.llm(input.turns, kit);
+  } catch (err) {
+    // D-097: sin IA (caída, lenta o sin terminar), contesta lo fijo si hay; si no, queda para el equipo.
+    if (flow) return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
+    throw err;
+  }
+  // D-097: sobre un pedido o un archivo la IA tiene que haber mirado los pedidos. Si no, no se le cree.
+  if (!answer.handoff && asksAboutOrders(input.text) && !kit.used.includes("ver_mis_pedidos") && flow) {
+    return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
+  }
   let reply = fixMailboxes(toVoseo(answer.reply));
   // D-092: si la IA va a repetir lo mismo que ya dijo, no está entendiendo: lo ve un asesor.
   const same = (t: string) => t.toLowerCase().replace(/[^\p{L}\d]+/gu, " ").trim();
@@ -57,11 +71,11 @@ export async function decideAnswer(input: {
   }
   if (!input.noticesOn) reply = dropNoticePromises(reply);
   // D-061: si el cliente no dijo el material, la IA no elige casilla (tendía a mandar todo a dtf@).
-  if (/@viavinilo\.com/i.test(reply) && !serviceFor(input.text) && !boardFor(input.text, input.boards)) {
+  if (/@viavinilo\.com/i.test(reply) && !kit.used.includes("info_servicio") && !serviceFor(input.text) && !boardFor(input.text, input.boards)) {
     reply = dropSentencesWith(reply, /@viavinilo\.com/i);
     if (!reply) return { reply: ASK_MATERIAL, handoff: false, reason: null, source: "flow" };
   }
-  return { ...answer, reply, source: "ai" };
+  return { ...answer, reply, source: "ai", tools: kit.used };
 }
 
 export interface BotRunResult {
@@ -162,7 +176,7 @@ export async function processBotReplies(
           : null,
       fileCheck: j.status === "RECEIVED" ? ((j.fileCheck as { verdict?: BotJob["fileCheck"] } | null)?.verdict ?? null) : null,
     }));
-    const system = buildSystemPrompt({
+    const system = buildAgentPrompt({
       customerName: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.businessName || "Cliente",
       customerNumber: customer.customerNumber,
       pendingSignup: customer.status === "PENDING",
