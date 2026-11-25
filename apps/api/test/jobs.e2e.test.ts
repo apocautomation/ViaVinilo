@@ -612,6 +612,22 @@ describe("materiales por tablero (D-095)", () => {
     expect((await http("production").patch(`/jobs/${b.id}/variant`, { variantId: null })).body.variant).toBeNull();
   });
 
+  it("D-109: la tarjeta y el panel muestran el código de la opción adelante del número; se busca por ese código", async () => {
+    const set = await prisma.sectorVariant.create({ data: { sectorId: sectors.CALANDRADO!.id, code: "TSET", name: "Jersey Set de prueba" } });
+    const job = await prisma.jobOrder.create({ data: { customerId, sectorId: sectors.CALANDRADO!.id, status: "RECEIVED", source: "API", variantId: set.id } });
+    const plain = await prisma.jobOrder.create({ data: { customerId, sectorId: sectors.CALANDRADO!.id, status: "RECEIVED", source: "API" } });
+    const pad = (n: number) => String(n).padStart(6, "0");
+
+    const board = await http("owner").get("/jobs/board?sector=CALANDRADO");
+    const cards = board.body.columns.flatMap((c: { cards: { id: string; code: string; label: string }[] }) => c.cards);
+    expect(cards.find((c: { id: string }) => c.id === job.id)).toMatchObject({ code: `TSET-${pad(job.number)}`, label: `VV-${pad(job.number)}` });
+    expect(cards.find((c: { id: string }) => c.id === plain.id)).toMatchObject({ code: `VV-${pad(plain.number)}` });
+
+    const found = await http("owner").get(`/jobs/board?sector=CALANDRADO&q=TSET-${pad(job.number)}`);
+    expect(found.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards.map((x) => x.id))).toEqual([job.id]);
+    expect((await http("owner").get(`/jobs/${job.id}`)).body.code).toBe(`TSET-${pad(job.number)}`);
+  });
+
   it("D-095: al pasar un pedido a otro sub-servicio se le quita el material del anterior", async () => {
     const lona = await prisma.sectorVariant.create({ data: { sectorId: sectors.GRAN_FORMATO!.id, code: "T-LONA", name: "Lona front" } });
     const job = await newJob("GRAN_FORMATO");

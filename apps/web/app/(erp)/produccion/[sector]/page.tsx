@@ -17,6 +17,8 @@ type Status =
 interface Card {
   id: string;
   label: string;
+  /** D-109: "SET-000002" (código de la opción + número); sin opción, igual al VV-. */
+  code: string;
   status: Status;
   customer: { id: string; number: number; name: string | null };
   description: string | null;
@@ -406,7 +408,10 @@ export default function BoardPage() {
                       {/* Es un div y no un botón para que la tarjeta se pueda arrastrar también en Firefox (D-086). */}
                       <div role="button" tabIndex={0} className="card-toggle" onClick={() => setPanel({ id: card.id, mode: "view" })} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
                         <span className="row">
-                          <span className="num">{card.label}</span>
+                          <span className="num" title={card.label}>
+                            {card.code}
+                            {card.code !== card.label && <small className="num-vv">{card.label}</small>}
+                          </span>
                           <span className="age" data-late={mins > LATE_MIN}>
                             <Clock size={12} aria-hidden /> {age(card.createdAt, now)}
                           </span>
@@ -440,7 +445,8 @@ export default function BoardPage() {
                 <article key={card.id} className="card" aria-busy={busy === card.id} data-dragging={dragging?.id === card.id} {...dragProps(card)}>
                   <header>
                     <button type="button" className="num num-btn" onClick={() => setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
-                      {card.label}
+                      {card.code}
+                      {card.code !== card.label && <small className="num-vv">{card.label}</small>}
                     </button>
                     <span className="age" data-late={mins > LATE_MIN} title={fullDate.format(new Date(card.createdAt))}>
                       <Clock size={12} aria-hidden /> {age(card.createdAt, now)}
