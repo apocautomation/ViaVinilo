@@ -5,7 +5,7 @@ import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildAgentPrompt, type BotJob } from "./prompt";
 import { buildToolKit } from "./tools";
-import { dropFiller, dropNoticePromises, dropSentencesWith, fixMailboxes, plainText, stripToolText } from "./guard";
+import { dropFiller, dropNoticePromises, dropSentencesWith, ensureMapLinks, fixMailboxes, plainText, stripToolText } from "./guard";
 import { toVoseo } from "./voseo";
 
 const HISTORY = 12;
@@ -105,6 +105,8 @@ export async function decideAnswer(input: {
     throw new Error("El modelo respondió solo con una herramienta");
   }
   let reply = dropFiller(plainText(fixMailboxes(toVoseo(stripped.text))));
+  // D-106: si preguntó dónde quedan, cada sucursal que nombra va con su link del mapa.
+  if (/\b(d[oó]nde|direcci[oó]n|ubicaci[oó]n|c[oó]mo llego|mapa|quedan|est[aá]n ubicad)/i.test(input.text)) reply = ensureMapLinks(reply);
   // D-104: el alias lo pide el cliente ("pedime el alias"); la IA a veces escribía "decime el alias".
   reply = reply.replace(/\bdecime el alias\b/gi, "pedime el alias");
   // D-101: el modelo a veces arranca en minúscula ("hola Lucía").

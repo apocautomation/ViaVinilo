@@ -1543,6 +1543,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Corrige D-104**: para los servicios sin regla de seña, `info_servicio` mandaba la aclaración "No figura en las reglas de seña: no digas que lleva ni que no lleva" y la IA la copió tal cual en una respuesta (látex). Ahora no se manda el campo; la instrucción está en el prompt y, por las dudas, se sacan de la respuesta las frases que suenan a instrucción interna ("no digas…", "no figura en las reglas").
 - **Por qué**: con "lona" sola la IA daba la casilla y la sucursal pero a veces no repetía el formato ni la resolución (último pendiente de la batería, D-104).
 - **Impacto**: sin migración.
+### D-106 · 25/11/2026 · Ezequiel · links del mapa y sin ofrecer el precio
+- **Mapa**: si el cliente pregunta dónde quedan o cómo llegar, cada sucursal que nombra la respuesta va con su link del mapa (se agrega al final si la IA no lo pasó, y se saca la frase "si querés el mapa, mandame el link"). Los links en formato markdown (`[Sucursal Centro](https://…)`) pasan a texto, porque el chat no los muestra como link. Se saca el punto pegado al final de un link ("…Gpsviavinilo."), que en muchos chats lo rompe.
+- **Precio**: se sacan las preguntas tipo "¿Querés saber cuánto sale?". La IA la hacía con un pedido todavía sin cotizar; el precio lo pasa el equipo cuando cotiza.
+- **Por qué**: detalles que quedaron en la batería completa después de D-105.
+- **Impacto**: sin migración.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

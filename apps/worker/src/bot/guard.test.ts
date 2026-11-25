@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropFiller, dropNoticePromises, fixMailboxes } from "./guard";
+import { dropFiller, dropNoticePromises, ensureMapLinks, fixMailboxes, plainText } from "./guard";
 
 describe("controles sobre la respuesta del bot (D-060)", () => {
   it("D-060: corrige casillas mal escritas por el modelo", () => {
@@ -21,5 +21,19 @@ describe("controles sobre la respuesta del bot (D-060)", () => {
     expect(dropFiller("Mandalo por mail. La seña no aplica.")).toBe("Mandalo por mail.");
     expect(dropFiller("Se retira en Planta Av. Chile. No figura en las reglas de seña: no digas que lleva ni que no lleva. Formato: PDF.")).toBe("Se retira en Planta Av. Chile. Formato: PDF.");
     expect(dropFiller("Para empezar falta la seña de $20.000.")).toBe("Para empezar falta la seña de $20.000.");
+  });
+
+  it("D-106: las sucursales nombradas van con su link del mapa; los links en markdown pasan a texto", () => {
+    expect(ensureMapLinks("La Sucursal Centro está en San Juan 714, Salta. Si querés el mapa, mandame el link.")).toBe(
+      "La Sucursal Centro está en San Juan 714, Salta.\n\nMapa:\nSucursal Centro: https://maps.google.com/?q=San+Juan+714,+Salta",
+    );
+    const both = "Planta Av. Chile: https://shortest.link/Gpsviavinilo y Sucursal Centro: https://maps.google.com/?q=San+Juan+714,+Salta";
+    expect(ensureMapLinks(both)).toBe(both);
+    expect(plainText("Mapa: [Planta Av. Chile](https://shortest.link/Gpsviavinilo)")).toBe("Mapa: Planta Av. Chile: https://shortest.link/Gpsviavinilo");
+    expect(plainText("Podés verlo acá: https://shortest.link/Gpsviavinilo.")).toBe("Podés verlo acá: https://shortest.link/Gpsviavinilo");
+  });
+
+  it("D-106: no ofrece decir el precio", () => {
+    expect(dropFiller("Recibimos el archivo y te pasamos el precio. ¿Querés saber cuánto sale?")).toBe("Recibimos el archivo y te pasamos el precio.");
   });
 });
