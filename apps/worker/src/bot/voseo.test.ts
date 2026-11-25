@@ -26,4 +26,9 @@ describe("el bot habla de vos (D-060)", () => {
     expect(toVoseo("Con el clip (elige el servicio, escribe medidas y cantidad).")).toBe("Con el clip (elegí el servicio, escribí medidas y cantidad).");
     expect(toVoseo("El equipo elige el color.")).toBe("El equipo elige el color.");
   });
+
+  it("D-107: 'envías' y 'Recuerda' pasan a vos", () => {
+    expect(toVoseo("Si lo envías por chat, elegí el servicio.")).toBe("Si lo enviás por chat, elegí el servicio.");
+    expect(toVoseo("Recuerda no mandarlo en espejo.")).toBe("Recordá no mandarlo en espejo.");
+  });
 });

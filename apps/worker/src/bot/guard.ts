@@ -38,7 +38,7 @@ export function dropFiller(text: string): string {
     text.replace(opener, ""),
     // "No se requiere seña": de los servicios fuera de las reglas de seña no se sabe; con las reglas, la
     // respuesta armada ya explica cuándo lleva.
-    /¿Quer[eé]s que te (ayude|ayudemos|prepare|preparemos|arme|armemos|corrija|corrijamos)\b|\b(en|el|del) resumen\b|\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\w*[^.!?]{0,15}\bse[ñn]a\b|\bse[ñn]a\b[^.!?]{0,10}\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\b|\bsin se[ñn]a\b|\bno figura en las reglas\b|\bno (digas|menciones|hables|prometas)\b|¿Quer[eé]s (saber|que te (diga|pase|pasemos|cuente)) (cu[aá]nto (sale|cuesta|es)|el precio|el presupuesto)/i,
+    /¿Quer[eé]s que te (ayude|ayudemos|prepare|preparemos|arme|armemos|corrija|corrijamos)\b|\b(en|el|del) resumen\b|\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\w*[^.!?]{0,15}\bse[ñn]a\b|\bse[ñn]a\b[^.!?]{0,10}\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\b|\bsin se[ñn]a\b|\bno figura en las reglas\b|\bno (digas|menciones|hables|prometas)\b|¿Quer[eé]s (saber|que te (diga|pase|pasemos|cuente)) (cu[aá]nto (sale|cuesta|es)|el precio|el presupuesto)|\bquer[eé]s ver el archivo\b/i,
   );
   return out || text;
 }

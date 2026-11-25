@@ -19,6 +19,10 @@ const MAP: Record<string, string> = {
   buscas: "buscás",
   entiendes: "entendés",
   recuerdas: "recordás",
+  // D-107: "Si lo envías por chat", "Recuerda no mandarlo en espejo". El bot no habla de terceros que
+  // "recuerdan", así que "recuerda" es siempre el imperativo.
+  "envías": "enviás",
+  recuerda: "recordá",
   "asegúrate": "asegurate",
   "fíjate": "fijate",
   "comunícate": "comunicate",
