@@ -46,6 +46,21 @@ function headerText(value: HeaderValue | undefined): string {
 }
 
 /** Respuestas automáticas, rebotes y listas: no son pedidos de un cliente. */
+/**
+ * Aviso de mail no entregado (D-112): Exchange y otros servidores lo mandan sin remitente y con asuntos
+ * como "Sin entregar: RE: dtf textil" o "Undeliverable: …". Hostinger los dejaba en dtf@ cuando esa
+ * casilla no podía enviar (I-22) y quedaban como error "El mail no tiene remitente".
+ */
+const BOUNCE_SUBJECT =
+  /^\s*(sin entregar|no entregado|no se pudo entregar|undeliverable|undelivered|delivery status notification|mail delivery (failed|subsystem)|returned mail|failure notice|delivery failure|mensaje devuelto)\b/i;
+
+export function isBounce(subject: string | null | undefined, fromEmail: string | null, hasDeliveryReport = false): boolean {
+  if (hasDeliveryReport) return true;
+  if (!subject || !BOUNCE_SUBJECT.test(subject)) return false;
+  // Con remitente, solo si es un servidor de correo: un cliente puede escribir "Undeliverable" en un asunto.
+  return !fromEmail || /^(mailer-daemon|postmaster|no-?reply|microsoftexchange[\w.-]*)@/i.test(fromEmail);
+}
+
 function detectAutoReply(headers: Map<string, HeaderValue>, fromEmail: string | null): boolean {
   const auto = headerText(headers.get("auto-submitted")).toLowerCase();
   if (auto && auto !== "no") return true;
@@ -96,7 +111,10 @@ export async function parseMail(raw: Buffer): Promise<ParsedMail> {
     subject: mail.subject?.trim() || null,
     sentAt: mail.date ?? null,
     text,
-    isAutoReply: detectAutoReply(mail.headers, fromEmail),
+    // D-112: los avisos de "no entregado" también son automáticos (aunque lleguen sin remitente).
+    isAutoReply:
+      detectAutoReply(mail.headers, fromEmail) ||
+      isBounce(mail.subject, fromEmail, mail.attachments.some((a) => /^message\/(delivery-status|disposition-notification)/i.test(a.contentType))),
     files,
     links: extractTransferLinks(text, typeof mail.html === "string" ? mail.html : undefined),
     measures: extractMeasures(`${mail.subject ?? ""}\n${text}`),

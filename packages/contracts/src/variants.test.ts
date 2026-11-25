@@ -9,7 +9,8 @@ describe("opciones de impresión por tablero (D-095, D-108)", () => {
   it("D-108: trae el catálogo de los Excel de Ricardo, con código SKU de Tango y anchos, sin precios", () => {
     expect(dtf.map((v) => v.name)).toEqual(["Normal", "Glitter", "Dorado", "Plateado", "Fotoluminiscente", "Color change", "Plata sólida"]);
     expect(DEFAULT_SECTOR_VARIANTS.DTF_UV).toHaveLength(1);
-    expect(DEFAULT_SECTOR_VARIANTS.CALANDRADO).toHaveLength(39);
+    // 39 telas del Excel + "Tela del cliente" (D-113).
+    expect(DEFAULT_SECTOR_VARIANTS.CALANDRADO).toHaveLength(40);
     expect(DEFAULT_SECTOR_VARIANTS.SUBLIMACION).toHaveLength(4);
     expect(DEFAULT_SECTOR_VARIANTS.CALANDRADO!.find((v) => v.code === "SET")).toEqual({
       code: "SET",
@@ -24,7 +25,9 @@ describe("opciones de impresión por tablero (D-095, D-108)", () => {
   it("D-108: los códigos y los SKU no se repiten en todo el sistema, y los códigos valen para el formulario", () => {
     const all = Object.values(DEFAULT_SECTOR_VARIANTS).flat();
     expect(new Set(all.map((v) => v.code)).size).toBe(all.length);
-    expect(new Set(all.map((v) => v.tangoSku)).size).toBe(all.length);
+    const skus = all.flatMap((v) => (v.tangoSku ? [v.tangoSku] : []));
+    expect(new Set(skus).size).toBe(skus.length);
+    expect(all.filter((v) => !v.tangoSku).map((v) => v.code)).toEqual(["TCLI"]);
     for (const v of all) expect(createVariantSchema.safeParse({ code: v.code, name: v.name }).success).toBe(true);
   });
 
