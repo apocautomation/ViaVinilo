@@ -1592,6 +1592,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Definición**: "Se cotizan separado, pero se imprimen y calandran por tela siempre y cuando sea con tela de Via Vinilo. Si es tela propia del cliente se imprime separado, así que se suele imprimir primero lo de los clientes que mandan su tela y seguido lo de Via". Ezequiel: el orden lo elige el empleado, puede tomar el pedido que quiera primero.
 - **Qué**: se suma en Calandrado la opción **"Tela del cliente"** (código `TCLI`, sin SKU ni ancho). Con "Agrupar por opción", esos trabajos quedan en su propio bloque, separados de las telas de Via Vinilo y de los que todavía no tienen opción. El sistema no impone un orden de impresión.
 - **Impacto**: migración `20261125090000_tela_del_cliente`. Seed actualizado. El dueño la puede renombrar o desactivar en Producción → Opciones de impresión.
+### D-114 · 25/11/2026 · Ezequiel · usuarios del equipo: perfiles e invitación por mail
+- **Pedido**: crear los usuarios del equipo pensando qué ve cada uno; por ejemplo, a los vendedores no se les muestra el total vendido.
+- **Perfiles** (con los roles que ya existen, D-017 y D-089):
+  - **Dueño / encargada** → rol Dueño: todo, incluidos los totales en pesos de Inicio, usuarios y configuración.
+  - **Vendedor / atención** → rol Atención, **sin** "ver totales en pesos": conversaciones, clientes y altas, cotizar y mover pedidos de todos los tableros con el precio de cada uno. No ve los totales vendidos de Inicio, ni configuración, ni puede eliminar pedidos, imprimir sin seña o dar de baja clientes. El permiso de los totales se le puede dar a uno en particular.
+  - **Taller** → rol Producción con sus tableros: mover los pedidos, descargar el archivo, corregir la medida, asignar máquina. No ve clientes, conversaciones ni otros tableros.
+  - Quien vende y además imprime puede tener los dos roles.
+- **Invitación por mail**: hasta ahora, crear un usuario pedía escribirle la contraseña. Ahora lo recomendado es crearlo **sin contraseña**: el sistema le manda un mail (desde la casilla de avisos) con un link para que la cree la persona. Nadie más la sabe, ni el dueño ni quien desarrolla. El link vale 72 horas y sirve una vez; "Reenviar invitación" manda otro y anula el anterior (también sirve si alguien se olvida la contraseña). Se sigue pudiendo poner la contraseña a mano. En la lista de usuarios se ve quién todavía no creó la suya.
+- **Por qué**: así el equipo arranca con sus propias claves y queda registrado quién hace cada cosa; y los vendedores trabajan con el precio de cada pedido sin ver la facturación del negocio.
+- **Impacto**: migración `20261125100000_user_activation`. Variable nueva `ERP_PUBLIC_URL` (por defecto `https://erp.viavinilo.tech` en producción).
 
 ## 5. Pendientes del cliente para arrancar la E1
 

@@ -3,6 +3,7 @@ import { Prisma, type UserRole } from "@prisma/client";
 import { alertSettingsSchema, DEFAULT_ALERT_SETTINGS, sectorCodeFromName, type AlertSettings } from "@viavinilo/contracts";
 import { AuditService } from "../audit/audit.service";
 import { hashPassword } from "../auth/password";
+import { StaffActivationService } from "../auth/staff-activation.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 const userSelect = {
@@ -13,6 +14,7 @@ const userSelect = {
   canSeeBilling: true,
   active: true,
   createdAt: true,
+  passwordHash: true,
   sectors: { select: { sector: { select: { id: true, code: true, name: true } } } },
 } satisfies Prisma.UserSelect;
 
@@ -27,21 +29,39 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly activation: StaffActivationService,
   ) {}
 
   // ───────────── Usuarios ─────────────
 
-  private shape(u: Prisma.UserGetPayload<{ select: typeof userSelect }>) {
-    return { id: u.id, name: u.name, email: u.email, roles: u.roles, canSeeBilling: u.canSeeBilling, active: u.active, createdAt: u.createdAt, sectors: u.sectors.map((s) => s.sector) };
+  /** Nunca sale el hash: solo si ya tiene contraseña y si tiene una invitación vigente (D-114). */
+  private shape(u: Prisma.UserGetPayload<{ select: typeof userSelect }>, invitePending = false) {
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      roles: u.roles,
+      canSeeBilling: u.canSeeBilling,
+      active: u.active,
+      createdAt: u.createdAt,
+      sectors: u.sectors.map((s) => s.sector),
+      loginReady: u.passwordHash !== null,
+      invitePending,
+    };
   }
 
   async users() {
     const rows = await this.prisma.user.findMany({ where: { deletedAt: null }, orderBy: [{ active: "desc" }, { name: "asc" }], select: userSelect });
-    return rows.map((u) => this.shape(u));
+    const pending = await this.activation.pending(rows.map((u) => u.id));
+    return rows.map((u) => this.shape(u, pending.has(u.id)));
   }
 
-  async createUser(input: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; canSeeBilling?: boolean; password: string }, actorId: string) {
-    const passwordHash = await hashPassword(input.password);
+  /**
+   * Sin contraseña (lo recomendado, D-114), la persona recibe un mail con un link para crearla. Con
+   * contraseña, se la pasa el dueño en persona.
+   */
+  async createUser(input: { name: string; email: string; roles: UserRole[]; sectorIds: string[]; canSeeBilling?: boolean; password?: string }, actorId: string) {
+    const passwordHash = input.password ? await hashPassword(input.password) : null;
     try {
       return await this.prisma.$transaction(async (tx) => {
         const user = await tx.user.create({
@@ -55,8 +75,12 @@ export class AdminService {
           },
           select: userSelect,
         });
-        await this.audit.log({ entity: "User", entityId: user.id, action: "create", userId: actorId, after: { email: user.email, roles: user.roles, sectors: input.sectorIds.length } }, tx);
-        return this.shape(user);
+        await this.audit.log(
+          { entity: "User", entityId: user.id, action: "create", userId: actorId, after: { email: user.email, roles: user.roles, sectors: input.sectorIds.length, invited: !passwordHash } },
+          tx,
+        );
+        if (!passwordHash) await this.activation.createAndQueue(user, tx);
+        return this.shape(user, !passwordHash);
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") throw new ConflictException("Ya hay un usuario con ese email");
@@ -107,6 +131,18 @@ export class AdminService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") throw new UnprocessableEntityException("Uno de los tableros no existe");
       throw err;
     }
+  }
+
+  /** Vuelve a mandar la invitación (D-114): anula el link anterior. Sirve también para "olvidé la contraseña". */
+  async invite(id: string, actorId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null }, select: { id: true, name: true, email: true, active: true } });
+    if (!user) throw new NotFoundException("No encontramos ese usuario");
+    if (!user.active) throw new UnprocessableEntityException("El usuario está desactivado: activalo antes de invitarlo");
+    await this.prisma.$transaction(async (tx) => {
+      await this.activation.createAndQueue(user, tx);
+      await this.audit.log({ entity: "User", entityId: id, action: "invite", userId: actorId }, tx);
+    });
+    return { ok: true };
   }
 
   async setPassword(id: string, password: string, actorId: string) {

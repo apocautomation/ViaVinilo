@@ -4,6 +4,7 @@ import { JwtModule } from "@nestjs/jwt";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
+import { StaffActivationService } from "./staff-activation.service";
 import { JwtAuthGuard, RolesGuard } from "./guards";
 
 @Module({
@@ -24,6 +25,7 @@ import { JwtAuthGuard, RolesGuard } from "./guards";
   controllers: [AuthController],
   providers: [
     AuthService,
+    StaffActivationService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

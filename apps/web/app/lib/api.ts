@@ -71,7 +71,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (res.status === 401) {
     clearSession();
-    if (!location.pathname.startsWith("/login")) location.href = "/login";
+    // D-114: en /activar el 401 es "el link venció": se muestra ahí, no se manda al login.
+    if (!location.pathname.startsWith("/login") && !location.pathname.startsWith("/activar")) location.href = "/login";
   }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string | string[]; errors?: Record<string, string> };
