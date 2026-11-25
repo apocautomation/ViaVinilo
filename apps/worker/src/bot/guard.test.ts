@@ -36,4 +36,10 @@ describe("controles sobre la respuesta del bot (D-060)", () => {
   it("D-106: no ofrece decir el precio", () => {
     expect(dropFiller("Recibimos el archivo y te pasamos el precio. ¿Querés saber cuánto sale?")).toBe("Recibimos el archivo y te pasamos el precio.");
   });
+
+  it("D-107: con el archivo en revisión no sugiere mandarlo de nuevo 'para verlo'", () => {
+    expect(dropFiller("El archivo del pedido VV-000104 lo está revisando el equipo. Si tenés dudas o querés ver el archivo, mandá el clip 📎 de este chat eligiendo ese pedido.")).toBe(
+      "El archivo del pedido VV-000104 lo está revisando el equipo.",
+    );
+  });
 });

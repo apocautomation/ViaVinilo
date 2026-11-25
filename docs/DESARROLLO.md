@@ -1548,6 +1548,10 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Precio**: se sacan las preguntas tipo "¿Querés saber cuánto sale?". La IA la hacía con un pedido todavía sin cotizar; el precio lo pasa el equipo cuando cotiza.
 - **Por qué**: detalles que quedaron en la batería completa después de D-105.
 - **Impacto**: sin migración.
+### D-107 · 25/11/2026 · Ezequiel · detalles de redacción del bot
+- **Qué**: "envías" → "enviás" y "Recuerda" → "Recordá" (formas de "tú" que se escapaban). Se saca la frase "si querés ver el archivo, mandá el clip…", que la IA agregaba con un archivo en revisión y no tiene sentido.
+- **Por qué**: batería completa del 25/11 sobre el código en producción: los 45 casos con datos correctos y quedaban solo estos tres detalles.
+- **Impacto**: sin migración.
 
 ## 5. Pendientes del cliente para arrancar la E1
 
