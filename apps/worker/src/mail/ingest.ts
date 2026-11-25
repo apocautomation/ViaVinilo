@@ -4,6 +4,7 @@ import type { FileStorage } from "../storage";
 import { customerSearchText, detectPickupBranch, detectSubService, detectVariant, SECTOR_SHARED_INBOX, isResetCommand, RESET_REPLY } from "@viavinilo/contracts";
 import { extractContact } from "./contact";
 import { recordInboundMail } from "./conversation";
+import { asksToCancel, jobDescription } from "./intent";
 import { parseMail, type ParsedMail } from "./parse";
 
 /** Avisos que dispara la ingesta. En producción manda mails por SMTP (invite.ts). */
@@ -65,6 +66,9 @@ export async function ingestMail(
   });
   return outcome;
 }
+
+/** Motivo con que queda marcado el hilo cuando el cliente pide cancelar por mail (D-111). */
+export const CANCEL_REASON = "Pide por mail cancelar un pedido";
 
 async function decide(
   deps: IngestDeps,
@@ -140,6 +144,21 @@ async function decide(
   if (existing) {
     await log(deps, sector, received, "DUPLICATE", { jobId: existing.id });
     return { ...base, result: "DUPLICATE", jobId: existing.id };
+  }
+
+  // D-111: si el cliente pide cancelar un pedido, el hilo queda marcado para que lo vea una persona (como
+  // cuando el bot deriva). Si además trae un archivo, el pedido se crea igual: muchas veces es "cancelen el
+  // anterior, va este" y no se puede perder. Sin archivo, no crea nada.
+  const cancel = asksToCancel(mail);
+  const flagCancel = async (conversationId: string | null) => {
+    if (cancel && conversationId) {
+      await prisma.conversation.update({ where: { id: conversationId }, data: { needsHuman: true, needsHumanReason: CANCEL_REASON } });
+    }
+  };
+  if (cancel && mail.files.length === 0 && mail.links.length === 0) {
+    await flagCancel(await toInbox(await knownCustomerId()));
+    await log(deps, sector, received, "CANCEL_REQUEST");
+    return { ...base, result: "CANCEL_REQUEST" };
   }
 
   if (mail.files.length === 0 && mail.links.length === 0) {
@@ -234,7 +253,7 @@ async function decide(
       await log(deps, sector, received, "DUPLICATE", { jobId: target });
       return { ...base, result: "DUPLICATE", jobId: target };
     }
-    await toInbox(customer.id, target);
+    await flagCancel(await toInbox(customer.id, target));
     await log(deps, sector, received, "RESENT", { jobId: target, fileCount: files.length });
     return { ...base, result: "RESENT", jobId: target };
   }
@@ -258,7 +277,9 @@ async function decide(
         sourceMessageId: mail.messageId,
         // D-083: si el mail dice dónde retira, queda en el pedido; si no, lo define el asesor.
         pickupBranch: detectPickupBranch(`${mail.subject}\n${mail.text}`),
-        description: mail.subject,
+        // D-111: en una respuesta ("Re: PEDIDO CANCELADO") el asunto es del mail anterior. Si pide cancelar
+        // otro pedido, se ve en la tarjeta.
+        description: cancel ? `Pide cancelar un pedido · ${jobDescription(mail.subject, mail.text) ?? ""}`.trim() : jobDescription(mail.subject, mail.text),
         requestedSpecs: {
           subject: mail.subject,
           body: mail.text.slice(0, MAX_BODY_CHARS),
@@ -295,7 +316,7 @@ async function decide(
   }
 
   const result: MailIngestResult = pendingSignup ? "PENDING_SIGNUP" : "CREATED";
-  await toInbox(customer.id, jobId);
+  await flagCancel(await toInbox(customer.id, jobId));
   await log(deps, sector, received, result, { jobId, fileCount: files.length });
 
   if (result === "PENDING_SIGNUP") await maybeInvite(deps, sector, customer.id, mail);
