@@ -1529,6 +1529,14 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Qué**: si el cliente pregunta por su pedido ("¿ya está lo mío?") y no tiene ninguno en curso, el bot contesta con la respuesta armada, sin la IA. Si el último ya se entregó lo dice ("No tenés pedidos en curso: el último, VV-000110 (DTF Textil), ya lo entregamos"); si no tiene ninguno, la de siempre. Cuando la IA consulta los pedidos por otro camino, la herramienta le manda esa misma frase armada.
 - **Por qué**: probado con el modelo real, con un único pedido entregado la IA a veces contestaba "No, todavía no está lo tuyo" y pedía el archivo. Sin pedidos en curso la respuesta es un dato, no hay nada que la IA tenga que interpretar.
 - **Impacto**: sin migración.
+### D-104 · 25/11/2026 · Ezequiel · respuestas que quedaban mal en la batería del bot
+- **"el 112" después de "¿Por cuál me consultás?"**: un número solo se toma como el número del pedido y se contesta con ese pedido (respuesta armada). La IA contestaba sin mirarlo ("Verifico…") y no decía cuál era el problema del archivo. Si no existe, dice que no lo encuentra y muestra los que tiene.
+- **Relleno y ofrecimientos**: se sacan el "Verifico…" o "Un momento…" del principio, las preguntas tipo "¿Querés que te ayudemos a preparar el archivo / con las medidas?" (Via Vinilo no prepara ni corrige archivos) y las menciones a "el resumen" (es un dato interno de la herramienta).
+- **Requisitos tal cual**: el prompt pide decir los requisitos como los da `info_servicio`, sin interpretarlos (la IA convirtió "Mínimo 50 cm" en "50 cm de margen").
+- **Seña por servicio (error de código)**: la seña de un servicio se buscaba por la primera palabra del nombre, así que "DTF UV" tomaba la de "DTF Textil" (decía 50 % desde 10 m en vez de desde 3 m). Ahora se busca por el nombre del servicio. Si un servicio no figura en las reglas de seña (Ecosolvente, por ejemplo), la herramienta lo dice y la IA no afirma que lleva ni que no lleva.
+- **Otros detalles**: "decime el alias" → "pedime el alias"; las instrucciones de cómo mandar el trabajo que recibe la IA van en vos ("elegí el servicio"); un archivo que revisa el equipo dice "todavía no se sabe si está bien" (la IA afirmaba que no tenía problemas).
+- **Sin cambio**: "¿ya me aprobaron la cuenta?" sigue derivando a un asesor (lo esperado en la batería).
+- **Impacto**: sin migración.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

@@ -27,6 +27,22 @@ export function dropSentencesWith(text: string, re: RegExp): string {
     .trim();
 }
 
+/**
+ * Relleno y ofrecimientos que no corresponden (D-104): "Verifico…" al empezar (ya verificó, o no lo hizo),
+ * "¿Querés que te ayudemos a preparar el archivo?" (no diseñan ni preparan archivos) y "el resumen"
+ * (es el nombre de un dato interno, el cliente no lo ve).
+ */
+export function dropFiller(text: string): string {
+  const opener = /^(?:(?:verifico|reviso|ya (?:lo )?(?:verifico|reviso)|d[eé]jame (?:ver|verificar|revisar)|un momento|un segundo)\b[^.!?…]*(?:\.\.\.|[.!?…])\s*)+/i;
+  const out = dropSentencesWith(
+    text.replace(opener, ""),
+    // "No se requiere seña": de los servicios fuera de las reglas de seña no se sabe; con las reglas, la
+    // respuesta armada ya explica cuándo lleva.
+    /¿Quer[eé]s que te (ayude|ayudemos|prepare|preparemos|arme|armemos|corrija|corrijamos)\b|\b(en|el|del) resumen\b|\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\w*[^.!?]{0,15}\bse[ñn]a\b|\bse[ñn]a\b[^.!?]{0,10}\bno (se )?(requiere|aplica|lleva|hace falta|necesita|pide|cobra)\b|\bsin se[ñn]a\b/i,
+  );
+  return out || text;
+}
+
 export function dropNoticePromises(text: string): string {
   const out = dropSentencesWith(text, /\bte (avisamos|avisaremos|vamos a avisar|notificamos)\b/i);
   return out || text;

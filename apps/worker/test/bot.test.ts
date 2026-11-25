@@ -427,4 +427,21 @@ describe("ajustes de la IA con herramientas (D-098)", () => {
     await decideAnswer({ ...base, jobs: [delivered], text: "che, y lo que pedí?", llm: k.llm });
     expect(k.results[0]).toContain("El último, VV-000110 (DTF Textil), ya se entregó.");
   });
+
+  it("D-104: 'el 112' después de '¿Por cuál me consultás?' contesta por ese pedido, sin IA", async () => {
+    const job = (n: string, status: string, fileIssue?: string) => ({ label: n, sector: "DTF Textil", status, description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: ["b.png"], fileIssue });
+    const jobs = [job("VV-000111", "Archivo recibido"), job("VV-000112", "Archivo con error", "Resolución baja")];
+    const turns = [
+      { role: "user" as const, content: "tenes mi archivo?" },
+      { role: "assistant" as const, content: "Tenés 2 pedidos en curso: VV-000111 y VV-000112. ¿Por cuál me consultás? Decime el número." },
+      { role: "user" as const, content: "el 112" },
+    ];
+    const ai = fakeLlm({ reply: "Verifico... El pedido VV-000112 está en Archivo con error." });
+    const r = await decideAnswer({ ...base, jobs, turns, text: "el 112", llm: ai.llm });
+    expect(r.source).toBe("flow");
+    expect(r.reply).toContain("VV-000112 (DTF Textil): el archivo tiene un problema: Resolución baja. Mandalo corregido");
+    expect(ai.calls).toHaveLength(0);
+    const none = await decideAnswer({ ...base, jobs, turns, text: "el 999", llm: fakeLlm({ reply: "x" }).llm });
+    expect(none.reply).toMatch(/^No encuentro un pedido con el número 999/);
+  });
 });

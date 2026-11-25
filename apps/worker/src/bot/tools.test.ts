@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BotJob } from "./prompt";
-import { buildToolKit } from "./tools";
+import { buildToolKit, depositRuleFor } from "./tools";
 
 const job = (over: Partial<BotJob>): BotJob => ({
   label: "VV-000050",
@@ -47,5 +47,18 @@ describe("herramientas del bot (D-097)", () => {
     expect(kit.handoff).toBeNull();
     kit.run("derivar_a_asesor", { motivo: "Pide factura A" });
     expect(kit.handoff).toEqual({ reason: "Pide factura A" });
+  });
+
+  it("D-104: la seña de cada servicio es la suya (DTF UV no toma la de DTF Textil)", () => {
+    expect(depositRuleFor("DTF UV")).toBe("50% desde 3 m");
+    expect(depositRuleFor("DTF Textil")).toBe("50% desde 10 m");
+    expect(depositRuleFor("Calandra (telas)")).toBe("50% desde 10 m");
+    expect(depositRuleFor("Sublimación")).toBe("50% desde 10 m");
+    expect(depositRuleFor("Ecosolvente")).toBeNull();
+    const kit = buildToolKit({ jobs: [], noticesOn: false, now: new Date() });
+    const uv = JSON.parse(kit.run("info_servicio", { servicio: "tazas" }));
+    expect(uv).toMatchObject({ servicio: "DTF UV", sena: "50% desde 3 m" });
+    expect(uv.como_mandarlo).toContain("elegí el servicio");
+    expect(JSON.parse(kit.run("info_servicio", { servicio: "lona" })).sena).toMatch(/No figura en las reglas de seña/);
   });
 });

@@ -5,7 +5,7 @@ import { fixedHandoff, handoffReply } from "./handoff";
 import type { BotAnswer, ChatTurn, Llm } from "./llm";
 import { buildAgentPrompt, type BotJob } from "./prompt";
 import { buildToolKit } from "./tools";
-import { dropNoticePromises, dropSentencesWith, fixMailboxes, plainText, stripToolText } from "./guard";
+import { dropFiller, dropNoticePromises, dropSentencesWith, fixMailboxes, plainText, stripToolText } from "./guard";
 import { toVoseo } from "./voseo";
 
 const HISTORY = 12;
@@ -41,14 +41,23 @@ export async function decideAnswer(input: {
 }): Promise<BotAnswer & { source: "handoff" | "flow" | "ai"; tools?: string[] }> {
   const fixed = fixedHandoff(input.text);
   if (fixed) return { reply: handoffReply(input.now), handoff: true, reason: fixed, source: "handoff" };
-  const fixedReply = fixedFlow(input.text, {
+  const ctx = {
     firstName: input.firstName,
     alreadyTalking: input.alreadyTalking,
     noticesOn: input.noticesOn,
     jobs: input.jobs,
     boards: input.boards,
     now: input.now,
-  });
+  };
+  // D-104: "el 112" justo después de "¿Por cuál me consultás?" es el número del pedido. Se contesta con
+  // ese pedido (la IA respondía sin mirarlo: "Verifico…").
+  const lastBot = [...input.turns].reverse().find((t) => t.role === "assistant");
+  const picked = lastBot && /¿Por cuál me consultás\?/.test(lastBot.content) ? /^\D{0,20}?\b(\d{1,7})\b\D{0,20}$/.exec(input.text) : null;
+  if (picked) {
+    const one = fixedFlow(`cómo va el pedido ${picked[1]}?`, ctx);
+    if (one) return { reply: one, handoff: false, reason: null, source: "flow" };
+  }
+  const fixedReply = fixedFlow(input.text, ctx);
   // D-099: si el cliente arrancó con "hola" y es el primer mensaje, la respuesta armada también saluda.
   const greets = /^\s*(hola+|buenas?( tardes| noches| d[ií]as)?|buen d[ií]a|holis)\b/i.test(input.text) && !input.alreadyTalking;
   const flow = fixedReply && greets && !/^¡Hola/.test(fixedReply) ? `¡Hola${input.firstName ? ` ${input.firstName}` : ""}! ${fixedReply}` : fixedReply;
@@ -89,7 +98,9 @@ export async function decideAnswer(input: {
     if (flow) return { reply: flow, handoff: false, reason: null, source: "flow", tools: kit.used };
     throw new Error("El modelo respondió solo con una herramienta");
   }
-  let reply = plainText(fixMailboxes(toVoseo(stripped.text)));
+  let reply = dropFiller(plainText(fixMailboxes(toVoseo(stripped.text))));
+  // D-104: el alias lo pide el cliente ("pedime el alias"); la IA a veces escribía "decime el alias".
+  reply = reply.replace(/\bdecime el alias\b/gi, "pedime el alias");
   // D-101: el modelo a veces arranca en minúscula ("hola Lucía").
   reply = reply.replace(/^([¡¿"]?)(\p{Ll})/u, (_m, p: string, c: string) => p + c.toUpperCase());
   // D-101: "Buen día, Lucía! ¿en qué…" → "¡Buen día, Lucía! ¿En qué…".
