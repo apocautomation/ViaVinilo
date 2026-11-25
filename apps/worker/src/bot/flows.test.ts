@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixedFlow } from "./flows";
+import { fixedFlow, toolFor } from "./flows";
 
 const ctx = { firstName: "Juan", alreadyTalking: false, noticesOn: false, jobs: [] };
 
@@ -99,6 +99,17 @@ describe("flujos fijos del bot (D-060)", () => {
     expect(eligioChile).toContain("Planta Av. Chile, Av. Chile 1822");
     const sinElegir = fixedFlow("ya está para retirar?", { ...ctx, jobs: [{ ...base, label: "VV-000566", sector: "Gran Formato" }] });
     expect(sinElegir).toContain("Planta Av. Chile");
+  });
+
+  it("D-100: '¿en qué sucursal?' con un pedido listo responde dónde se retira ese pedido; sin pedido listo, las sucursales", () => {
+    const listo = { label: "VV-000564", sector: "DTF Textil", status: "Terminado, listo para retirar", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), pickupBranch: "san-juan" };
+    for (const q of ["en que sucursal?", "¿dónde lo retiro?", "donde lo paso a retirar?"]) {
+      expect(fixedFlow(q, { ...ctx, jobs: [listo] }), q).toBe("Tu pedido: VV-000564 (DTF Textil): está listo para retirar en Sucursal Centro, San Juan 714, Salta (Lunes a viernes 08:30 a 19:30; Sábados 08:30 a 13:00).");
+      expect(toolFor(q, [listo]), q).toBe("ver_mis_pedidos");
+    }
+    // "¿Hasta qué hora?" sigue siendo de horarios, y sin pedido listo se muestran las sucursales.
+    expect(toolFor("¿hasta qué hora abren?", [listo])).toBe("sucursales_y_horarios");
+    expect(fixedFlow("en que sucursal?", ctx)).toMatch(/^Tenemos dos sucursales/);
   });
 
   it("D-060: lo demás lo responde la IA", () => {
