@@ -1498,6 +1498,16 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Impacto**: sin migración. Cambia `mem_limit` de Ollama en `deploy/docker-compose.prod.yml`.
 - **Abierto**: la velocidad (20 a 45 s con herramientas) es el límite de este servidor sin placa de video. Las explicaciones técnicas de los servicios se resuelven cuando la Ayuda sea editable (Etapa 2).
 
+### D-099 · 25/11/2026 · Ezequiel (chat real con el bot) · el bot dice en qué sucursal se retira el pedido
+- **Qué pasó**: en un chat real, a "Hola, ¿mi pedido ya está para retirar?" el bot contestó solo "Terminado, listo para retirar", sin saludar ni decir dónde; el cliente tuvo que preguntar "¿en qué sucursal?". La IA acertó la sucursal por deducción, porque `ver_mis_pedidos` no tenía ese dato.
+- **Arreglo**:
+  - `ver_mis_pedidos` incluye `retira_en`: la sucursal que eligió el cliente (D-083) o, si no eligió, la del servicio.
+  - La respuesta armada de un pedido listo dice "está listo para retirar en Sucursal Centro, San Juan 714 (horarios)".
+  - Si el cliente saluda en su primer mensaje y la respuesta es la armada, también saluda.
+  - "¿Ya está para retirar?" con tilde no se reconocía como pregunta por el pedido (el `` de las expresiones no corta después de una vocal con tilde): se compara sin tildes.
+- **Medición del 25/11 después de D-098** (12 mensajes, `bot-dry-run`): las 12 respuestas correctas, incluidos horario de hoy, espejo y derivar. Tiempos: 3 a 17 s sin herramientas o con respaldo, 12 a 53 s consultando pedidos. Ollama usó 7,4 de 10 GB. La medición corrió a la par de un chat real, lo que la hizo más lenta.
+- **Impacto**: sin migración.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

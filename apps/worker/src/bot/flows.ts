@@ -137,8 +137,22 @@ export function jobNumberIn(text: string): number | null {
 }
 
 /** Un pedido en una línea, con lo que el cliente necesita saber del archivo (D-092, D-094). */
+/**
+ * Dónde retira el cliente un pedido (D-099): la sucursal que eligió o, si no eligió, la del servicio
+ * (DTF Textil, DTF UV y TPU en San Juan; el resto en Av. Chile).
+ */
+export function pickupOf(j: Pick<BotJob, "pickupBranch" | "sector">): (typeof help.BRANCHES)[number] {
+  const id = j.pickupBranch ?? (/^(dtf|tpu)/i.test(j.sector) ? "san-juan" : "chile");
+  return help.BRANCHES.find((b) => b.id === id) ?? help.BRANCHES[0]!;
+}
+
 export function jobLine(j: BotJob): string {
   const base = `${j.label} (${j.sector}${j.description ? `, ${j.description}` : ""})`;
+  if (j.status === "Terminado, listo para retirar") {
+    // D-099: el cliente lo que quiere saber es dónde y hasta qué hora.
+    const b = pickupOf(j);
+    return `${base}: está listo para retirar en ${b.name}, ${b.address} (${b.hours.map((h) => `${h.days} ${h.time}`).join("; ")})`;
+  }
   const clip = `con el clip 📎 de este chat, eligiendo el pedido ${j.label}`;
   const names = j.files?.length ? ` (${j.files.slice(0, 2).join(", ")}${j.files.length > 2 ? ` y ${j.files.length - 2} más` : ""})` : "";
   if (j.status === "Archivo con error") {
@@ -169,7 +183,7 @@ export function jobLine(j: BotJob): string {
 
 /** Pregunta por el estado de un pedido o por su archivo (D-097): la IA no puede contestarla sin mirar los pedidos. */
 export function asksAboutOrders(text: string): boolean {
-  return (STATUS.test(text) || FILE_QUESTION.test(plain(text)) || jobNumberIn(text) !== null) && !NEW_JOB.test(text);
+  return (STATUS.test(plain(text)) || FILE_QUESTION.test(plain(text)) || jobNumberIn(text) !== null) && !NEW_JOB.test(text);
 }
 
 /**
@@ -200,7 +214,7 @@ export function fixedFlow(text: string, c: FlowContext): string | null {
   }
   if (THANKS.test(text)) return /gracias/i.test(text) ? "¡De nada! Cualquier cosa, escribime por acá." : "¡Dale! Cualquier cosa, escribime por acá.";
 
-  if ((STATUS.test(text) || FILE_QUESTION.test(plain(text))) && !NEW_JOB.test(text)) {
+  if ((STATUS.test(plain(text)) || FILE_QUESTION.test(plain(text))) && !NEW_JOB.test(text)) {
     const active = c.jobs.filter((j) => j.status !== "Entregado" && j.status !== "Cancelado");
     if (active.length === 0) {
       return "Todavía no veo pedidos tuyos en curso. Si mandaste el archivo recién, puede tardar unos minutos en aparecer. Si todavía no lo mandaste, usá el clip 📎 de este chat y te pasamos el precio.";

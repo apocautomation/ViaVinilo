@@ -19,6 +19,8 @@ export interface BotJob {
   depositAmount?: string | null;
   estimatedReadyAt: Date | null;
   createdAt: Date;
+  /** Sucursal donde lo retira: "chile" o "san-juan" (D-083, D-099). Sin dato, la del servicio. */
+  pickupBranch?: string | null;
   /** Archivos guardados en el pedido (D-094). Sin el dato (undefined) el bot no afirma nada. */
   files?: string[];
   /** El pedido llegó con un link al archivo (D-094). */
