@@ -135,7 +135,7 @@ Mientras un punto esté **Abierto**, no se implementa por suposición: se deja `
 | I-25 | Cómo se reconoce la seña (D-050) | "Cuando el cliente pase el comprobante, pasa a Seña recibida": falta definir si alcanza con que mande una imagen o si alguien la verifica. | E1 | Abierto. Propuesta: el asesor ve el comprobante en Conversaciones y toca "Seña recibida" (un clic, queda auditado). La lectura automática del monto queda para después. |
 | I-26 | Tableros que faltan (D-050) | Ezequiel listó 6 tableros (Calandra, DTF, DTF UV, Gran Formato, Látex y Sublimación). Verónica nombró además TPU y Embroidery, y el Corte con su casilla `cortes@`. | E1 | **Resuelto en D-082** (definido el 24/11): Gran Formato con Látex, Ecosolvente, UV rollo a rollo, UV rígidos y Cortes; DTF Textil, DTF UV y TPU; sin Embroidery. |
 | I-27 | Seña por servicio en la Ayuda de la app (D-053) | Los agentes de Runamatic no coinciden: los de sector piden 50% siempre; el agente "SISTEMA NUEVO" la pide según metros (DTF Textil, Sublimación y Calandra desde 10 m; DTF UV desde 3 m; TPU siempre). La Ayuda muestra la del agente más nuevo. | E1 | Abierto. Confirmar con Verónica y corregir `apps/pwa/app/(app)/ayuda/content.ts`. |
-| I-28 | Materiales de cada tablero (D-095) | Ricardo manda un Excel con las opciones de cada producto (por ejemplo las telas de Calandra). Los códigos de DTF Textil (`DTF-GLI`, etc.) los puse yo y son provisorios. | E1 | Abierto. Cargar el Excel en Producción → Opciones de impresión (o por importación) y confirmar los códigos con Ricardo. |
+| I-28 | Opciones de impresión de cada tablero (D-095, D-108) | El catálogo ya está cargado con los Excel de Ricardo del 25/11 (DTF Textil, DTF UV, Calandrado y Sublimación, con SKU de Tango y anchos). Los códigos cortos (`SET`, `COOL` los dio Ricardo; el resto, como `GLI` o `TROP`, los propuse yo) faltan confirmar. Faltan los Excel de Gran Formato (Látex, Ecosolvente, UV), TPU y Cortes. | E1 | Abierto. Confirmar los códigos con Ricardo y cargar los tableros que faltan. |
 
 ## 4. Bitácora de decisiones
 
@@ -1552,6 +1552,15 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Qué**: "envías" → "enviás" y "Recuerda" → "Recordá" (formas de "tú" que se escapaban). Se saca la frase "si querés ver el archivo, mandá el clip…", que la IA agregaba con un archivo en revisión y no tiene sentido.
 - **Por qué**: batería completa del 25/11 sobre el código en producción: los 45 casos con datos correctos y quedaban solo estos tres detalles.
 - **Impacto**: sin migración.
+### D-108 · 25/11/2026 · Ricardo (WhatsApp y Excel "DETALLE …" del 25/11) + Ezequiel · catálogo de opciones de impresión con código de Tango
+- **Qué**: se cargan las opciones de impresión de los Excel de Ricardo: DTF Textil (7), DTF UV (1), Calandrado (39 telas) y Sublimación (4 papeles). Cada opción guarda su **código SKU de Tango**, el **ancho** y el **ancho útil** (en cm; texto porque A4 es "21x29,7"). Se ven y se cargan en Producción → Opciones de impresión. La migración las carga en producción sola al desplegar.
+- **DTF Textil**: las provisorias de D-095 pasan a las del Excel con sus pedidos (Glitter, Dorado, Plateado, Color change, Normal; "Plata" pasa a "Plata sólida"). Reflectivo, Fluorescente y Oro no están en el Excel: se desactivan (el pedido que tenía "Oro" la conserva). Se suma Fotoluminiscente.
+- **Códigos cortos**: sin guiones y en mayúsculas (`SET`, `COOL`, `GLI`, `TROP`…), para que en D-109 vayan adelante del número del pedido ("SET-000002") sin ambigüedad. Ricardo dio `SET` (Jersey Set) y `COOL` (Cool Dry Fit) de ejemplo; los demás los propuse a partir del nombre y faltan confirmar (`TODO(spec): I-28`).
+- **Sin precios**: Ricardo prefiere no cargarlos todavía ("que los chicos coticen manualmente por ahora"). Los precios suben por el dólar o por el costo de un insumo, no por un porcentaje fijo; a futuro deberían sincronizarse con Tango (E3). La idea de un botón "subir precios por porcentaje" queda en el backlog.
+- **Mails**: la detección de la opción en el mail se queda con la frase más completa ("polar antipeeling" no es también "polar"; "set de microfibra premium" no es "set").
+- **App de clientes**: con más de 8 opciones (Calandrado) el selector es una lista desplegable en vez de botones.
+- **En espera**: Ricardo propuso que el sistema junte solo los trabajos de la misma tela según el volumen (por ejemplo 10 trabajos de Jersey Set) para mandarlos a imprimir juntos. Ezequiel le preguntó si sería de distintos clientes, porque la cotización es individual; queda en espera hasta su respuesta. Hoy ya existe "Agrupar por opción" en el tablero (E1.4).
+- **Impacto**: migración `20261125060000_sector_variants_tango` (columnas nuevas y carga del catálogo). Seed actualizado con el mismo catálogo.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

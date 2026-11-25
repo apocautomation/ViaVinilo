@@ -66,5 +66,13 @@ export const FILE_ERROR_REASONS: FileErrorReasonSeed[] = [
 
 /** Materiales u opciones de impresión por tablero (D-095). */
 export const SECTOR_VARIANTS = Object.entries(DEFAULT_SECTOR_VARIANTS).flatMap(([sector, list]) =>
-  (list ?? []).map((v, i) => ({ sector: sector as SectorCode, code: v.code, name: v.name, sortOrder: i + 1 })),
+  (list ?? []).map((v, i) => ({
+    sector: sector as SectorCode,
+    code: v.code,
+    name: v.name,
+    tangoSku: v.tangoSku ?? null,
+    width: v.width ?? null,
+    usableWidth: v.usableWidth ?? null,
+    sortOrder: i + 1,
+  })),
 );

@@ -242,7 +242,7 @@ async function decide(
   // D-092: si el mail nombra un solo sub-servicio de esta casilla, el pedido entra directo ahí.
   const subCode = related.length ? detectSubService(`${mail.subject}\n${mail.text}`, related.map((r) => r.code)) : null;
   const target = related.find((r) => r.code === subCode) ?? null;
-  // D-095: si el mail nombra un material de ese tablero ("glitter", "DTF-GLI"), queda cargado.
+  // D-095: si el mail nombra un material de ese tablero ("glitter", "SET"), queda cargado.
   const variants = await prisma.sectorVariant.findMany({ where: { sectorId: target?.id ?? sector.id, active: true }, select: { id: true, code: true, name: true } });
   const variantId = variants.length ? detectVariant(`${mail.subject}\n${mail.text}`, variants) : null;
 

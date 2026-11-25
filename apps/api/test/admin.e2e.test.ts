@@ -110,19 +110,31 @@ describe("Configuración: permiso para ver los totales (D-089)", () => {
   });
 });
 
-describe("materiales por tablero (D-095)", () => {
-  it("D-095: el dueño agrega, renombra y desactiva materiales; el código no se repite; queda auditado", async () => {
-    expect((await as("attention").post(`/sectors/${dtfId}/variants`, { code: "A-GLI", name: "Glitter" })).status).toBe(403);
-    const created = await as("owner").post(`/sectors/${dtfId}/variants`, { code: "a-gli", name: "Glitter" });
+describe("opciones de impresión por tablero (D-095, D-108)", () => {
+  it("D-095: el dueño agrega, renombra y desactiva opciones; el código no se repite; queda auditado", async () => {
+    expect((await as("attention").post(`/sectors/${dtfId}/variants`, { code: "AGLI", name: "Glitter" })).status).toBe(403);
+    const created = await as("owner").post(`/sectors/${dtfId}/variants`, { code: "agli", name: "Glitter" });
     expect(created.status).toBe(201);
-    expect(created.body).toMatchObject({ code: "A-GLI", name: "Glitter", active: true });
-    expect((await as("owner").post(`/sectors/${dtfId}/variants`, { code: "A-GLI", name: "Otro" })).status).toBe(409);
+    expect(created.body).toMatchObject({ code: "AGLI", name: "Glitter", active: true, tangoSku: null });
+    expect((await as("owner").post(`/sectors/${dtfId}/variants`, { code: "AGLI", name: "Otro" })).status).toBe(409);
     const off = await as("owner").patch(`/variants/${created.body.id}`, { active: false, name: "Glitter fino" });
     expect(off.body).toMatchObject({ active: false, name: "Glitter fino" });
     const all = await as("owner").get("/sectors/all");
-    expect(all.body.find((s: { id: string }) => s.id === dtfId).variants.map((v: { code: string }) => v.code)).toContain("A-GLI");
+    expect(all.body.find((s: { id: string }) => s.id === dtfId).variants.map((v: { code: string }) => v.code)).toContain("AGLI");
     const audit = await prisma.auditLog.findFirst({ where: { entity: "SectorVariant", entityId: created.body.id, action: "update" } });
     expect(audit).toMatchObject({ before: { active: true }, after: { active: false, name: "Glitter fino" } });
+  });
+
+  it("D-108: guarda el código de Tango y los anchos; el código de Tango no se repite; el código no lleva guiones", async () => {
+    expect((await as("owner").post(`/sectors/${dtfId}/variants`, { code: "A-SET", name: "Con guion" })).status).toBe(400);
+    const created = await as("owner").post(`/sectors/${dtfId}/variants`, { code: "ASET", name: "Jersey Set", tangoSku: "ZZTEST001", width: "160", usableWidth: "155" });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ code: "ASET", tangoSku: "ZZTEST001", width: "160", usableWidth: "155" });
+    const dup = await as("owner").post(`/sectors/${dtfId}/variants`, { code: "ASET2", name: "Otra", tangoSku: "ZZTEST001" });
+    expect(dup.status).toBe(409);
+    expect(dup.body.message).toBe("Ese código de Tango ya lo tiene otra opción");
+    const edited = await as("owner").patch(`/variants/${created.body.id}`, { width: "150", usableWidth: "145" });
+    expect(edited.body).toMatchObject({ width: "150", usableWidth: "145", tangoSku: "ZZTEST001" });
   });
 });
 

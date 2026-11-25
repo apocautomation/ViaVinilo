@@ -457,7 +457,7 @@ export class JobsService {
             ...(n ? [{ number: n }, { customer: { customerNumber: n } }] : []),
             { customer: { AND: terms.map((t) => ({ searchText: { contains: t } })) } },
             { customer: { emails: { some: { email: { contains: query.q.trim().toLowerCase() } } } } },
-            // D-095: también por el código o el nombre del material ("DTF-GLI", "glitter").
+            // D-095: también por el código o el nombre del material ("SET", "glitter").
             { variant: { OR: [{ code: query.q.trim().toUpperCase() }, { name: { contains: query.q.trim(), mode: "insensitive" } }] } },
           ],
         },
