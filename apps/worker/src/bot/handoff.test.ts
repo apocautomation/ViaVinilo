@@ -22,4 +22,10 @@ describe("derivación fija a un asesor (D-057)", () => {
     expect(handoffReply(new Date("2026-11-21T01:00:00Z"))).toMatch(/próximo día hábil/); // viernes 22:00
     expect(handoffReply(new Date("2026-11-22T15:00:00Z"))).toMatch(/próximo día hábil/); // domingo
   });
+
+  it("D-101: 'cuánto es la seña' no es pedir precio; 'llegó todo despegado' es un reclamo", () => {
+    expect(fixedHandoff("cuánto es la seña?")).toBeNull();
+    expect(fixedHandoff("cuánto es?")).toBe("Pide precio o presupuesto");
+    expect(fixedHandoff("me llegó todo despegado, es un desastre")).toBe("Reclamo por una falla");
+  });
 });

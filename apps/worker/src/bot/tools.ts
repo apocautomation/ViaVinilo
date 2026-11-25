@@ -89,8 +89,10 @@ export function buildToolKit(c: ToolContext): ToolKit {
     problema_del_archivo: j.fileIssue ?? undefined,
     control_del_archivo: j.fileCheck === "ok" ? "dio bien" : j.fileCheck === "review" ? "lo revisa el equipo" : undefined,
     precio: j.quotedAmount ?? undefined,
-    // D-099: dónde lo retira (la que eligió el cliente o la del servicio).
-    retira_en: `${pickupOf(j).name}, ${pickupOf(j).address}`,
+    // D-099: dónde lo retira. D-101: solo si está listo; si no, la IA decía "listo para retirar" de un pedido impreso.
+    listo_para_retirar: j.status === "Terminado, listo para retirar",
+    retira_en: j.status === "Terminado, listo para retirar" ? `${pickupOf(j).name}, ${pickupOf(j).address}` : undefined,
+    cuando_este_listo_se_retira_en: j.status === "Terminado, listo para retirar" ? undefined : pickupOf(j).name,
     sena: j.depositRequired ? (j.depositPaid ? "pagada" : `pendiente${j.depositAmount ? ` (${j.depositAmount})` : ""}`) : undefined,
     // La frase ya armada con los datos: la IA la puede usar tal cual o decirla con sus palabras.
     resumen: jobLine(j),
@@ -111,7 +113,7 @@ export function buildToolKit(c: ToolContext): ToolKit {
         return JSON.stringify({
           pedidos_en_curso: active.slice(0, 5).map(shape),
           total_en_curso: active.length,
-          entregados_recientes: c.jobs.filter((j) => j.status === "Entregado").slice(0, 2).map((j) => ({ pedido: j.label, servicio: j.sector })),
+          entregados_recientes: c.jobs.filter((j) => j.status === "Entregado").slice(0, 2).map((j) => ({ pedido: j.label, servicio: j.sector, estado: "Entregado: ya lo retiró, no está pendiente" })),
           avisos_automaticos: c.noticesOn ? "prendidos: cuando cambia el estado le llega un aviso" : "apagados: no prometas avisos",
         });
       }

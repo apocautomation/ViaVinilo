@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixedFlow, toolFor } from "./flows";
+import { fixedFlow, jobLine, toolFor } from "./flows";
 
 const ctx = { firstName: "Juan", alreadyTalking: false, noticesOn: false, jobs: [] };
 
@@ -22,7 +22,7 @@ describe("flujos fijos del bot (D-060)", () => {
   it("D-060: '¿está listo?' se responde con los pedidos reales; sin pedidos no promete nada", () => {
     expect(fixedFlow("¿cuándo va a estar listo lo que te pedí?", ctx)).toMatch(/Todavía no veo pedidos tuyos/);
     const jobs = [{ label: "VV-000012", sector: "Calandrado", status: "Cotizado", description: "Tela", quotedAmount: "1", depositRequired: true, depositPaid: false, estimatedReadyAt: null, createdAt: new Date() }];
-    expect(fixedFlow("ya está listo mi pedido?", { ...ctx, jobs: [{ ...jobs[0]!, quotedAmount: null }] })).toBe("Tu pedido: VV-000012 (Calandrado, Tela): Cotizado.");
+    expect(fixedFlow("ya está listo mi pedido?", { ...ctx, jobs: [{ ...jobs[0]!, quotedAmount: null }] })).toBe("Tu pedido: VV-000012 (Calandrado, Tela): Cotizado. Todavía no está listo para retirar.");
     expect(fixedFlow("ya está listo mi pedido?", { ...ctx, jobs, noticesOn: true })).toMatch(/te llega un aviso/);
   });
 
@@ -48,7 +48,7 @@ describe("flujos fijos del bot (D-060)", () => {
     expect(conSena).toMatch(/cotizado en \$\s?45\.000,00\. Para empezar falta la seña de \$\s?20\.000,00/);
     expect(conSena).toContain("pedime el alias");
     const pagada = fixedFlow("ya está listo mi pedido?", { ...ctx, jobs: [{ ...base, quotedAmount: "45000", depositRequired: true, depositPaid: true }] });
-    expect(pagada).toMatch(/cotizado en \$\s?45\.000,00\.$/);
+    expect(pagada).toMatch(/cotizado en \$\s?45\.000,00\. Entra a producción por orden de llegada \(24 a 48 h hábiles\)\.$/);
     expect(pagada).not.toMatch(/seña/);
   });
 
@@ -116,6 +116,12 @@ describe("flujos fijos del bot (D-060)", () => {
     const jobs = [{ label: "VV-000101", sector: "DTF Textil", status: "Archivo recibido", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: ["logo.png"], fileCheck: "ok" as const }];
     expect(toolFor("ola tenes mi archibo?", jobs)).toBe("ver_mis_pedidos");
     expect(fixedFlow("ola tenes mi archibo?", { ...ctx, jobs })).toContain("recibimos el archivo y el control automático dio bien (logo.png)");
+  });
+
+  it("D-101: 'lo puedo pasar a buscar?' con un pedido listo dice dónde retirarlo", () => {
+    const jobs = [{ label: "VV-000109", sector: "Calandrado", status: "Terminado, listo para retirar", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date(), files: ["t.pdf"], pickupBranch: "chile" }];
+    expect(toolFor("lo puedo pasar a buscar?", jobs)).toBe("ver_mis_pedidos");
+    expect(fixedFlow("lo puedo pasar a buscar?", { ...ctx, jobs })).toContain("listo para retirar en Planta");
   });
 
   it("D-060: lo demás lo responde la IA", () => {
@@ -224,5 +230,18 @@ describe("respuestas que la IA contestaba mal (D-066)", () => {
   it("D-066: tiempos y formato", () => {
     expect(fixedFlow("cuanto tardan?", ctx)).toMatch(/^Entre 24 y 48 horas hábiles/);
     expect(fixedFlow("como tengo que mandar el archivo para dtf?", ctx)).toMatch(/^DTF Textil: PNG con fondo transparente/);
+  });
+
+  it("D-101: 'cómo te mando el diseño' no es pedir que lo diseñen; '???' pide que cuente qué necesita", () => {
+    expect(fixedFlow("quiero hacer tazas, cómo te mando el diseño?", ctx)).not.toMatch(/No diseñamos/);
+    expect(fixedFlow("me pueden arreglar el diseño?", ctx)).toMatch(/No diseñamos/);
+    expect(fixedFlow("???", ctx)).toMatch(/^Contame qué necesitás/);
+    expect(fixedFlow("👍", ctx)).toMatch(/^¡Dale!/);
+  });
+
+  it("D-101: un pedido impreso no está listo para retirar; uno entregado ya se entregó", () => {
+    const j = { label: "VV-000108", sector: "DTF Textil", description: null, quotedAmount: null, depositRequired: false, depositPaid: false, estimatedReadyAt: null, createdAt: new Date() };
+    expect(jobLine({ ...j, status: "Impreso" })).toBe("VV-000108 (DTF Textil): Impreso. Todavía no está listo para retirar");
+    expect(jobLine({ ...j, status: "Entregado" })).toBe("VV-000108 (DTF Textil): ya lo entregamos");
   });
 });

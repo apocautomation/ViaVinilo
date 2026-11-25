@@ -21,4 +21,9 @@ describe("el bot habla de vos (D-060)", () => {
     expect(toVoseo("Estas son las sucursales. Las pagas del mes.")).toBe("Estas son las sucursales. Las pagas del mes.");
     expect(toVoseo("A Juan le responde Ana.")).toBe("A Juan le responde Ana.");
   });
+
+  it("D-101: pasa a vos el imperativo de 'tú' antes de lo que se pide", () => {
+    expect(toVoseo("Con el clip (elige el servicio, escribe medidas y cantidad).")).toBe("Con el clip (elegí el servicio, escribí medidas y cantidad).");
+    expect(toVoseo("El equipo elige el color.")).toBe("El equipo elige el color.");
+  });
 });

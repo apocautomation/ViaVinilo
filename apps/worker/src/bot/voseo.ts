@@ -52,6 +52,19 @@ const MAP: Record<string, string> = {
 const PHRASES: [RegExp, string][] = [
   [/\b(un asesor(?: del equipo)?(?: de Via Vinilo)?) le (responde|contesta|escribe|va a responder|va a escribir)\b/gi, "$1 te $2"],
   [/\ble (respondemos|contestamos|escribimos|avisamos|pasamos)\b/gi, "te $1"],
+  // D-101: imperativo de "tú" antes de lo que se pide ("elige el servicio, escribe medidas").
+  ...(
+    [
+      ["elige", "elegí"],
+      ["escribe", "escribí"],
+      ["indica", "indicá"],
+      ["adjunta", "adjuntá"],
+      ["envía", "enviá"],
+    ] as const
+  ).map(([tu, vos]): [RegExp, string] => [
+    new RegExp(`(^|[(,.:;!?¿¡]\\s*|\\s(?:y|o)\\s)${tu}(?= (?:el|la|los|las|tu|tus|un|una|medidas|cantidad|nombre)\\b)`, "giu"),
+    `$1${vos}`,
+  ]),
 ];
 
 const RE = new RegExp(`(?<![\\p{L}])(${Object.keys(MAP).join("|")})(?![\\p{L}])`, "giu");

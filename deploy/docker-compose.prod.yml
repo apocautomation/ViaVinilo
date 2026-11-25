@@ -131,7 +131,9 @@ services:
       OLLAMA_CONTEXT_LENGTH: "8192"
     cpus: 3
     # D-098: qwen3:8b con 8.192 de contexto usa ~7,9 GB: con 8 GB quedaba al límite.
-    mem_limit: 10g
+    # D-101: en una tanda de 60 consultas seguidas pasó los 10 GB y se cortó el modelo. El resto de los
+    # servicios usa menos de 1 GB: con 12 GB quedan ~3,5 GB libres en el servidor (16 GB).
+    mem_limit: 12g
     volumes:
       - ollama:/root/.ollama
 
