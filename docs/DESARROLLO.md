@@ -1487,6 +1487,17 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Velocidad**: el servidor tiene 4 núcleos sin placa de video. Hay que medir `qwen3:8b` con `bot-dry-run` antes de prender el bot en más chats; con el 3B cada respuesta de la IA tardaba entre 6 y 10 segundos.
 - **Impacto**: sin migración. `BOT_MODEL` por defecto pasa a `qwen3:8b` (compose, `.env.example` y código); hay que bajar el modelo en el servidor (`ollama pull qwen3:8b`, unos 5 GB).
 
+### D-098 · 25/11/2026 · Ezequiel (medición del bot con qwen3:8b) · ajustes de la IA con herramientas
+- **Medición del 25/11** (10 mensajes, `bot-dry-run` en el servidor, sin tocar la base): con herramientas respondió bien los pedidos y archivos, pero tardó 24 a 46 s (93 s el primero, al cargar el modelo), Ollama usó 7,85 de 8 GB, y 4 de 10 respuestas tuvieron problemas: horario de hoy equivocado (dio el del sábado un miércoles), explicó DTF y sublimación inventando, inventó un plazo de "5 días" y escribió la llamada a `derivar_a_asesor` en el texto en vez de derivar, y dio formatos de archivo sin consultar el servicio. Ezequiel eligió dejarlo andando y ajustarlo.
+- **Ajustes**:
+  - `sucursales_y_horarios` dice el día y la hora de hoy y, por sucursal, si está abierta y a qué hora cierra hoy.
+  - Cada tipo de pregunta tiene **su herramienta** (pedido o archivo → `ver_mis_pedidos`; horarios → `sucursales_y_horarios`; alias → `datos_de_pago`; formato o trabajo nuevo → `info_servicio`; espejo, diseño, retiros, envíos, señas, tiempos, insumos → `preguntas_frecuentes`). Si la IA no la usó, va la respuesta armada con los datos.
+  - Una pregunta que la IA contesta **sin ninguna herramienta** y sin respuesta armada (por ejemplo "¿qué diferencia hay entre DTF y sublimación?") va a un asesor: el bot no tiene de dónde sacar el dato.
+  - Si la IA escribe el nombre de una herramienta en el texto, se saca; si era `derivar_a_asesor`, deriva igual. Se sacan asteriscos y títulos (el chat no muestra Markdown).
+  - El modelo queda cargado 24 h (antes 30 min: cada recarga tardaba ~90 s) y Ollama pasa de 8 a 10 GB de memoria.
+- **Impacto**: sin migración. Cambia `mem_limit` de Ollama en `deploy/docker-compose.prod.yml`.
+- **Abierto**: la velocidad (20 a 45 s con herramientas) es el límite de este servidor sin placa de video. Las explicaciones técnicas de los servicios se resuelven cuando la Ayuda sea editable (Etapa 2).
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

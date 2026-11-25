@@ -52,7 +52,7 @@ const NEW_JOB =
 const ASKS =
   /\?|^\s*(d[oó]nde|qu[eé]|cu[aá]l|cu[aá]ndo|cu[aá]nto|a qu[eé] hora|hasta qu[eé] hora|c[oó]mo|puedo|se puede|tienen|hay|hacen|venden|abren|me pas[aá]s|me pod[eé]s|pasame)\b/i;
 const WHERE = /\b(d[oó]nde|direcci[oó]n|ubicaci[oó]n|sucursal(es)?|c[oó]mo llego|mapa)\b/i;
-const HOURS = /\b(horarios?|abren|cierran|atienden|abierto|hasta qu[eé] hora|a qu[eé] hora)\b/i;
+const HOURS = /\b(horarios?|abren|cierran|atienden|abiert[oa]s?|hasta qu[eé] hora|a qu[eé] hora)\b/i;
 const SATURDAY = /\bs[aá]bados?\b/i;
 const TODAY = /\b(hoy|ahora)\b/i;
 const MIRROR = /\b(espejo|espejad\w*)\b/i;
@@ -171,6 +171,25 @@ export function jobLine(j: BotJob): string {
 export function asksAboutOrders(text: string): boolean {
   return (STATUS.test(text) || FILE_QUESTION.test(plain(text)) || jobNumberIn(text) !== null) && !NEW_JOB.test(text);
 }
+
+/**
+ * Qué herramienta tiene que haber usado la IA para responder este mensaje (D-098). Si no la usó, su
+ * respuesta no se basa en datos del sistema y se reemplaza por la armada. Mismo orden que fixedFlow.
+ */
+export function toolFor(text: string): string | null {
+  if (GREETING.test(text) || THANKS.test(text)) return null;
+  if (asksAboutOrders(text)) return "ver_mis_pedidos";
+  const asks = ASKS.test(text);
+  if (asks && PAY.test(text)) return "datos_de_pago";
+  if (asks && (MIRROR.test(text) || DESIGN.test(text) || DEPOSIT.test(text) || THIRD_PARTY.test(text) || SUPPLIES.test(text) || TIMES.test(text))) return "preguntas_frecuentes";
+  if (asks && SHIPPING.test(text) && !/\barchivos?\b/i.test(text)) return "preguntas_frecuentes";
+  if (asks && (WHERE.test(text) || HOURS.test(text) || /\bretir\w*/i.test(text))) return "sucursales_y_horarios";
+  if ((asks && FORMAT.test(text)) || NEW_JOB.test(text)) return "info_servicio";
+  return null;
+}
+
+/** Es una pregunta (D-098): si la IA la contesta sin ninguna herramienta, no tiene de dónde sacar el dato. */
+export const isQuestion = (text: string) => ASKS.test(text) && !GREETING.test(text) && !THANKS.test(text);
 
 /** Devuelve la respuesta fija, o null si el mensaje no es de estos flujos (lo responde la IA). */
 export function fixedFlow(text: string, c: FlowContext): string | null {

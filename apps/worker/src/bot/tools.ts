@@ -18,6 +18,17 @@ export interface ToolContext {
   jobs: BotJob[];
   boards?: ExtraBoard[];
   noticesOn: boolean;
+  /** Ahora (D-098): para decir si hoy está abierto y hasta qué hora. */
+  now?: Date;
+}
+
+/** Hoy en Salta: día de la semana y hora (D-098). La IA confundía el horario del sábado con el de hoy. */
+export function todayInSalta(now: Date): { label: string; day: number; minutes: number } {
+  const tz = "America/Argentina/Salta";
+  const label = now.toLocaleString("es-AR", { timeZone: tz, weekday: "long", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(now.toLocaleString("en-US", { timeZone: tz, weekday: "short" }));
+  const [h, m] = now.toLocaleString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).split(":").map(Number);
+  return { label, day, minutes: h! * 60 + m! };
 }
 
 /** Lo que dejó la conversación con las herramientas: cuáles usó y si derivó. */
@@ -118,8 +129,26 @@ export function buildToolKit(c: ToolContext): ToolKit {
           sena: help.DEPOSITS.find((d) => d.service.toLowerCase().includes(s.name.toLowerCase().split(" ")[0]!))?.rule ?? null,
         });
       }
-      case "sucursales_y_horarios":
-        return JSON.stringify(help.BRANCHES.map((b) => ({ sucursal: b.name, direccion: b.address, servicios: b.services, horarios: b.hours.map((h) => `${h.days} ${h.time}`), mapa: b.mapUrl })));
+      case "sucursales_y_horarios": {
+        const today = todayInSalta(c.now ?? new Date());
+        const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+        return JSON.stringify({
+          ahora: today.label,
+          sucursales: help.BRANCHES.map((b) => {
+            // Domingo cerrado; sábado el segundo horario; de lunes a viernes el primero.
+            const slot = today.day === 0 ? null : today.day === 6 ? b.hours[1] : b.hours[0];
+            const [open, close] = slot ? slot.time.split(" a ") : [];
+            const state = !slot
+              ? "hoy está cerrada"
+              : today.minutes < toMin(open!)
+                ? `hoy abre a las ${open} y cierra a las ${close}`
+                : today.minutes < toMin(close!)
+                  ? `ahora está abierta, hoy cierra a las ${close}`
+                  : `hoy ya cerró (cerró a las ${close})`;
+            return { sucursal: b.name, direccion: b.address, servicios: b.services, hoy: state, horarios: b.hours.map((h) => `${h.days} ${h.time}`), mapa: b.mapUrl };
+          }),
+        });
+      }
       case "datos_de_pago": {
         const s = args.servicio ? serviceFor(String(args.servicio)) : null;
         const list = s ? [help.PAYMENTS[isCentro(s.id) ? 1 : 0]!] : [...help.PAYMENTS];

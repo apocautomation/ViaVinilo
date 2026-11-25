@@ -130,7 +130,8 @@ services:
       # El prompt del bot ocupa ~3.400 tokens: con 4.096 se cortaría el hilo.
       OLLAMA_CONTEXT_LENGTH: "8192"
     cpus: 3
-    mem_limit: 8g
+    # D-098: qwen3:8b con 8.192 de contexto usa ~7,9 GB: con 8 GB quedaba al límite.
+    mem_limit: 10g
     volumes:
       - ollama:/root/.ollama
 
