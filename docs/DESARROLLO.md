@@ -1513,6 +1513,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Arreglo**: si el cliente tiene un pedido "Terminado, listo para retirar" y pregunta dónde ("¿en qué sucursal?", "¿dónde lo retiro?"), la pregunta va a `ver_mis_pedidos` y se responde con la sucursal de ese pedido. Si la IA no consulta el pedido, va la respuesta armada con la sucursal. "¿Hasta qué hora abren?" sigue yendo a los horarios, y sin pedido listo se muestran las dos sucursales.
 - **Impacto**: sin migración.
 
+### D-101 · 25/11/2026 · Ezequiel · voseo con tilde y batería de casos del bot
+- **Voseo**: el modelo a veces escribe el voseo sin tilde ("Podes retirarlo") o pasa a "usted" al derivar ("un asesor le responde"). Se corrigen al salir: podes → podés, tenes → tenés, queres → querés, decís, venís, elegís, pedís, preferís, recibís, retirás; "un asesor le responde" → "te responde", "le avisamos" → "te avisamos". No se tocan palabras que son otra cosa ("estas", "pagas") ni "le responde" referido a un tercero.
+- **Batería de casos** (`docs/bot/casos-de-prueba.json`): 45 situaciones con lo que se espera de cada una: saludos, errores de tipeo, pedidos en cada estado, sin pedidos, varios pedidos, número inexistente, alta pendiente, formatos y casillas por servicio, horarios, pagos, preguntas frecuentes, derivaciones y preguntas fuera de tema. Son casos inventados, sin datos de clientes. Se corren con `bot-dry-run`, que ahora acepta la conversación anterior (`history`) para probar el contexto ("el 112", "lona") y muestra lo esperado al lado de la respuesta.
+- **Impacto**: sin migración.
+
 ## 5. Pendientes del cliente para arrancar la E1
 
 Actualizar cuando llegue cada cosa.

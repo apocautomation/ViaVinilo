@@ -29,14 +29,20 @@ async function main() {
     jobs?: DryRunJob[];
     alreadyTalking?: boolean;
     noticesOn?: boolean;
+    /** Mensajes anteriores del mismo chat (D-101), para probar el contexto: "el 51", "lona". */
+    history?: { role: "user" | "assistant"; content: string }[];
+    pendingSignup?: boolean;
+    /** Qué se espera, para leer el resultado (no se evalúa solo). */
+    expect?: string;
   }[];
   for (const [i, c] of cases.entries()) {
     const firstName = c.firstName ?? null;
     const now = new Date();
     const jobs = dryRunJobs(c.jobs, now);
-    const alreadyTalking = c.alreadyTalking ?? false;
+    const history = c.history ?? [];
+    const alreadyTalking = c.alreadyTalking ?? history.some((h) => h.role === "assistant");
     const noticesOn = c.noticesOn ?? false;
-    const system = buildAgentPrompt({ customerName: firstName ?? "Cliente", customerNumber: 0, pendingSignup: false, jobs, now, alreadyTalking, noticesOn });
+    const system = buildAgentPrompt({ customerName: firstName ?? "Cliente", customerNumber: 0, pendingSignup: c.pendingSignup ?? false, jobs, now, alreadyTalking, noticesOn });
     const t0 = Date.now();
     const a = await decideAnswer({
       text: c.text,
@@ -46,13 +52,15 @@ async function main() {
       jobs,
       turns: [
         { role: "system", content: system },
+        ...history,
         { role: "user", content: c.text },
       ],
       llm,
       now,
     });
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
-    console.log(`\n#${i + 1} CLIENTE: ${c.text.replace(/\s+/g, " ").slice(0, 300)}`);
+    console.log(`\n#${i + 1} CLIENTE: ${c.text.replace(/\s+/g, " ").slice(0, 300)}${history.length ? `  (con ${history.length} mensajes antes)` : ""}`);
+    if (c.expect) console.log(`   ESPERADO: ${c.expect}`);
     const tools = a.tools?.length ? `, herramientas: ${a.tools.join(" + ")}` : "";
     console.log(`   BOT [${a.source}${tools}${a.handoff ? `, deriva: ${a.reason}` : ""}, ${secs} s]: ${a.reply}`);
   }

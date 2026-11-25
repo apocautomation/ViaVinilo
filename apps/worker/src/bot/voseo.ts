@@ -31,12 +31,34 @@ const MAP: Record<string, string> = {
   "envíame": "mandame",
   "tú": "vos",
   contigo: "con vos",
+  // D-101: el voseo bien conjugado pero sin tilde ("Podes retirarlo"). Solo formas que no son otra
+  // palabra: "estas", "pagas" o "vos" quedan como están.
+  podes: "podés",
+  tenes: "tenés",
+  queres: "querés",
+  decis: "decís",
+  venis: "venís",
+  elegis: "elegís",
+  pedis: "pedís",
+  preferis: "preferís",
+  recibis: "recibís",
+  retiras: "retirás",
 };
+
+/**
+ * Frases de "usted" que el modelo usa al derivar (D-101): "un asesor le responde" → "te responde".
+ * Solo las que no pueden ser de una tercera persona.
+ */
+const PHRASES: [RegExp, string][] = [
+  [/\b(un asesor(?: del equipo)?(?: de Via Vinilo)?) le (responde|contesta|escribe|va a responder|va a escribir)\b/gi, "$1 te $2"],
+  [/\ble (respondemos|contestamos|escribimos|avisamos|pasamos)\b/gi, "te $1"],
+];
 
 const RE = new RegExp(`(?<![\\p{L}])(${Object.keys(MAP).join("|")})(?![\\p{L}])`, "giu");
 
 export function toVoseo(text: string): string {
-  return text.replace(RE, (word) => {
+  const phrased = PHRASES.reduce((t, [re, to]) => t.replace(re, to), text);
+  return phrased.replace(RE, (word) => {
     const out = MAP[word.toLowerCase()]!;
     return word[0] === word[0]!.toUpperCase() && word[0] !== word[0]!.toLowerCase() ? out[0]!.toUpperCase() + out.slice(1) : out;
   });
