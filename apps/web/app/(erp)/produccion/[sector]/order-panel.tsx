@@ -17,6 +17,8 @@ export type PanelMode = "view" | "quote" | "error" | "cancel" | "force" | "delet
 interface Detail {
   id: string;
   label: string;
+  /** D-109: "SET-000002"; sin opción, igual al VV-. */
+  code: string;
   status: string;
   statusLabel: string;
   sector: { code: string; name: string };
@@ -192,7 +194,8 @@ export function OrderPanel(props: {
       <aside className="drawer order-panel" role="dialog" aria-modal="true" aria-label={job ? `Pedido ${job.label}` : "Pedido"}>
         <div className="drawer-head">
           <span className="order-panel-title">
-            <strong>{job?.label ?? "Pedido"}</strong>
+            <strong>{job?.code ?? "Pedido"}</strong>
+            {job && job.code !== job.label && <span className="muted">{job.label}</span>}
             {job && <span className="chip chip-brand">{waitingDeposit ? "Esperando seña" : job.statusLabel}</span>}
             {job && <span className="muted">{job.sector.name}</span>}
           </span>

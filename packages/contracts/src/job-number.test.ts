@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatJobNumber, parseJobNumber } from "./job-number";
+import { formatJobCode, formatJobNumber, parseJobCode, parseJobNumber } from "./job-number";
 
 describe("número de orden", () => {
   it("R-JOB-1: formatea el correlativo como VV-000123", () => {
@@ -30,5 +30,15 @@ describe("número de orden", () => {
     expect(parseJobNumber("123")).toBeNull();
     expect(parseJobNumber("VV-12")).toBeNull();
     expect(parseJobNumber("VV-000000")).toBeNull();
+  });
+
+  it("D-109: el código del trabajo lleva adelante el código de la opción, con el mismo número", () => {
+    expect(formatJobCode(2, "SET")).toBe("SET-000002");
+    expect(formatJobCode(6, "COOL")).toBe("COOL-000006");
+    expect(formatJobCode(123, null)).toBe("VV-000123");
+    expect(parseJobCode("SET-000002")).toEqual({ code: "SET", number: 2 });
+    expect(parseJobCode(" cool-6 ")).toEqual({ code: "COOL", number: 6 });
+    expect(parseJobCode("SET")).toBeNull();
+    expect(parseJobCode("DTF-GLI")).toBeNull();
   });
 });

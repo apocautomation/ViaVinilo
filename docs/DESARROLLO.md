@@ -1561,6 +1561,12 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **App de clientes**: con más de 8 opciones (Calandrado) el selector es una lista desplegable en vez de botones.
 - **En espera**: Ricardo propuso que el sistema junte solo los trabajos de la misma tela según el volumen (por ejemplo 10 trabajos de Jersey Set) para mandarlos a imprimir juntos. Ezequiel le preguntó si sería de distintos clientes, porque la cotización es individual; queda en espera hasta su respuesta. Hoy ya existe "Agrupar por opción" en el tablero (E1.4).
 - **Impacto**: migración `20261125060000_sector_variants_tango` (columnas nuevas y carga del catálogo). Seed actualizado con el mismo catálogo.
+### D-109 · 25/11/2026 · Ricardo (WhatsApp del 25/11) + Ezequiel · código del trabajo según la tela
+- **Pedido**: "Necesitamos códigos distintos en los trabajos para organizar tipos de telas. Por ej.: SET-00002, COOL-00006. Cuando enviamos a imprimir, agrupamos los trabajos por material, independientemente del orden recibido."
+- **Qué**: en el ERP (tarjeta del tablero y panel del pedido) el trabajo se muestra con el código de la opción de impresión adelante del número: `SET-000002` es una Jersey Set Premium, `COOL-000006` una Cool Dry Fit. Al lado, más chico, va el `VV-000002`. El buscador del tablero encuentra el pedido por `SET-000002`. Sin opción elegida se ve el `VV-` como hasta ahora.
+- **Decisiones (por defecto, a confirmar con Ricardo)**: es el **mismo número** del pedido, no una numeración aparte por tela (así no hay dos pedidos con el mismo número y se cruza fácil con lo que dice el cliente). Seis dígitos, como el `VV-`. El **cliente sigue viendo `VV-`** en la app, el bot y los mails: el código por tela es para el taller.
+- **En espera**: que el sistema junte solo los trabajos por volumen de tela (ver D-108).
+- **Impacto**: sin migración. `formatJobCode` y `parseJobCode` en contracts; la tarjeta y el detalle del pedido traen `code`.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

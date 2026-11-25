@@ -12,8 +12,10 @@ import {
   JOB_STATUS_LABELS,
   allowedTransitions,
   checkTransition,
+  formatJobCode,
   formatJobNumber,
   normalizeSearch,
+  parseJobCode,
   parseJobNumber,
   type SectorCode,
 } from "@viavinilo/contracts";
@@ -125,6 +127,8 @@ export class JobsService {
       id: row.id,
       number: row.number,
       label: formatJobNumber(row.number),
+      /** Código en el ERP (D-109): "SET-000002" con la opción elegida; si no, el VV-. */
+      code: formatJobCode(row.number, row.variant?.code),
       status: row.status,
       statusLabel: JOB_STATUS_LABELS[row.status],
       customer: { id: row.customer.id, number: row.customer.customerNumber, name: name || null },
@@ -449,7 +453,8 @@ export class JobsService {
       where.createdAt = { gte: from, lt: new Date(from.getTime() + 864e5) };
     }
     if (query.q) {
-      const n = parseJobNumber(query.q) ?? (/^\d+$/.test(query.q.trim()) ? Number(query.q.trim()) : null);
+      // D-109: "SET-000002" también se busca por el número.
+      const n = parseJobNumber(query.q) ?? parseJobCode(query.q)?.number ?? (/^\d+$/.test(query.q.trim()) ? Number(query.q.trim()) : null);
       const terms = normalizeSearch(query.q).split(" ").filter(Boolean);
       where.AND = [
         {
