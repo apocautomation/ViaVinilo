@@ -25,4 +25,10 @@ describe("agrupación visual por opción de impresión (D-110)", () => {
     const groups = groupByMaterial(Array.from({ length: 12 }, (_, i) => card(String(i), { code: `T${String(i).padStart(2, "0")}`, name: `Tela ${i}` })));
     for (let i = 1; i < groups.length; i++) expect(groups[i]!.color).not.toBe(groups[i - 1]!.color);
   });
+
+  it("D-117: el mismo código de dos sub-servicios (Látex y Ecosolvente) es un solo grupo", () => {
+    const inLatex = { id: "1", variant: { id: "latex-jbb", code: "JBB", name: "Vinilo Jaspe base blanca" }, material: null };
+    const inEco = { id: "2", variant: { id: "eco-jbb", code: "JBB", name: "Vinilo Jaspe base blanca" }, material: null };
+    expect(groupByMaterial([inLatex, inEco]).map((g) => [g.code, g.cards.map((c) => c.id)])).toEqual([["JBB", ["1", "2"]]]);
+  });
 });

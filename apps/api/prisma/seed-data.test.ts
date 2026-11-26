@@ -43,11 +43,12 @@ describe("seed", () => {
     expect(new Set(FILE_ERROR_REASONS.map((r) => r.code)).size).toBe(FILE_ERROR_REASONS.length);
   });
 
-  it("D-108: siembra el catálogo de los Excel de Ricardo, con código único y SKU de Tango", () => {
+  it("D-108, D-117: siembra el catálogo de los Excel de Ricardo, con código único por tablero y SKU de Tango", () => {
     expect(SECTOR_VARIANTS.filter((v) => v.sector === "DTF")).toHaveLength(7);
     expect(SECTOR_VARIANTS.filter((v) => v.sector === "CALANDRADO")).toHaveLength(40);
     expect(SECTOR_VARIANTS.find((v) => v.code === "TCLI")).toMatchObject({ name: "Tela del cliente", tangoSku: null });
-    expect(new Set(SECTOR_VARIANTS.map((v) => v.code)).size).toBe(SECTOR_VARIANTS.length);
+    expect(new Set(SECTOR_VARIANTS.map((v) => `${v.sector}:${v.code}`)).size).toBe(SECTOR_VARIANTS.length);
+    expect(new Set(SECTOR_VARIANTS.filter((v) => v.code === "JBB").map((v) => v.sector))).toEqual(new Set(["LATEX", "ECOSOLVENTE", "UV_ROLLO"]));
     expect(SECTOR_VARIANTS.find((v) => v.name === "Glitter")).toMatchObject({ sector: "DTF", code: "GLI", tangoSku: "IMDT00009", width: "60", usableWidth: "58" });
   });
 });

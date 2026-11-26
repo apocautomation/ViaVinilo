@@ -27,15 +27,18 @@ import { SectorAccess } from "./sector-access";
 
 const BUSINESS_TZ = "America/Argentina/Salta";
 
-/** Con qué se agrupan los pedidos del mismo material (D-095): la opción elegida o, si no, el producto. */
-const materialKey = (r: { variantId: string | null; materialProductId: string | null }) =>
-  r.variantId ? `v:${r.variantId}` : r.materialProductId ? `p:${r.materialProductId}` : null;
+/**
+ * Con qué se agrupan los pedidos del mismo material (D-095): la opción elegida o, si no, el producto. D-117:
+ * la opción va por código, porque en Gran Formato el mismo vinilo está en cada sub-servicio.
+ */
+const materialKey = (r: { variant: { code: string } | null; materialProductId: string | null }) =>
+  r.variant ? `v:${r.variant.code}` : r.materialProductId ? `p:${r.materialProductId}` : null;
 
 export interface BoardQuery {
   sector: SectorCode;
   /** Sub-servicio del tablero (D-082). */
   service?: SectorCode;
-  /** Material u opción de impresión (D-095). */
+  /** Código de la opción de impresión (D-095, D-117). */
   variant?: string;
   machineId?: string;
   materialId?: string;
@@ -446,7 +449,7 @@ export class JobsService {
       ],
       ...(query.machineId ? { machineId: query.machineId } : {}),
       ...(query.materialId ? { materialProductId: query.materialId } : {}),
-      ...(query.variant ? { variantId: query.variant } : {}),
+      ...(query.variant ? { variant: { code: query.variant } } : {}),
     };
     if (query.date) {
       const from = new Date(`${query.date}T00:00:00-03:00`);
@@ -474,7 +477,7 @@ export class JobsService {
       include: cardInclude,
       // Por defecto, por orden de llegada (E1.4).
       orderBy: query.groupByMaterial
-        ? [{ variantId: { sort: "asc", nulls: "last" } }, { materialProductId: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }]
+        ? [{ variant: { code: "asc" } }, { materialProductId: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }]
         : { createdAt: "asc" },
       take: 1000,
     });
@@ -494,11 +497,12 @@ export class JobsService {
 
     return {
       sector: { id: sector.id, code: sector.code, name: sector.name },
-      /** Materiales de los tableros que se ven, para filtrar (D-095). */
+      /** Materiales de los tableros que se ven, para filtrar (D-095). Uno por código (D-117). */
       variants: await this.prisma.sectorVariant.findMany({
         where: { active: true, sectorId: { in: family.map((f) => f.id) } },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
         select: { id: true, code: true, name: true },
+        distinct: ["code"],
       }),
       /** Sub-servicios del tablero que ve este usuario (D-082). Vacío si el tablero no tiene. */
       services: family.filter((f) => f.id !== sector.id).map((f) => ({ code: f.code, name: f.name })),
@@ -560,7 +564,7 @@ export class JobsService {
    * Gran Formato y era de Látex. Solo dentro del mismo tablero; queda auditado.
    */
   async moveService(user: AuthUser, id: string, code: string) {
-    const job = await this.prisma.jobOrder.findFirst({ where: { id, deletedAt: null }, include: { sector: true } });
+    const job = await this.prisma.jobOrder.findFirst({ where: { id, deletedAt: null }, include: { sector: true, variant: { select: { code: true } } } });
     if (!job) throw new NotFoundException("No encontramos esa orden");
     await this.access.assert(user, job.sectorId);
     const target = await this.prisma.sector.findFirst({ where: { code, active: true }, include: { stages: true, machines: true } });
@@ -571,13 +575,15 @@ export class JobsService {
     if (job.status !== "PENDING_SIGNUP" && job.status !== "FILE_ERROR" && job.status !== "CANCELLED" && !target.stages.some((s) => s.status === job.status)) {
       throw new UnprocessableEntityException("Ese servicio no tiene el paso en el que está el pedido");
     }
-    // La máquina se conserva solo si también trabaja en el servicio nuevo.
+    // La máquina se conserva solo si también trabaja en el servicio nuevo; la opción, si el servicio nuevo
+    // tiene la misma (D-117: el mismo vinilo está en Látex y en Ecosolvente).
     const keepsMachine = !job.machineId || target.machines.some((m) => m.machineId === job.machineId);
+    const variant = job.variant ? await this.prisma.sectorVariant.findFirst({ where: { sectorId: target.id, code: job.variant.code, active: true }, select: { id: true } }) : null;
     await this.prisma.$transaction(async (tx) => {
       // fileCheck en null: el mínimo de resolución puede ser otro, se vuelve a controlar.
       await tx.jobOrder.update({
         where: { id },
-        data: { sectorId: target.id, ...(keepsMachine ? {} : { machineId: null }), variantId: null, ...(job.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}) },
+        data: { sectorId: target.id, ...(keepsMachine ? {} : { machineId: null }), variantId: variant?.id ?? null, ...(job.status === "RECEIVED" ? { fileCheck: Prisma.DbNull } : {}) },
       });
       await this.audit.log({ entity: "JobOrder", entityId: id, action: "service", userId: user.id, before: { sector: job.sector.code }, after: { sector: target.code } }, tx);
     });

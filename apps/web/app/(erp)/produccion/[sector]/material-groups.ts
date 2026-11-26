@@ -25,7 +25,8 @@ export const MATERIAL_COLORS = ["#9ca3af", "#eab308", "#ef4444", "#3b82f6", "#22
 export function groupByMaterial<T extends GroupableCard>(cards: readonly T[]): MaterialGroup<T>[] {
   const groups = new Map<string, MaterialGroup<T>>();
   for (const card of cards) {
-    const key = card.variant ? `v:${card.variant.id}` : card.material ? `m:${card.material.id}` : "none";
+    // D-117: por código, así el mismo material de dos sub-servicios de Gran Formato es un solo grupo.
+    const key = card.variant ? `v:${card.variant.code}` : card.material ? `m:${card.material.id}` : "none";
     let group = groups.get(key);
     if (!group) {
       group = card.variant
