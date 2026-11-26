@@ -175,3 +175,40 @@ export function missingFieldsForApproval(c: {
   if (c.phoneCount < 1) missing.push("teléfono");
   return missing;
 }
+
+/** Cliente como lo devuelve la API (`GET /customers/:id`). */
+export interface CustomerDetail {
+  id: string;
+  customerNumber: number;
+  firstName: string | null;
+  lastName: string | null;
+  dni: string | null;
+  status: CustomerStatus;
+  internalNotes: string | null;
+  isTrade: boolean;
+  businessName: string | null;
+  cuit: string | null;
+  legalName: string | null;
+  taxCondition: TaxCondition | null;
+  fiscalAddress: string | null;
+  city: string | null;
+  province: string | null;
+  creditEnabled: boolean;
+  notificationPrefs: NotificationPrefs | null;
+  emails: { id: string; email: string; isPrimary: boolean }[];
+  phones: { id: string; phone: string; isPrimary: boolean }[];
+  /** Cuándo se cargó la contraseña de la app. Null = no puede entrar (D-039). */
+  appPasswordSetAt: string | null;
+  /** Última invitación a la app (D-049). */
+  appInvitedAt: string | null;
+  importSource: string | null;
+  createdAt: string;
+}
+
+/** Una página del listado de clientes (`GET /customers`). */
+export interface CustomerListPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: CustomerDetail[];
+}

@@ -1,23 +1,7 @@
-/**
- * Estados de los pedidos de la app de clientes y su forma de mostrarse (D-034).
- * Los estados y su orden salen de la actualización §2.4 y de D-013 (seña).
- */
-export type Status = "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED" | "PRINTED" | "CALENDERING" | "READY" | "DELIVERED" | "CANCELLED";
+import type { AppJobStatus } from "@viavinilo/contracts";
 
-/** Cómo ve el cliente cada estado. "Impreso", nunca "Imprimiendo" (actualización §2.4). */
-export const STATUS_LABEL: Record<Status, string> = {
-  RECEIVED: "Archivo recibido",
-  FILE_ERROR: "Archivo con error",
-  QUOTED: "Cotizado",
-  DEPOSIT_RECEIVED: "Seña recibida",
-  PRINTED: "Impreso",
-  CALENDERING: "En calandra",
-  READY: "Listo para retirar",
-  DELIVERED: "Entregado",
-  CANCELLED: "Cancelado",
-};
-
-export const STATUS_CLASS: Record<Status, string> = {
+/** Clase de color de cada estado en la app de clientes (D-034). Los textos son `JOB_STATUS_LABELS`. */
+export const STATUS_CLASS: Record<AppJobStatus, string> = {
   RECEIVED: "st-received",
   FILE_ERROR: "st-error",
   QUOTED: "st-quoted",
@@ -28,38 +12,6 @@ export const STATUS_CLASS: Record<Status, string> = {
   DELIVERED: "",
   CANCELLED: "",
 };
-
-/** Un pedido como lo manda la API (`GET /app/jobs`): sale directo del tablero de producción. */
-export interface Order {
-  /** Número del pedido, sin formato: es lo que va en la dirección `/pedidos/418`. */
-  id: string;
-  num: string;
-  sector: string;
-  desc: string;
-  measure: string;
-  /** Material u opción de impresión (D-095). */
-  material?: string | null;
-  status: Status;
-  steps: Status[];
-  amount: string | null;
-  depositRequired: boolean;
-  depositAmount: string | null;
-  depositPaid: boolean;
-  readyAt: string | null;
-  /** Sucursal donde lo retira (D-083). */
-  pickup?: string;
-  /** El cliente todavía puede cancelarlo desde la app (hasta "Cotizado"). */
-  canCancel: boolean;
-  /** Todavía se le puede sumar o cambiar el archivo (D-094). */
-  canAddFile?: boolean;
-  /** Está cancelado y se puede volver a pedir. */
-  canReorder: boolean;
-  error: string | null;
-  files: { name: string; size: string; available: boolean }[];
-  history: { status: Status; at: string }[];
-  channel: "App" | "Mail" | "Mostrador";
-  createdAt: string;
-}
 
 const SALTA = "America/Argentina/Salta";
 const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: SALTA });

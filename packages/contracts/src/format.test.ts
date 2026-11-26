@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskAmount, maskCuit, maskDni, parseAmount, parseSaltaDateTime } from "./format";
+import { formatPhone, maskAmount, maskCuit, maskDni, parseAmount, parseSaltaDateTime } from "./format";
 import { transitionSchema } from "./transitions";
 
 describe("formatos argentinos en los campos (D-055)", () => {
@@ -9,6 +9,11 @@ describe("formatos argentinos en los campos (D-055)", () => {
     expect(maskCuit("20-12345678-9")).toBe("20-12345678-9");
     expect(maskCuit("201234567890000")).toBe("20-12345678-9");
     expect(maskCuit("2")).toBe("2");
+  });
+
+  it("I-12: los celulares argentinos se muestran con característica y guion", () => {
+    expect(formatPhone("+5493874669944")).toBe("387 466-9944");
+    expect(formatPhone("+34911234567")).toBe("+34911234567");
   });
 
   it("D-055: el DNI se escribe con puntos", () => {

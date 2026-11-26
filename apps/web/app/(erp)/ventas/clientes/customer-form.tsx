@@ -2,9 +2,8 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
-import { maskCuit, maskDni, TAX_CONDITION_LABELS, TAX_CONDITIONS, type TaxCondition } from "@viavinilo/contracts";
+import { formatPhone, maskCuit, maskDni, TAX_CONDITION_LABELS, TAX_CONDITIONS, type CustomerDetail, type TaxCondition } from "@viavinilo/contracts";
 import { Help } from "../../help";
-import { formatPhone, type Customer } from "./customer";
 
 /** Lo que carga el formulario. Los contactos solo se editan acá en el alta; en la ficha van aparte. */
 export interface CustomerFormValues {
@@ -42,7 +41,7 @@ export function generateAppPassword(): string {
   return `${words[r[0]! % words.length]}-${num}-${letters[r[2]! % letters.length]}${letters[r[3]! % letters.length]}`;
 }
 
-export function initialValues(c?: Customer): CustomerFormValues {
+export function initialValues(c?: CustomerDetail): CustomerFormValues {
   return {
     firstName: c?.firstName ?? "",
     lastName: c?.lastName ?? "",

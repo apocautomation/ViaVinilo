@@ -1609,6 +1609,11 @@ Formato: ID · fecha · fuente · decisión · por qué · impacto en documentos
 - **Para deshacer** (si hiciera falta): volver a poner `deletedAt` en null a los pedidos con ese registro en la auditoría.
 - **Ojo**: lo que entre el jueves a la noche también queda archivado (se trabaja por mail como hasta ahora). Para que alguien pueda crear usuarios hace falta que el cliente tenga al menos un usuario Dueño: hoy el único es Ezequiel.
 - **Impacto**: sin migración (el ajuste se carga en producción). Cola nueva del worker `go-live`.
+### D-116 · 26/11/2026 · Desarrollo · limpieza de los frontends: tipos, cliente HTTP y textos de estado
+- **Qué**: los tipos de las respuestas de la API que usan el ERP y la app (tarjeta y panel del tablero, listado de pedidos, cliente, conversaciones, pedido y perfil de la app, usuario del personal) pasan a `packages/contracts` (`job-views.ts`, `app-views.ts`, `conversations.ts`, `customers.ts`, `auth.ts`). El cliente HTTP de los dos frontends es uno solo: `packages/api-client` (`createApiClient({ baseUrl, tokenKey, on401 })`).
+- **Textos que cambian en la app de clientes**: los estados salen de `JOB_STATUS_LABELS`, los mismos que usa el ERP. "En calandra" pasa a "En proceso de calandra" y "Listo para retirar" pasa a "Terminado, listo para retirar".
+- **Comportamiento**: el ERP ahora avisa "No hay conexión. Revisá internet y probá de nuevo." cuando no llega a la API (antes salía el error del navegador), y la app acepta respuestas 204.
+- **Impacto**: paquete nuevo en el workspace (`pnpm i`, Dockerfile actualizado). Sin migración.
 
 ## 5. Pendientes del cliente para arrancar la E1
 

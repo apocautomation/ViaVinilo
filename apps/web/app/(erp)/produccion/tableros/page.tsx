@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
-import { api, ApiError, getUser } from "../../../lib/api";
-import { Badge, PageHead } from "../../ui";
+import { api } from "../../../lib/api";
+import { errorText, useIsOwner } from "../../hooks";
+import { Badge, OwnerGate, PageHead, TableMessage } from "../../ui";
 
 /**
  * Administrar tableros (D-064): el dueño crea tableros nuevos (por ejemplo TPU o Corte), les pone
@@ -21,8 +22,6 @@ interface Sector {
   stages: string[];
 }
 
-const errorText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal. Probá de nuevo.");
-
 export default function TablerosPage() {
   const [sectors, setSectors] = useState<Sector[] | null>(null);
   const [error, setError] = useState("");
@@ -31,9 +30,7 @@ export default function TablerosPage() {
   const [inboxEmail, setInboxEmail] = useState("");
   const [withCalender, setWithCalender] = useState(false);
   const [busy, setBusy] = useState(false);
-  // El rol se lee después de montar: en el servidor no hay sesión y el primer dibujo tiene que coincidir.
-  const [isOwner, setIsOwner] = useState<boolean | null>(null);
-  useEffect(() => setIsOwner(getUser()?.roles.includes("OWNER") ?? false), []);
+  const isOwner = useIsOwner();
   /** Paso automático a "Archivo con error" (D-065). */
   const [autoCheck, setAutoCheck] = useState<boolean | null>(null);
   useEffect(() => {
@@ -91,22 +88,7 @@ export default function TablerosPage() {
     }
   }
 
-  if (isOwner === null) {
-    return (
-      <div className="page page-narrow">
-        <PageHead title="Administrar tableros" />
-        <div className="empty" style={{ padding: 32 }}>Cargando…</div>
-      </div>
-    );
-  }
-  if (!isOwner) {
-    return (
-      <div className="page page-narrow">
-        <PageHead title="Administrar tableros" />
-        <div className="empty" style={{ padding: 32 }}>Los tableros los crea y los cambia el dueño.</div>
-      </div>
-    );
-  }
+  if (!isOwner) return <OwnerGate isOwner={isOwner} className="page page-narrow" title="Administrar tableros" denied="Los tableros los crea y los cambia el dueño." />;
 
   return (
     <div className="page page-narrow">
@@ -196,13 +178,7 @@ export default function TablerosPage() {
                   </td>
                 </tr>
               ))}
-              {!sectors && (
-                <tr>
-                  <td colSpan={6}>
-                    <div className="empty" style={{ padding: 32 }}>Cargando…</div>
-                  </td>
-                </tr>
-              )}
+              {!sectors && <TableMessage colSpan={6}>Cargando…</TableMessage>}
             </tbody>
           </table>
         </div>

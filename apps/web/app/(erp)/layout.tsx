@@ -4,23 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Bell, ChevronDown, Factory, LogOut, Search, Settings } from "lucide-react";
+import { USER_ROLE_LABELS } from "@viavinilo/contracts";
 import { api, clearSession, getToken, getUser, type SessionUser } from "../lib/api";
 import { NAV, findNavItem, type NavItem, type NavSection } from "./nav";
-
-const ROLE_LABEL: Record<SessionUser["roles"][number], string> = {
-  OWNER: "Dueño",
-  PRODUCTION: "Producción",
-  ATTENTION: "Atención",
-};
-
-function initials(name: string | undefined): string {
-  if (!name) return "··";
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
+import { initials } from "./ui";
 
 function MenuLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
@@ -277,11 +264,11 @@ export default function ErpLayout({ children }: { children: ReactNode }) {
           <Link href="/configuracion" className="icon-btn" aria-label="Configuración" title="Configuración">
             <Settings size={18} strokeWidth={1.75} />
           </Link>
-          <div className="who-am-i" title={user?.roles.map((r) => ROLE_LABEL[r]).join(" · ")}>
-            <span className="avatar">{initials(user?.name)}</span>
+          <div className="who-am-i" title={user?.roles.map((r) => USER_ROLE_LABELS[r]).join(" · ")}>
+            <span className="avatar">{initials(user?.name, "··")}</span>
             <span className="who-text">
               <strong>{user?.name ?? "…"}</strong>
-              <small>{user?.roles.map((r) => ROLE_LABEL[r]).join(" · ")}</small>
+              <small>{user?.roles.map((r) => USER_ROLE_LABELS[r]).join(" · ")}</small>
             </span>
           </div>
           <button

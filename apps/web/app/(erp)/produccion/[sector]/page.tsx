@@ -2,604 +2,151 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock, Download, FileText, Paperclip } from "lucide-react";
-import { isPickupBranch, PICKUP_LABELS } from "@viavinilo/contracts";
-import { api, downloadFile, getUser, watchBoard, type SessionUser } from "../../../lib/api";
+import { useState } from "react";
+import type { BoardCard, JobStatus, MachineRef, SectorRef } from "@viavinilo/contracts";
 import { Help } from "../../help";
-import { ars } from "../../ui";
-import { OrderPanel, type PanelMode } from "./order-panel";
-import { groupByMaterial as groupCardsByMaterial } from "./material-groups";
+import { dropIntent, flowOf } from "./board-rules";
+import { Column } from "./board-column";
+import { BoardToolbar } from "./board-toolbar";
+import type { CardContext } from "./board-card";
+import { OrderPanel } from "./order-panel";
+import { useBoard, type BoardState } from "./use-board";
 
-type Status =
-  | "PENDING_SIGNUP" | "RECEIVED" | "FILE_ERROR" | "QUOTED" | "DEPOSIT_RECEIVED"
-  | "PRINTED" | "CALENDERING" | "READY" | "DELIVERED" | "CANCELLED";
-
-interface Card {
-  id: string;
-  label: string;
-  /** D-109: "SET-000002" (código de la opción + número); sin opción, igual al VV-. */
-  code: string;
-  status: Status;
-  customer: { id: string; number: number; name: string | null };
-  description: string | null;
-  measure: string | null;
-  quotedAmount: string | null;
-  depositRequired: boolean;
-  depositAmount: string | null;
-  depositPaidAt: string | null;
-  estimatedReadyAt: string | null;
-  /** Sucursal donde retira (D-083). */
-  pickupBranch: string | null;
-  fileCount: number;
-  /** Resultado del control automático del archivo (D-065). */
-  fileCheck: { verdict: "ok" | "review" | "error" | "unknown"; detail: string; hint?: string; linkNote?: string } | null;
-  linkCount: number;
-  machine: { id: string; name: string } | null;
-  material: { id: string; name: string } | null;
-  /** Material u opción de impresión con su código (D-095). */
-  variant: { id: string; code: string; name: string } | null;
-  /** Sub-servicio del pedido (D-082): Látex, Ecosolvente… */
-  service: { code: string; name: string } | null;
-  sameMaterialCount: number;
-  createdAt: string;
-  next: Status | null;
-  other: Status[];
+function BoardHeader({ name, live, total }: { name: string | undefined; live: boolean; total: number }) {
+  return (
+    <div className="page" style={{ paddingBottom: 0 }}>
+      <div className="page-head">
+        <h1>
+          Tablero · {name ?? "…"}
+          <Help label="Cómo funciona el tablero">
+            <strong>Pasos obligatorios:</strong> cada trabajo avanza de a un paso y no se puede saltear
+            ninguno.
+            <br />
+            Para avanzar un pedido, tocá su botón o arrastrá la tarjeta a la columna siguiente. El archivo se
+            puede descargar en cualquier paso.
+            <br />
+            El cliente ve cada cambio en su app al instante. En amarillo: más de 2 h en el mismo paso.
+          </Help>
+        </h1>
+        <span className="live" data-on={live}>
+          {live ? `En vivo · ${total} órdenes` : "Reconectando…"}
+        </span>
+      </div>
+    </div>
+  );
 }
 
-interface Board {
-  sector: { code: string; name: string };
-  machines: { id: string; name: string }[];
-  /** Sub-servicios del tablero (D-082). */
-  services: { code: string; name: string }[];
-  /** Materiales de los tableros que se ven (D-095). */
-  variants: { id: string; code: string; name: string }[];
-  /** `key` distingue "Cotizado" de "Esperando seña" (D-081): las dos son del estado QUOTED. */
-  columns: { key: string; status: Status; label: string; cards: Card[] }[];
+function SectorTabs({ sectors, current }: { sectors: readonly SectorRef[]; current: string }) {
+  return (
+    <div className="board-top">
+      <nav className="sector-tabs" aria-label="Sectores">
+        {sectors.map((s) => (
+          <Link
+            key={s.code}
+            href={`/produccion/${s.code}`}
+            className="sector-tab"
+            aria-current={s.code === current ? "page" : undefined}
+          >
+            {s.name}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
 }
 
-interface Sector {
-  code: string;
-  name: string;
+/** D-086: arrastrar una tarjeta a la columna siguiente la hace avanzar. */
+function useCardDrag() {
+  const [dragging, setDragging] = useState<BoardCard | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const stop = () => {
+    setDragging(null);
+    setOver(null);
+  };
+  return { dragging, over, setOver, start: setDragging, stop };
 }
 
-interface Reason {
-  id: string;
-  label: string;
+type CardDrag = ReturnType<typeof useCardDrag>;
+
+function cardContextFor(b: BoardState, drag: CardDrag, flow: JobStatus[], machines: readonly MachineRef[]) {
+  return (card: BoardCard): CardContext => ({
+    now: b.now,
+    busy: b.busy === card.id,
+    dragging: drag.dragging?.id === card.id,
+    isOwner: b.isOwner,
+    flow,
+    machines,
+    grouped: b.filters.groupByMaterial,
+    onIntent: (intent) => b.apply(card, intent),
+    onAssign: (machineId) => void b.assign(card, machineId),
+    onDownload: () => void b.downloadForPrint(card.id),
+    onDragStart: () => drag.start(card),
+    onDragEnd: drag.stop,
+  });
 }
 
-/** Texto del botón grande para pasar a cada estado: un clic, sin pensar. */
-const NEXT_ACTION: Partial<Record<Status, string>> = {
-  RECEIVED: "Archivo corregido",
-  QUOTED: "Cotizar",
-  DEPOSIT_RECEIVED: "Registrar seña",
-  PRINTED: "Marcar impreso",
-  CALENDERING: "Pasar a calandra",
-  READY: "Marcar terminado",
-  DELIVERED: "Entregar",
-};
-
-/** Color de cada columna (punto del encabezado y borde de la tarjeta). */
-const STATUS_COLOR: Partial<Record<Status, string>> = {
-  PENDING_SIGNUP: "var(--color-neutral-400)",
-  RECEIVED: "var(--color-brand-500)",
-  FILE_ERROR: "var(--color-danger)",
-  QUOTED: "var(--color-accent-500)",
-  DEPOSIT_RECEIVED: "var(--color-warning-500)",
-  PRINTED: "var(--color-navy-500)",
-  CALENDERING: "var(--color-navy-400)",
-  READY: "var(--color-success-500)",
-  DELIVERED: "var(--color-success-700)",
-};
-
-
-/** Más de 2 h en el mismo paso: se marca en amarillo. TODO(spec): I-11 — umbral por sector. */
-const LATE_MIN = 120;
-
-function initials(name: string | null): string {
-  if (!name) return "?";
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
-const money = ars;
-/** Siempre hora de Salta y en 24 h, sin importar cómo esté configurada la PC del taller. */
-const TZ = "America/Argentina/Salta";
-const readyAt = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const fullDate = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, dateStyle: "short", timeStyle: "short", hourCycle: "h23" });
-
-function age(iso: string, now: number): string {
-  const min = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60000));
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  return h < 24 ? `${h} h ${min % 60} min` : `${Math.floor(h / 24)} d`;
-}
-
-function minutesSince(iso: string, now: number): number {
-  return Math.max(0, Math.round((now - new Date(iso).getTime()) / 60000));
+function PanelHost({ b, machines }: { b: BoardState; machines: readonly MachineRef[] }) {
+  if (!b.panel) return null;
+  return (
+    <OrderPanel
+      key={`${b.panel.id}-${b.panel.mode}`}
+      jobId={b.panel.id}
+      initialMode={b.panel.mode}
+      machines={machines}
+      reasons={b.reasons}
+      isOwner={b.isOwner}
+      onClose={() => b.setPanel(null)}
+      onChanged={() => void b.load()}
+    />
+  );
 }
 
 export default function BoardPage() {
   const { sector } = useParams<{ sector: string }>();
-  const [user, setUser] = useState<SessionUser | null>(null);
-  const [sectors, setSectors] = useState<Sector[]>([]);
-  const [reasons, setReasons] = useState<Reason[]>([]);
-  const [board, setBoard] = useState<Board | null>(null);
-  const [q, setQ] = useState("");
-  const [machineId, setMachineId] = useState("");
-  const [service, setService] = useState("");
-  const [variant, setVariant] = useState("");
-  // Al cambiar de tablero, los filtros de sub-servicio y material del anterior ya no sirven.
-  useEffect(() => {
-    setService("");
-    setVariant("");
-  }, [sector]);
-  const [groupByMaterial, setGroupByMaterial] = useState(false);
-  /**
-   * Vista compacta (D-066): cada tarjeta ocupa 3 renglones, para que un tablero con muchos pedidos no
-   * sea un scroll interminable. La elección se recuerda en el navegador. Al tocar una tarjeta se abre
-   * el panel del pedido (D-079).
-   */
-  const [compact, setCompact] = useState(true);
-  const [panel, setPanel] = useState<{ id: string; mode: PanelMode } | null>(null);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("vv.board.compact") === "0") setCompact(false);
-    } catch {
-      /* sin almacenamiento: queda compacta */
-    }
-  }, []);
-  const toggleCompact = (value: boolean) => {
-    setCompact(value);
-    try {
-      localStorage.setItem("vv.board.compact", value ? "1" : "0");
-    } catch {
-      /* sin almacenamiento */
-    }
-  };
-  const [live, setLive] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  /** D-086: arrastrar una tarjeta a la columna siguiente la hace avanzar. */
-  const [dragging, setDragging] = useState<Card | null>(null);
-  const [over, setOver] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const b = useBoard(sector);
+  const drag = useCardDrag();
+  const { dragging } = drag;
 
-  const query = useMemo(() => {
-    const p = new URLSearchParams({ sector });
-    if (q.trim()) p.set("q", q.trim());
-    if (machineId) p.set("machineId", machineId);
-    if (service) p.set("service", service);
-    if (variant) p.set("variant", variant);
-    if (groupByMaterial) p.set("groupByMaterial", "true");
-    return p.toString();
-  }, [sector, q, machineId, service, variant, groupByMaterial]);
-
-  const load = useCallback(async () => {
-    try {
-      setBoard(await api<Board>(`/jobs/board?${query}`));
-    } catch (e) {
-      setToast((e as Error).message);
-    }
-  }, [query]);
-
-  useEffect(() => {
-    setUser(getUser());
-    api<Sector[]>("/sectors").then(setSectors).catch(() => undefined);
-    api<Reason[]>("/file-error-reasons").then(setReasons).catch(() => undefined);
-  }, []);
-
-  // Búsqueda con una pequeña espera para no pedir en cada tecla.
-  useEffect(() => {
-    const t = setTimeout(load, 250);
-    return () => clearTimeout(t);
-  }, [load]);
-
-  // Tiempo real: cuando entra o se mueve una orden en el sector, se recarga.
-  useEffect(() => watchBoard(sector, () => void load(), setLive), [sector, load]);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 4500);
-    return () => clearTimeout(t);
-  }, [toast]);
-
-  async function move(card: Card, body: Record<string, unknown>) {
-    setBusy(card.id);
-    try {
-      await api(`/jobs/${card.id}/transition`, { method: "POST", body: JSON.stringify(body) });
-      await load();
-    } catch (e) {
-      setToast((e as Error).message);
-      await load();
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  function clickNext(card: Card) {
-    if (!card.next) return;
-    if (card.next === "QUOTED" && !card.quotedAmount) setPanel({ id: card.id, mode: "quote" });
-    else void move(card, { to: card.next });
-  }
-
-  async function assign(card: Card, value: string) {
-    setBusy(card.id);
-    try {
-      await api(`/jobs/${card.id}/machine`, { method: "PATCH", body: JSON.stringify({ machineId: value || null }) });
-      await load();
-    } catch (e) {
-      setToast((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  /** D-062: descarga los archivos del pedido para imprimir (la API controla que esté liberado). */
-  async function downloadForPrint(jobId: string) {
-    try {
-      const detail = await api<{ files: { id: string; filename: string }[] }>(`/jobs/${jobId}`);
-      for (const f of detail.files) await downloadFile(`/jobs/${jobId}/files/${f.id}`, f.filename);
-      if (!detail.files.length) setToast("Este pedido no tiene archivos guardados.");
-    } catch (e) {
-      setToast(e instanceof Error ? e.message : "No pudimos descargar el archivo.");
-    }
-  }
-
-  /**
-   * Soltar una tarjeta en una columna (D-086). Vale lo mismo que el botón: solo al paso que sigue, a
-   * "Archivo con error" (pide el motivo) o, para el dueño, a "Impreso" sin seña. No se saltean pasos.
-   */
-  function dropOn(col: { key: string; status: Status }) {
-    const card = dragging;
-    setDragging(null);
-    setOver(null);
-    if (!card || card.status === col.status) return;
-    if (col.status === card.next) {
-      if (col.status === "QUOTED" && card.quotedAmount) void move(card, { to: "QUOTED" });
-      else clickNext(card);
-    } else if (col.status === "FILE_ERROR" && card.other.includes("FILE_ERROR")) setPanel({ id: card.id, mode: "error" });
-    else if (col.status === "PRINTED" && card.next === "DEPOSIT_RECEIVED" && isOwner) setPanel({ id: card.id, mode: "force" });
-    else if (col.status === "PRINTED" && card.next === "DEPOSIT_RECEIVED") setToast("Primero hay que registrar la seña.");
-    else setToast("Los pasos no se pueden saltear: el pedido avanza de a un paso.");
-  }
-  const dragProps = (card: Card) => ({
-    draggable: true,
-    onDragStart: (e: React.DragEvent) => {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", card.label);
-      setDragging(card);
-    },
-    onDragEnd: () => {
-      setDragging(null);
-      setOver(null);
-    },
-  });
-
-  const isOwner = user?.roles.includes("OWNER") ?? false;
-  const total = board?.columns.reduce((n, c) => n + c.cards.length, 0) ?? 0;
-
-  const flow = board?.columns.filter((c) => c.status !== "FILE_ERROR" && c.status !== "PENDING_SIGNUP" && c.key === c.status) ?? [];
-  const stepOf = (s: Status) => flow.findIndex((c) => c.status === s);
+  const columns = b.board?.columns ?? [];
+  const total = columns.reduce((n, c) => n + c.cards.length, 0);
+  const flow = flowOf(columns);
+  const grouped = b.filters.groupByMaterial;
+  const machines = b.board?.machines ?? [];
+  const cardContext = cardContextFor(b, drag, flow, machines);
 
   return (
     <>
-      <div className="page" style={{ paddingBottom: 0 }}>
-        <div className="page-head">
-          <h1>
-            Tablero · {board?.sector.name ?? "…"}
-            <Help label="Cómo funciona el tablero">
-              <strong>Pasos obligatorios:</strong> cada trabajo avanza de a un paso y no se puede saltear ninguno.
-              <br />
-              Para avanzar un pedido, tocá su botón o arrastrá la tarjeta a la columna siguiente. El archivo se puede descargar en cualquier paso.
-              <br />
-              El cliente ve cada cambio en su app al instante. En amarillo: más de 2 h en el mismo paso.
-            </Help>
-          </h1>
-          <span className="live" data-on={live}>
-            {live ? `En vivo · ${total} órdenes` : "Reconectando…"}
-          </span>
-        </div>
-      </div>
+      <BoardHeader name={b.board?.sector.name} live={b.live} total={total} />
+      <SectorTabs sectors={b.sectors} current={sector} />
 
-      <div className="board-top">
-        <nav className="sector-tabs" aria-label="Sectores">
-          {sectors.map((s) => (
-            <Link key={s.code} href={`/produccion/${s.code}`} className="sector-tab" aria-current={s.code === sector ? "page" : undefined}>
-              {s.name}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      <div className="toolbar">
-        <input
-          type="search"
-          placeholder="Buscar por orden (VV-…), cliente o email"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label="Buscar"
-        />
-        {(board?.services.length ?? 0) > 0 && (
-          <select value={service} onChange={(e) => setService(e.target.value)} aria-label="Filtrar por servicio">
-            <option value="">Todos los servicios</option>
-            {board?.services.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {(board?.variants.length ?? 0) > 0 && (
-          <select value={variant} onChange={(e) => setVariant(e.target.value)} aria-label="Filtrar por opción de impresión">
-            <option value="">Todas las opciones</option>
-            {board?.variants.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.code} · {v.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <select value={machineId} onChange={(e) => setMachineId(e.target.value)} aria-label="Filtrar por máquina">
-          <option value="">Todas las máquinas</option>
-          {board?.machines.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-        <label className="toggle">
-          <input type="checkbox" checked={groupByMaterial} onChange={(e) => setGroupByMaterial(e.target.checked)} />
-          Agrupar por opción
-        </label>
-        <label className="toggle">
-          <input type="checkbox" checked={compact} onChange={(e) => toggleCompact(e.target.checked)} />
-          Vista compacta
-        </label>
-      </div>
+      <BoardToolbar board={b.board} filters={b.filters} compact={b.compact} onCompact={b.setCompact} />
 
       <main className="board">
-        {board?.columns.map((col) => (
-          <section
+        {columns.map((col) => (
+          <Column
             key={col.key}
-            className="column"
-            data-drop={dragging && over === col.key ? (col.status === dragging.next || (col.status === "FILE_ERROR" && dragging.other.includes("FILE_ERROR")) ? "ok" : "no") : undefined}
-            onDragOver={(e) => {
-              if (!dragging) return;
-              e.preventDefault();
-              if (over !== col.key) setOver(col.key);
+            col={col}
+            step={col.key === col.status ? flow.indexOf(col.status) : -1}
+            compact={b.compact}
+            grouped={grouped}
+            isOwner={b.isOwner}
+            dragging={dragging}
+            over={drag.over === col.key}
+            onDragOver={() => drag.setOver(col.key)}
+            onDrop={() => {
+              drag.stop();
+              if (dragging) b.apply(dragging, dropIntent(dragging, col.status, b.isOwner));
             }}
-            onDrop={(e) => {
-              e.preventDefault();
-              dropOn(col);
-            }}
-            aria-label={col.label}
-            style={{ ["--col" as string]: col.key === "AWAITING_DEPOSIT" ? "var(--color-warning)" : STATUS_COLOR[col.status] }}
-          >
-            <div className="column-head">
-              <span className="column-dot" />
-              <h2>{col.label}</h2>
-              {col.key === col.status && stepOf(col.status) >= 0 && <span className="column-step">Paso {stepOf(col.status) + 1}</span>}
-              <span className="column-count">{col.cards.length}</span>
-            </div>
-            <div className="cards">
-              {col.cards.length === 0 && (
-                <div className="empty">
-                  <FileText size={18} aria-hidden />
-                  Sin órdenes
-                </div>
-              )}
-              {/* D-110: con "Agrupar por opción", los trabajos de la misma tela van uno abajo del otro bajo su color. */}
-              {(groupByMaterial ? groupCardsByMaterial(col.cards) : [{ key: "all", code: null, title: "", color: null, cards: col.cards }]).map((group) => (
-                <div
-                  key={group.key}
-                  className={groupByMaterial ? "mat-group" : "mat-all"}
-                  data-none={groupByMaterial && !group.color ? "true" : undefined}
-                  style={group.color ? { ["--mat" as string]: group.color } : undefined}
-                >
-                  {groupByMaterial && (
-                    <div className="mat-group-head">
-                      <span className="mat-swatch" aria-hidden />
-                      {group.code && <b>{group.code}</b>}
-                      <span className="mat-title">{group.title}</span>
-                      <span className="mat-count" aria-label={`${group.cards.length} ${group.cards.length === 1 ? "trabajo" : "trabajos"}`}>
-                        {group.cards.length}
-                      </span>
-                    </div>
-                  )}
-              {group.cards.map((card) => {
-                const mins = minutesSince(card.createdAt, now);
-                const step = stepOf(card.status);
-                const waitingDeposit = card.depositRequired && !card.depositPaidAt && card.next === "DEPOSIT_RECEIVED";
-                const depositLabel = `Esperando seña${card.depositAmount ? ` de ${money.format(Number(card.depositAmount))}` : ""}`;
-                if (compact) {
-                  const check = card.status === "RECEIVED" ? card.fileCheck?.verdict : undefined;
-                  return (
-                    <article key={card.id} className="card card-compact" aria-busy={busy === card.id} data-dragging={dragging?.id === card.id} {...dragProps(card)}>
-                      {/* Es un div y no un botón para que la tarjeta se pueda arrastrar también en Firefox (D-086). */}
-                      <div role="button" tabIndex={0} className="card-toggle" onClick={() => setPanel({ id: card.id, mode: "view" })} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
-                        <span className="row">
-                          <span className="num" title={card.label}>
-                            {card.code}
-                            {card.code !== card.label && <small className="num-vv">{card.label}</small>}
-                          </span>
-                          <span className="age" data-late={mins > LATE_MIN}>
-                            <Clock size={12} aria-hidden /> {age(card.createdAt, now)}
-                          </span>
-                        </span>
-                        <span className="row">
-                          <span className="who-line">{card.customer.name ?? `Cliente N.º ${card.customer.number}`}</span>
-                          <span className="mini">
-                            {(check === "error" || check === "review") && <span className={`dot ${check}`} title={card.fileCheck?.detail} />}
-                            {card.quotedAmount && <span>{money.format(Number(card.quotedAmount))}</span>}
-                            {waitingDeposit && <span className="warn" title={depositLabel}>Seña{card.depositAmount ? ` ${money.format(Number(card.depositAmount))}` : ""}</span>}
-                          </span>
-                        </span>
-                        {card.description && (
-                          <span className="desc-line">
-                            {card.variant && <b className="service-tag" title={card.variant.name}>{card.variant.code}</b>}
-                            {card.service && <b className="service-tag">{card.service.name}</b>}
-                            {isPickupBranch(card.pickupBranch) && <b className="service-tag">→ {PICKUP_LABELS[card.pickupBranch]}</b>}
-                            {card.description}
-                          </span>
-                        )}
-                      </div>
-                      {card.next && (
-                        <button className="btn btn-primary btn-sm" disabled={busy === card.id} onClick={() => clickNext(card)}>
-                          {NEXT_ACTION[card.next] ?? "Avanzar"}
-                        </button>
-                      )}
-                    </article>
-                  );
-                }
-                return (
-                <article key={card.id} className="card" aria-busy={busy === card.id} data-dragging={dragging?.id === card.id} {...dragProps(card)}>
-                  <header>
-                    <button type="button" className="num num-btn" onClick={() => setPanel({ id: card.id, mode: "view" })} title="Abrir el pedido">
-                      {card.code}
-                      {card.code !== card.label && <small className="num-vv">{card.label}</small>}
-                    </button>
-                    <span className="age" data-late={mins > LATE_MIN} title={fullDate.format(new Date(card.createdAt))}>
-                      <Clock size={12} aria-hidden /> {age(card.createdAt, now)}
-                    </span>
-                  </header>
-                  <div className="who">
-                    <span className="avatar avatar-sm">{initials(card.customer.name)}</span>
-                    <span>
-                      {card.customer.name ?? "Cliente sin nombre"}
-                      <small>Cliente N.º {card.customer.number}</small>
-                    </span>
-                  </div>
-                  {card.description && <div className="desc">{card.description}</div>}
-                  {step >= 0 && (
-                    <div className="steps" aria-label={`Paso ${step + 1} de ${flow.length}`}>
-                      {flow.map((c, i) => (
-                        <span key={c.status} data-done={i <= step} />
-                      ))}
-                    </div>
-                  )}
-                  <div className="chips">
-                    {card.service && <span className="chip chip-brand">{card.service.name}</span>}
-                    <span className="chip">
-                      <Paperclip size={12} aria-hidden /> {card.fileCount} {card.fileCount === 1 ? "archivo" : "archivos"}
-                    </span>
-                    {card.linkCount > 0 && <span className="chip">{card.linkCount} link</span>}
-                    {card.quotedAmount && <span className="chip chip-brand">{money.format(Number(card.quotedAmount))}</span>}
-                    {waitingDeposit && <span className="chip chip-warn">{depositLabel}</span>}
-                    {isPickupBranch(card.pickupBranch) && <span className="chip">Retira en {PICKUP_LABELS[card.pickupBranch]}</span>}
-                    {card.variant ? (
-                      <span className="chip chip-brand" title={card.variant.name}>
-                        {card.variant.code} · {card.variant.name}
-                      </span>
-                    ) : (
-                      card.material && <span className="chip">{card.material.name}</span>
-                    )}
-                    {/* D-110: agrupado, el encabezado del grupo ya dice cuántos son. */}
-                    {!groupByMaterial && card.sameMaterialCount > 0 && (
-                      <span className="chip chip-brand">+{card.sameMaterialCount} con la misma opción</span>
-                    )}
-                    {card.estimatedReadyAt && (
-                      <span className="chip">
-                        Listo {readyAt.format(new Date(card.estimatedReadyAt))}
-                      </span>
-                    )}
-                  </div>
-
-                  {card.status !== "DELIVERED" && card.status !== "CANCELLED" && (
-                    <select
-                      value={card.machine?.id ?? ""}
-                      onChange={(e) => void assign(card, e.target.value)}
-                      disabled={busy === card.id}
-                      aria-label={`Máquina de ${card.label}`}
-                    >
-                      <option value="">Sin máquina asignada</option>
-                      {board.machines.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {card.status === "RECEIVED" && (card.fileCheck?.verdict === "error" || card.fileCheck?.verdict === "review") && (
-                    <p className={`file-check ${card.fileCheck.verdict}`} title={card.fileCheck.detail}>
-                      <b>{card.fileCheck.verdict === "error" ? "Archivo con problema" : "Revisar el archivo"}:</b> {card.fileCheck.detail}
-                    </p>
-                  )}
-                  {card.status === "RECEIVED" && card.fileCheck?.verdict === "ok" && <p className="file-check ok">Archivo controlado: {card.fileCheck.detail}</p>}
-                  {/* D-071: aunque no se pudo decidir, el dato del archivo le sirve al operador para cotizar. */}
-                  {card.status === "RECEIVED" && card.fileCheck?.verdict === "unknown" && card.fileCheck.hint && <p className="file-check hint">{card.fileCheck.hint}</p>}
-                  {/* D-077: un link que no se pudo bajar se avisa siempre, haya o no otro archivo en el pedido. */}
-                  {card.status === "RECEIVED" && card.fileCheck?.linkNote && (
-                    <p className="file-check review" title={card.fileCheck.linkNote}>
-                      <b>Link sin bajar:</b> {card.fileCheck.linkNote}
-                    </p>
-                  )}
-
-                  {card.fileCount > 0 && ["RECEIVED", "QUOTED", "DEPOSIT_RECEIVED"].includes(card.status) && (
-                    <button className="btn btn-ghost" onClick={() => void downloadForPrint(card.id)}>
-                      <Download size={14} aria-hidden /> Descargar archivo
-                    </button>
-                  )}
-
-                  {card.next && (
-                    <button className="btn btn-primary btn-big" disabled={busy === card.id} onClick={() => clickNext(card)}>
-                      {NEXT_ACTION[card.next] ?? "Avanzar"}
-                    </button>
-                  )}
-                  {(card.other.length > 0 || (isOwner && card.next === "DEPOSIT_RECEIVED")) && (
-                    <div className="actions">
-                      {card.other.includes("FILE_ERROR") && (
-                        <button className="btn btn-danger" disabled={busy === card.id} onClick={() => setPanel({ id: card.id, mode: "error" })}>
-                          Error de archivo
-                        </button>
-                      )}
-                      {isOwner && card.next === "DEPOSIT_RECEIVED" && (
-                        <button className="btn btn-ghost" disabled={busy === card.id} onClick={() => setPanel({ id: card.id, mode: "force" })}>
-                          Imprimir sin seña
-                        </button>
-                      )}
-                      {card.other.includes("CANCELLED") && (
-                        <button className="btn btn-ghost" disabled={busy === card.id} onClick={() => setPanel({ id: card.id, mode: "cancel" })}>
-                          Cancelar
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </article>
-                );
-              })}
-                </div>
-              ))}
-            </div>
-          </section>
+            cardContext={cardContext}
+          />
         ))}
       </main>
 
-      {panel && (
-        <OrderPanel
-          key={`${panel.id}-${panel.mode}`}
-          jobId={panel.id}
-          initialMode={panel.mode}
-          machines={board?.machines ?? []}
-          reasons={reasons}
-          isOwner={isOwner}
-          onClose={() => setPanel(null)}
-          onChanged={() => void load()}
-        />
-      )}
+      <PanelHost b={b} machines={machines} />
 
-      {toast && (
+      {b.toast && (
         <div className="toast" role="status">
-          {toast}
+          {b.toast}
         </div>
       )}
     </>

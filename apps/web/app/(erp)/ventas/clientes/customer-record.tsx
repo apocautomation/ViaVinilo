@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ChevronLeft, Plus, X } from "lucide-react";
-import { CUSTOMER_STATUS_LABELS } from "@viavinilo/contracts";
-import { api, ApiError } from "../../../lib/api";
-import { Badge, PageHead } from "../../ui";
-import { formatPhone, fullName, STATUS_TONE, type Customer } from "./customer";
+import { CUSTOMER_STATUS_LABELS, formatPhone, type CustomerDetail } from "@viavinilo/contracts";
+import { api } from "../../../lib/api";
+import { errorText } from "../../hooks";
+import { Badge, Loading, PageHead } from "../../ui";
+import { fullName, STATUS_TONE } from "./customer";
 import { CustomerForm, generateAppPassword, initialValues, toPayload } from "./customer-form";
 
 interface Match {
@@ -15,10 +16,8 @@ interface Match {
   firstName: string | null;
   lastName: string | null;
   businessName: string | null;
-  status: Customer["status"];
+  status: CustomerDetail["status"];
 }
-
-const errorText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal. Probá de nuevo.");
 
 /** Campo + botón "Agregar". Enter agrega sin mandar el formulario de la ficha. */
 function AddRow({
@@ -57,7 +56,7 @@ function AddRow({
 }
 
 /** Emails y teléfonos: se agregan y quitan de a uno, y quedan en la auditoría. */
-function Contacts({ customer, onChange }: { customer: Customer; onChange: () => Promise<void> }) {
+function Contacts({ customer, onChange }: { customer: CustomerDetail; onChange: () => Promise<void> }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
@@ -261,7 +260,7 @@ export function CustomerRecord({
   onChanged?: () => void;
 }) {
   const wrap = embedded ? "record-embedded" : "page page-narrow";
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customer, setCustomer] = useState<CustomerDetail | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(isNew ? "Cliente dado de alta. Pasale por WhatsApp su email y la contraseña de la app." : "");
   const [blocking, setBlocking] = useState<false | "block" | "reject">(false);
@@ -270,7 +269,7 @@ export function CustomerRecord({
 
   const load = useCallback(async () => {
     try {
-      setCustomer(await api<Customer>(`/customers/${id}`));
+      setCustomer(await api<CustomerDetail>(`/customers/${id}`));
     } catch (e) {
       setError(errorText(e));
     }
@@ -285,7 +284,7 @@ export function CustomerRecord({
   async function action(path: string, body?: object, done?: string) {
     setError("");
     try {
-      setCustomer(await api<Customer>(`/customers/${id}/${path}`, { method: "POST", body: body ? JSON.stringify(body) : undefined }));
+      setCustomer(await api<CustomerDetail>(`/customers/${id}/${path}`, { method: "POST", body: body ? JSON.stringify(body) : undefined }));
       if (done) setNotice(done);
       onChanged?.();
     } catch (e) {
@@ -297,7 +296,7 @@ export function CustomerRecord({
   if (!customer) {
     return (
       <div className={wrap}>
-        {error ? <p className="error">{error}</p> : <div className="empty" style={{ padding: 48 }}>Cargando…</div>}
+        {error ? <p className="error">{error}</p> : <Loading padding={48} />}
       </div>
     );
   }
@@ -416,7 +415,7 @@ export function CustomerRecord({
         }
         onSubmit={async (v) => {
           setCustomer(
-            await api<Customer>(`/customers/${customer.id}`, { method: "PATCH", body: JSON.stringify(toPayload(v, "edit")) }),
+            await api<CustomerDetail>(`/customers/${customer.id}`, { method: "PATCH", body: JSON.stringify(toPayload(v, "edit")) }),
           );
           setNotice("Cambios guardados.");
           onChanged?.();

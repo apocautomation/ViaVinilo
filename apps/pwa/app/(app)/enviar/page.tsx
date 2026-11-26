@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
-import { BookOpen, CheckCircle2, Mail, Paperclip, Send } from "lucide-react";
-import { ACCEPT_ATTRIBUTE, defaultPickupBranch, formatBytes, help, MAX_UPLOAD_BYTES, PICKUP_BRANCHES, PICKUP_LABELS, type PickupBranch } from "@viavinilo/contracts";
+import { useState, type FormEvent } from "react";
+import { BookOpen, CheckCircle2, Mail, Send } from "lucide-react";
+import { defaultPickupBranch, help, type PickupBranch } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
-import { SECTOR_OF } from "../../services";
+import { progressPercent, sectorCodeFor } from "../../upload";
+import { BranchChoices, FileDrop, ServiceChoices, UploadProgress, useExtraBoards, useUpload } from "../../upload-parts";
 import { VariantPicker, type Variant } from "../../variant-picker";
-import { api, upload, useSession } from "../../session";
+import { useSession } from "../../session";
 
 /**
  * Enviar un trabajo (D-087). Es el mismo mail que el cliente le mandaba a la casilla del servicio,
@@ -29,22 +30,13 @@ export default function EnviarPage() {
   const variantOk = variants.length === 0 || variant !== null;
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const { progress, error, send: sendFile } = useUpload<{ job: { label: string } }>();
   const [sent, setSent] = useState<string | null>(null);
-  /** Tableros creados desde el ERP que no son un servicio de la Ayuda (D-064), por ejemplo TPU. */
-  const [extra, setExtra] = useState<{ code: string; name: string }[]>([]);
-
-  useEffect(() => {
-    const base = new Set<string>(Object.values(SECTOR_OF));
-    api<{ code: string; name: string }[]>("/app/sectors")
-      .then((all) => setExtra(all.filter((x) => !base.has(x.code))))
-      .catch(() => undefined);
-  }, []);
+  const extra = useExtraBoards();
 
   const service = help.SERVICES.find((s) => s.id === serviceId);
   const extraBoard = extra.find((x) => `sector:${x.code}` === serviceId);
-  const sectorCode = extraBoard ? extraBoard.code : serviceId ? SECTOR_OF[serviceId] : undefined;
+  const sectorCode = sectorCodeFor(serviceId, extra);
   const serviceName = service?.name ?? extraBoard?.name ?? "";
   const name = customer ? [customer.firstName, customer.lastName].filter(Boolean).join(" ") : "";
   const branch = pickup ?? (sectorCode ? defaultPickupBranch(sectorCode) : null);
@@ -63,7 +55,6 @@ export default function EnviarPage() {
   async function send(e: FormEvent) {
     e.preventDefault();
     if (!ready || !file || !sectorCode || !branch) return;
-    if (file.size > MAX_UPLOAD_BYTES) return setError("El archivo es muy grande: el máximo es 150 MB.");
     const form = new FormData();
     form.append("sector", sectorCode);
     form.append("pickupBranch", branch);
@@ -73,16 +64,8 @@ export default function EnviarPage() {
     form.append("copies", copies);
     if (note.trim()) form.append("note", note.trim());
     form.append("file", file);
-    setError("");
-    setProgress(0);
-    try {
-      const r = await upload<{ job: { label: string } }>("/app/chat/files", form, setProgress);
-      setSent(r.job.label);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No pudimos subir el archivo.");
-    } finally {
-      setProgress(null);
-    }
+    const r = await sendFile(file, form);
+    if (r) setSent(r.job.label);
   }
 
   function again() {
@@ -132,18 +115,7 @@ export default function EnviarPage() {
           </p>
 
           <h2 className="section-title">1 · ¿Qué servicio?</h2>
-          <div className="choices">
-            {help.SERVICES.map((s) => (
-              <button type="button" key={s.id} className="choice" aria-pressed={serviceId === s.id} onClick={() => setServiceId(s.id)}>
-                {s.name}
-              </button>
-            ))}
-            {extra.map((x) => (
-              <button type="button" key={x.code} className="choice" aria-pressed={serviceId === `sector:${x.code}`} onClick={() => setServiceId(`sector:${x.code}`)}>
-                {x.name}
-              </button>
-            ))}
-          </div>
+          <ServiceChoices value={serviceId} onChange={setServiceId} extra={extra} />
           {service && (
             <div className="help-text compose-hint">
               <p>
@@ -184,39 +156,18 @@ export default function EnviarPage() {
           </div>
 
           <h2 className="section-title">3 · ¿Dónde lo retirás?</h2>
-          <div className="choices">
-            {PICKUP_BRANCHES.map((b) => {
-              const info = help.BRANCHES.find((x) => x.id === b);
-              return (
-                <button type="button" key={b} className="choice" aria-pressed={branch === b} onClick={() => setPickup(b)}>
-                  {info?.name ?? PICKUP_LABELS[b]}
-                  <small className="muted" style={{ display: "block", fontWeight: 400 }}>
-                    {info?.address}
-                  </small>
-                </button>
-              );
-            })}
-          </div>
+          <BranchChoices selected={branch} onPick={setPickup} />
 
           <h2 className="section-title">4 · Aclaraciones (opcional)</h2>
           <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} maxLength={800} placeholder="Ej.: tela jersey set, lo necesito para el viernes" />
 
           <h2 className="section-title">5 · El archivo</h2>
-          <label className="drop">
-            <Paperclip size={24} />
-            <strong>{file ? file.name : "Tocá para adjuntar el archivo"}</strong>
-            <span>{file ? formatBytes(file.size) : "PDF, PNG, JPG, TIF, AI, EPS, PSD, CDR o ZIP · hasta 150 MB"}</span>
-            <input type="file" hidden accept={ACCEPT_ATTRIBUTE} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
+          <FileDrop file={file} prompt="Tocá para adjuntar el archivo" onChange={setFile} />
 
           {error && <p className="form-error">{error}</p>}
-          {progress !== null && (
-            <div className="progress" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
-              <span style={{ width: `${Math.round(progress * 100)}%` }} />
-            </div>
-          )}
+          <UploadProgress progress={progress} />
           <button className="btn btn-primary btn-block" disabled={!ready}>
-            <Send size={18} /> {progress !== null ? `Enviando… ${Math.round(progress * 100)}%` : "Enviar el trabajo"}
+            <Send size={18} /> {progress !== null ? `Enviando… ${progressPercent(progress)}%` : "Enviar el trabajo"}
           </button>
           {!ready && progress === null && <p className="muted compose-missing">Para enviar falta: {[!sectorCode && "el servicio", !variantOk && "la opción de impresión", !measureOk && "las medidas", !copiesOk && "las copias", !file && "el archivo"].filter(Boolean).join(", ")}.</p>}
         </form>

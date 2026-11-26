@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, FileText, MessageCircle, PackageCheck, RotateCcw, Upload, X } from "lucide-react";
 import { AppBar, StatusPill } from "../../../components";
-import { STATUS_LABEL, ars, formatWhen, type Order, type Status } from "../../../data";
+import { JOB_STATUS_LABELS, type AppJobStatus, type AppOrder } from "@viavinilo/contracts";
+import { ars, formatWhen } from "../../../data";
 import { api, ApiError } from "../../../session";
 
 /** Detalle de un pedido: estado, precio, cuándo está listo, historial y archivos (SPEC E1.5). */
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>();
-  const [o, setOrder] = useState<Order | null>(null);
+  const [o, setOrder] = useState<AppOrder | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "missing">("loading");
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -29,7 +30,7 @@ export default function PedidoPage() {
       await api(`/app/jobs/${encodeURIComponent(id)}/reorder`, { method: "POST", body: JSON.stringify({ measure: measure.trim() || undefined, note: note.trim() || undefined }) });
       setReordering(false);
       setNote("");
-      setOrder(await api<Order>(`/app/jobs/${encodeURIComponent(id)}`));
+      setOrder(await api<AppOrder>(`/app/jobs/${encodeURIComponent(id)}`));
     } catch (e) {
       setCancelError(e instanceof ApiError ? e.message : "No pudimos volver a pedirlo. Probá de nuevo.");
     } finally {
@@ -43,7 +44,7 @@ export default function PedidoPage() {
     try {
       await api(`/app/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" });
       // Si el dueño apagó "mostrar cancelados", el pedido ya no se puede abrir: se vuelve a la lista.
-      const next = await api<Order>(`/app/jobs/${encodeURIComponent(id)}`).catch(() => null);
+      const next = await api<AppOrder>(`/app/jobs/${encodeURIComponent(id)}`).catch(() => null);
       if (!next) return router.replace("/");
       setOrder(next);
       setCancelling(false);
@@ -56,7 +57,7 @@ export default function PedidoPage() {
   }
   useEffect(() => {
     const load = () =>
-      api<Order>(`/app/jobs/${encodeURIComponent(id)}`)
+      api<AppOrder>(`/app/jobs/${encodeURIComponent(id)}`)
         .then((r) => (setOrder(r), setState("ok")))
         .catch(() => setState((s) => (s === "ok" ? "ok" : "missing")));
     void load();
@@ -87,7 +88,7 @@ export default function PedidoPage() {
 
   const error = o.status === "FILE_ERROR";
   const pos = o.steps.indexOf(o.status);
-  const when = (s: Status) => {
+  const when = (s: AppJobStatus) => {
     const at = o.history.find((h) => h.status === s)?.at;
     return at ? formatWhen(at) : undefined;
   };
@@ -225,7 +226,7 @@ export default function PedidoPage() {
                   <Check size={15} />
                 </span>
                 <span className="tl-text">
-                  <strong>{STATUS_LABEL.RECEIVED}</strong>
+                  <strong>{JOB_STATUS_LABELS.RECEIVED}</strong>
                   <span>{when("RECEIVED")}</span>
                 </span>
               </li>
@@ -234,7 +235,7 @@ export default function PedidoPage() {
                   <X size={15} />
                 </span>
                 <span className="tl-text">
-                  <strong>{STATUS_LABEL.FILE_ERROR}</strong>
+                  <strong>{JOB_STATUS_LABELS.FILE_ERROR}</strong>
                   <span>{when("FILE_ERROR")} · esperando que lo reenvíes</span>
                 </span>
               </li>
@@ -248,7 +249,7 @@ export default function PedidoPage() {
                 <li key={s} data-state={state}>
                   <span className="tl-dot">{state === "done" ? <Check size={15} /> : i + 1}</span>
                   <span className="tl-text">
-                    <strong>{STATUS_LABEL[s]}</strong>
+                    <strong>{JOB_STATUS_LABELS[s]}</strong>
                     <span>{when(s) ?? (state === "todo" ? "Pendiente" : "")}</span>
                   </span>
                 </li>

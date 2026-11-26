@@ -6,7 +6,8 @@ import { Bell, ChevronRight, Download, LogOut, Mail, Phone, Share, Smartphone } 
 import { AppBar } from "../../components";
 import { useInstall } from "../../install";
 import { disablePush, enablePush, pushState, type PushState } from "../../push";
-import { api, formatPhone, useSession } from "../../session";
+import { formatPhone } from "@viavinilo/contracts";
+import { api, useSession } from "../../session";
 
 /** Cuenta: datos, avisos y puntos (E4). Los datos personales los cambia un asesor (actualización §2.1). */
 export default function CuentaPage() {

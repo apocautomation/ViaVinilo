@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@viavinilo/api-client": "workspace:*",
     "@viavinilo/contracts": "workspace:*",
     "@viavinilo/ui": "workspace:*",
     "lucide-react": "0.460.0",

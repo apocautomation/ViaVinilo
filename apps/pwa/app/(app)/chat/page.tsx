@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { CircleHelp, Download, Mail, Paperclip, Send, X } from "lucide-react";
-import { ACCEPT_ATTRIBUTE, attachmentsOf, defaultPickupBranch, formatBytes, help, MAX_UPLOAD_BYTES, PICKUP_BRANCHES, PICKUP_LABELS, type PickupBranch } from "@viavinilo/contracts";
+import { attachmentsOf, defaultPickupBranch, formatBytes, help, type AppOrder, type PickupBranch } from "@viavinilo/contracts";
 import { AppBar } from "../../components";
-import type { Order } from "../../data";
-import { SECTOR_OF } from "../../services";
+import { progressPercent, sectorCodeFor } from "../../upload";
+import { BranchChoices, FileDrop, ServiceChoices, UploadProgress, useExtraBoards, useUpload } from "../../upload-parts";
 import { VariantPicker, type Variant } from "../../variant-picker";
-import { api, downloadFile, upload } from "../../session";
+import { api, downloadFile } from "../../session";
 
 /** Texto del mensaje con los links tocables (D-066): el bot manda mapas y la tienda. */
 function Linkified({ text }: { text: string }) {
@@ -38,9 +38,9 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
   const [serviceId, setServiceId] = useState<string | null>(null);
   /** D-094: el archivo puede ser para un pedido que ya existe (corregido o que faltaba). */
   const [jobId, setJobId] = useState<string | null>(initialJob ?? null);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<AppOrder[]>([]);
   useEffect(() => {
-    api<{ orders: Order[] }>("/app/jobs")
+    api<{ orders: AppOrder[] }>("/app/jobs")
       .then((r) => setOrders(r.orders.filter((o) => o.canAddFile)))
       .catch(() => undefined);
   }, []);
@@ -52,27 +52,17 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
   const [variant, setVariant] = useState<string | null>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const { progress, error, send: sendFile } = useUpload<{ job: { label: string }; resent?: boolean; added?: boolean }>();
   const service = help.SERVICES.find((s) => s.id === serviceId);
-  /** Tableros creados desde el ERP que no son un servicio de base (D-064). */
-  const [extra, setExtra] = useState<{ code: string; name: string }[]>([]);
-  useEffect(() => {
-    const base = new Set<string>(Object.values(SECTOR_OF));
-    api<{ code: string; name: string }[]>("/app/sectors")
-      .then((all) => setExtra(all.filter((x) => !base.has(x.code))))
-      .catch(() => undefined);
-  }, []);
-  const extraBoard = extra.find((x) => `sector:${x.code}` === serviceId);
+  const extra = useExtraBoards();
+  const sectorCode = sectorCodeFor(serviceId, extra);
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!file || (!serviceId && !jobId)) return;
-    if (file.size > MAX_UPLOAD_BYTES) return setError("El archivo es muy grande: el máximo es 150 MB.");
+    if (!file || (!sectorCode && !jobId)) return;
     const form = new FormData();
     if (jobId) form.append("job", jobId);
-    else {
-      const sectorCode = extraBoard ? extraBoard.code : SECTOR_OF[serviceId!]!;
+    else if (sectorCode) {
       form.append("sector", sectorCode);
       form.append("pickupBranch", pickup ?? defaultPickupBranch(sectorCode));
       if (variant) form.append("variant", variant);
@@ -80,15 +70,8 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
     // D-091: el servicio ya va en el tablero del pedido; repetirlo en la nota ensuciaba la descripción.
     if (note.trim()) form.append("note", note.trim());
     form.append("file", file);
-    setError("");
-    setProgress(0);
-    try {
-      const r = await upload<{ job: { label: string }; resent?: boolean; added?: boolean }>("/app/chat/files", form, setProgress);
-      onSent(r.job.label, Boolean(r.resent || r.added));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No pudimos subir el archivo.");
-      setProgress(null);
-    }
+    const r = await sendFile(file, form);
+    if (r) onSent(r.job.label, Boolean(r.resent || r.added));
   }
 
   return (
@@ -132,21 +115,10 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
         {jobId === null && (
           <>
         <p className="sheet-label">1 · ¿Para qué servicio?</p>
-        <div className="choices">
-          {help.SERVICES.map((s) => (
-            <button type="button" key={s.id} className="choice" aria-pressed={serviceId === s.id} onClick={() => setServiceId(s.id)}>
-              {s.name}
-            </button>
-          ))}
-          {extra.map((x) => (
-            <button type="button" key={x.code} className="choice" aria-pressed={serviceId === `sector:${x.code}`} onClick={() => setServiceId(`sector:${x.code}`)}>
-              {x.name}
-            </button>
-          ))}
-        </div>
+        <ServiceChoices value={serviceId} onChange={setServiceId} extra={extra} />
         {service && <p className="muted sheet-hint">Formato: {service.formats}.</p>}
         <VariantPicker
-          sectorCode={serviceId ? (extraBoard ? extraBoard.code : SECTOR_OF[serviceId]) : undefined}
+          sectorCode={sectorCode}
           value={variant}
           onChange={setVariant}
           onList={setVariants}
@@ -155,34 +127,15 @@ function SendFile({ onClose, onSent, initialJob }: { onClose: () => void; onSent
         <p className="sheet-label">2 · Medidas y cantidad</p>
         <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej.: 58 × 100 cm, 2 copias" />
         <p className="sheet-label">3 · ¿Dónde lo retirás?</p>
-        <div className="choices">
-          {PICKUP_BRANCHES.map((b) => {
-            const selected = (pickup ?? (serviceId ? defaultPickupBranch(extraBoard ? extraBoard.code : SECTOR_OF[serviceId]!) : null)) === b;
-            return (
-              <button type="button" key={b} className="choice" aria-pressed={selected} onClick={() => setPickup(b)}>
-                {help.BRANCHES.find((x) => x.id === b)?.name ?? PICKUP_LABELS[b]}
-                <small className="muted" style={{ display: "block", fontWeight: 400 }}>{help.BRANCHES.find((x) => x.id === b)?.address}</small>
-              </button>
-            );
-          })}
-        </div>
+        <BranchChoices selected={pickup ?? (sectorCode ? defaultPickupBranch(sectorCode) : null)} onPick={setPickup} />
           </>
         )}
         <p className="sheet-label">{jobId === null ? "4 · El archivo" : "El archivo"}</p>
-        <label className="drop">
-          <Paperclip size={24} />
-          <strong>{file ? file.name : "Tocá para elegir el archivo"}</strong>
-          <span>{file ? formatBytes(file.size) : "PDF, PNG, JPG, TIF, AI, EPS, PSD, CDR o ZIP · hasta 150 MB"}</span>
-          <input type="file" hidden accept={ACCEPT_ATTRIBUTE} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        </label>
+        <FileDrop file={file} prompt="Tocá para elegir el archivo" onChange={setFile} />
         {error && <p className="form-error">{error}</p>}
-        {progress !== null && (
-          <div className="progress" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
-            <span style={{ width: `${Math.round(progress * 100)}%` }} />
-          </div>
-        )}
+        <UploadProgress progress={progress} />
         <button className="btn btn-primary btn-block" disabled={!file || (!serviceId && jobId === null) || (jobId === null && variants.length > 0 && !variant) || progress !== null}>
-          {progress !== null ? `Subiendo… ${Math.round(progress * 100)}%` : "Mandar el archivo"}
+          {progress !== null ? `Subiendo… ${progressPercent(progress)}%` : "Mandar el archivo"}
         </button>
       </form>
     </div>

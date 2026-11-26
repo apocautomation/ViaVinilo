@@ -17,6 +17,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/worker/package.json apps/worker/
 COPY apps/web/package.json apps/web/
 COPY apps/pwa/package.json apps/pwa/
+COPY packages/api-client/package.json packages/api-client/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/ui/package.json packages/ui/
 RUN pnpm install --frozen-lockfile

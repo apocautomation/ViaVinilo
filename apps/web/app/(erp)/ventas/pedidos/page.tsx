@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
-import type { JobStatus } from "@viavinilo/contracts";
-import { api, ApiError } from "../../../lib/api";
-import { Badge, PageHead, ars, type Tone } from "../../ui";
+import type { JobListItem, JobStatus, SectorRef } from "@viavinilo/contracts";
+import { api } from "../../../lib/api";
+import { useApiQuery, useDebounced } from "../../hooks";
+import { Badge, PageHead, SearchBox, TableFoot, TableMessage, ars, type Tone } from "../../ui";
 
 /** Pedidos reales de todos los sectores (sin datos de ejemplo). */
 const TABS = [
@@ -34,27 +34,10 @@ const STATUS_TONE: Partial<Record<JobStatus, Tone>> = {
   DELIVERED: "ok",
 };
 
-interface Job {
-  id: string;
-  label: string;
-  status: JobStatus;
-  statusLabel: string;
-  source: string;
-  description: string | null;
-  measure: string | null;
-  quotedAmount: string | null;
-  depositRequired: boolean;
-  depositPaidAt: string | null;
-  estimatedReadyAt: string | null;
-  createdAt: string;
-  sector: { code: string; name: string };
-  customer: { id: string; customerNumber: number; firstName: string | null; lastName: string | null; businessName: string | null } | null;
-}
-
-const customerName = (c: Job["customer"]) =>
+const customerName = (c: JobListItem["customer"]) =>
   c ? [c.firstName, c.lastName].filter(Boolean).join(" ") || c.businessName || `Cliente N.º ${c.customerNumber}` : "—";
 
-function deposit(j: Job): { text: string; tone: Tone } | null {
+function deposit(j: JobListItem): { text: string; tone: Tone } | null {
   if (!j.depositRequired) return null;
   return j.depositPaidAt ? { text: "Seña recibida", tone: "ok" } : { text: "Seña pendiente", tone: "warn" };
 }
@@ -67,36 +50,20 @@ export default function PedidosPage() {
   const [sector, setSector] = useState("");
   const [source, setSource] = useState("");
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
+  const query = useDebounced(search.trim());
   const [page, setPage] = useState(1);
-  const [sectors, setSectors] = useState<{ code: string; name: string }[]>([]);
-  const [data, setData] = useState<{ total: number; pageSize: number; items: Job[] } | null>(null);
-  const [error, setError] = useState("");
+  const [sectors, setSectors] = useState<SectorRef[]>([]);
 
   useEffect(() => {
-    api<{ code: string; name: string }[]>("/sectors").then(setSectors).catch(() => undefined);
+    api<SectorRef[]>("/sectors").then(setSectors).catch(() => undefined);
   }, []);
-  useEffect(() => {
-    const t = setTimeout(() => setQuery(search.trim()), 350);
-    return () => clearTimeout(t);
-  }, [search]);
   useEffect(() => setPage(1), [tab, sector, source, query]);
 
-  useEffect(() => {
-    const params = new URLSearchParams({ tab, page: String(page), pageSize: "30" });
-    if (sector) params.set("sector", sector);
-    if (source) params.set("source", source);
-    if (query) params.set("search", query);
-    let cancelled = false;
-    api<{ total: number; pageSize: number; items: Job[] }>(`/jobs?${params}`)
-      .then((d) => !cancelled && (setData(d), setError("")))
-      .catch((e: unknown) => !cancelled && setError(e instanceof ApiError ? e.message : "No pudimos cargar los pedidos"));
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, sector, source, query, page]);
-
-  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const params = new URLSearchParams({ tab, page: String(page), pageSize: "30" });
+  if (sector) params.set("sector", sector);
+  if (source) params.set("source", source);
+  if (query) params.set("search", query);
+  const { data, error } = useApiQuery<{ total: number; pageSize: number; items: JobListItem[] }>(`/jobs?${params}`, "No pudimos cargar los pedidos");
 
   return (
     <div className="page">
@@ -129,10 +96,7 @@ export default function PedidosPage() {
               </option>
             ))}
           </select>
-          <label className="search" style={{ marginLeft: "auto" }}>
-            <Search size={16} aria-hidden />
-            <input placeholder="N.º de pedido, cliente o detalle" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Buscar pedidos" />
-          </label>
+          <SearchBox pushRight placeholder="N.º de pedido, cliente o detalle" value={search} onChange={setSearch} label="Buscar pedidos" />
         </div>
 
         {error && <p className="error" style={{ padding: "0 16px" }}>{error}</p>}
@@ -189,43 +153,14 @@ export default function PedidosPage() {
                 );
               })}
               {data && data.items.length === 0 && (
-                <tr>
-                  <td colSpan={10}>
-                    <div className="empty" style={{ padding: 32 }}>
-                      {query || sector || source ? "No hay pedidos con ese filtro." : "Todavía no hay pedidos en esta lista."}
-                    </div>
-                  </td>
-                </tr>
+                <TableMessage colSpan={10}>{query || sector || source ? "No hay pedidos con ese filtro." : "Todavía no hay pedidos en esta lista."}</TableMessage>
               )}
-              {!data && !error && (
-                <tr>
-                  <td colSpan={10}>
-                    <div className="empty" style={{ padding: 32 }}>Cargando…</div>
-                  </td>
-                </tr>
-              )}
+              {!data && !error && <TableMessage colSpan={10}>Cargando…</TableMessage>}
             </tbody>
           </table>
         </div>
 
-        {data && data.total > 0 && (
-          <div className="table-foot">
-            <span>
-              {data.total} {data.total === 1 ? "pedido" : "pedidos"}
-            </span>
-            <div className="pager">
-              <button className="btn btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Anterior
-              </button>
-              <span>
-                {page} de {pages}
-              </span>
-              <button className="btn btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
+        {data && data.total > 0 && <TableFoot total={data.total} noun={["pedido", "pedidos"]} page={page} pageSize={data.pageSize} onPage={setPage} />}
       </section>
     </div>
   );

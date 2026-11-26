@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { api, getToken, saveToken, SUPPORT_WHATSAPP_URL } from "../../session";
+import { AuthShell, PasswordInput, useAuthSubmit } from "../auth-parts";
 
 /** "Escribinos por WhatsApp", con link solo si ya está cargado el número de la empresa (D-039). */
 function WhatsApp({ children }: { children: string }) {
@@ -26,35 +27,27 @@ export default function IngresarPage() {
   const [user, setUser] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { busy, error, run } = useAuthSubmit();
 
   // Si ya hay sesión, directo a sus pedidos.
   useEffect(() => {
     if (getToken()) router.replace("/");
   }, [router]);
 
-  async function submit(e: FormEvent) {
+  function submit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
+    void run(async () => {
       const { accessToken } = await api<{ accessToken: string }>("/app/auth/login", {
         method: "POST",
         body: JSON.stringify({ user, password }),
       });
       saveToken(accessToken);
       router.replace("/");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No pudimos iniciar sesión.");
-    } finally {
-      setBusy(false);
-    }
+    }, "No pudimos iniciar sesión.");
   }
 
   return (
-    <main className="shell auth">
-      <img className="auth-logo" src="/logo-mascota.svg" alt="Via Vinilo · Mayorista gráfico" />
+    <AuthShell>
       <h1>Seguí tus trabajos</h1>
       <p className="lead">Estado, precio y cuándo podés retirar cada pedido.</p>
       <form onSubmit={submit}>
@@ -73,23 +66,7 @@ export default function IngresarPage() {
         </label>
         <label className="field">
           Contraseña
-          <span className="password-row">
-            <input
-              type={show ? "text" : "password"}
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-              onClick={() => setShow((s) => !s)}
-            >
-              {show ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
-          </span>
+          <PasswordInput show={show} onToggle={() => setShow((s) => !s)} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
         {error && <p className="form-error">{error}</p>}
         <button className="btn btn-primary btn-block" disabled={busy}>
@@ -103,6 +80,6 @@ export default function IngresarPage() {
         ¿Todavía no sos cliente o no tenés email cargado? <WhatsApp>Escribinos por WhatsApp</WhatsApp> y un asesor
         te ayuda.
       </p>
-    </main>
+    </AuthShell>
   );
 }

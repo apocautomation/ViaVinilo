@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { api } from "../../../../lib/api";
 import { PageHead } from "../../../ui";
-import type { Customer } from "../customer";
+import type { CustomerDetail } from "@viavinilo/contracts";
 import { CustomerForm, initialValues, toPayload } from "../customer-form";
 
 export default function NewCustomerPage() {
@@ -24,7 +24,7 @@ export default function NewCustomerPage() {
         initial={initialValues()}
         submitLabel="Dar de alta"
         onSubmit={async (v) => {
-          const created = await api<Customer>("/customers", {
+          const created = await api<CustomerDetail>("/customers", {
             method: "POST",
             body: JSON.stringify(toPayload(v, "create")),
           });

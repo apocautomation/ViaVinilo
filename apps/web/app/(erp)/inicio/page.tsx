@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Banknote, ClipboardList, Factory, FileWarning, HandCoins, Hourglass, PackageCheck, Receipt, Truck } from "lucide-react";
 import { JOB_STATUS_LABELS, parseSaltaDateTime, type JobStatus } from "@viavinilo/contracts";
-import { api, ApiError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { useApiQuery } from "../hooks";
 import { Badge, Kpi, PageHead, ars } from "../ui";
 
 /** Límite de "demorado" mientras carga el configurado (Configuración → Avisos). */
@@ -86,8 +87,6 @@ export default function InicioPage() {
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [sector, setSector] = useState("");
   const [sectors, setSectors] = useState<{ code: string; name: string }[]>([]);
-  const [data, setData] = useState<Summary | null>(null);
-  const [error, setError] = useState("");
   const [lateHours, setLateHours] = useState(DEFAULT_LATE_HOURS);
   const [late, setLate] = useState<LateJob[]>([]);
   const [lateTotal, setLateTotal] = useState(0);
@@ -101,20 +100,8 @@ export default function InicioPage() {
   }, []);
 
   const range = rangeOf(preset, custom);
-  const rangeKey = range ? `${range.from}|${range.to}` : "";
-  useEffect(() => {
-    if (!rangeKey) return;
-    const [from, to] = rangeKey.split("|") as [string, string];
-    const params = new URLSearchParams({ from, to });
-    if (sector) params.set("sector", sector);
-    let cancelled = false;
-    api<Summary>(`/jobs/summary?${params}`)
-      .then((d) => !cancelled && (setData(d), setError("")))
-      .catch((e: unknown) => !cancelled && setError(e instanceof ApiError ? e.message : "No pudimos cargar el resumen"));
-    return () => {
-      cancelled = true;
-    };
-  }, [rangeKey, sector]);
+  const summaryParams = range ? new URLSearchParams({ from: range.from, to: range.to, ...(sector ? { sector } : {}) }) : null;
+  const { data, error } = useApiQuery<Summary>(summaryParams && `/jobs/summary?${summaryParams}`, "No pudimos cargar el resumen");
 
   const n = (v: number | undefined) => (data ? String(v ?? 0) : "…");
   const money = (v: string | undefined) => (data ? ars.format(Number(v ?? 0)) : "…");

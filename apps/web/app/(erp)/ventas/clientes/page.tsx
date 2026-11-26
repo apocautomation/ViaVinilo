@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CheckCircle2, Plus, Search, Send } from "lucide-react";
-import { CUSTOMER_STATUS_LABELS, TAX_CONDITION_LABELS, type CustomerGap, type CustomerStatus } from "@viavinilo/contracts";
-import { api, ApiError } from "../../../lib/api";
-import { Badge, PageHead } from "../../ui";
-import { appAccess, formatDni, formatPhone, fullName, STATUS_TONE, type CustomerPage } from "./customer";
+import { CheckCircle2, Plus, Send } from "lucide-react";
+import { CUSTOMER_STATUS_LABELS, formatPhone, TAX_CONDITION_LABELS, type CustomerGap, type CustomerListPage, type CustomerStatus } from "@viavinilo/contracts";
+import { useApiQuery, useDebounced } from "../../hooks";
+import { Badge, PageHead, SearchBox, TableFoot, TableMessage } from "../../ui";
+import { appAccess, formatDni, fullName, STATUS_TONE } from "./customer";
 import { InviteDialog } from "./invite-dialog";
 
 const GAPS: { label: string; value: CustomerGap | "" }[] = [
@@ -32,34 +32,16 @@ export default function CustomersPage() {
   const [notice, setNotice] = useState("");
   const [reload, setReload] = useState(0);
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
+  const query = useDebounced(search.trim());
   const [page, setPage] = useState(1);
-  const [data, setData] = useState<CustomerPage | null>(null);
-  const [error, setError] = useState("");
-
-  // Busca medio segundo después de que dejan de escribir.
-  useEffect(() => {
-    const t = setTimeout(() => setQuery(search.trim()), 350);
-    return () => clearTimeout(t);
-  }, [search]);
   useEffect(() => setPage(1), [query, tab, gap]);
 
-  useEffect(() => {
-    const params = new URLSearchParams({ page: String(page), pageSize: "25" });
-    if (query) params.set("search", query);
-    const status = TABS[tab]?.status;
-    if (status) params.set("status", status);
-    if (gap) params.set("gap", gap);
-    let cancelled = false;
-    api<CustomerPage>(`/customers?${params}`)
-      .then((d) => !cancelled && (setData(d), setError("")))
-      .catch((e: unknown) => !cancelled && setError(e instanceof ApiError ? e.message : "No pudimos cargar los clientes"));
-    return () => {
-      cancelled = true;
-    };
-  }, [page, query, tab, gap, reload]);
-
-  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const params = new URLSearchParams({ page: String(page), pageSize: "25" });
+  if (query) params.set("search", query);
+  const status = TABS[tab]?.status;
+  if (status) params.set("status", status);
+  if (gap) params.set("gap", gap);
+  const { data, error } = useApiQuery<CustomerListPage>(`/customers?${params}`, "No pudimos cargar los clientes", reload);
 
   return (
     <div className="page">
@@ -94,15 +76,7 @@ export default function CustomersPage() {
               </button>
             ))}
           </div>
-          <label className="search" style={{ marginLeft: "auto" }}>
-            <Search size={16} aria-hidden />
-            <input
-              placeholder="Nombre, N.º de cliente, DNI, email o teléfono"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Buscar clientes"
-            />
-          </label>
+          <SearchBox pushRight placeholder="Nombre, N.º de cliente, DNI, email o teléfono" value={search} onChange={setSearch} label="Buscar clientes" />
         </div>
 
         <div className="filters filters-sub">
@@ -156,21 +130,9 @@ export default function CustomersPage() {
                 </tr>
               ))}
               {data && data.items.length === 0 && (
-                <tr>
-                  <td colSpan={8}>
-                    <div className="empty" style={{ padding: 32 }}>
-                      {query ? "No encontramos clientes con esa búsqueda." : "Todavía no hay clientes en esta lista."}
-                    </div>
-                  </td>
-                </tr>
+                <TableMessage colSpan={8}>{query ? "No encontramos clientes con esa búsqueda." : "Todavía no hay clientes en esta lista."}</TableMessage>
               )}
-              {!data && !error && (
-                <tr>
-                  <td colSpan={8}>
-                    <div className="empty" style={{ padding: 32 }}>Cargando…</div>
-                  </td>
-                </tr>
-              )}
+              {!data && !error && <TableMessage colSpan={8}>Cargando…</TableMessage>}
             </tbody>
           </table>
         </div>
@@ -186,24 +148,7 @@ export default function CustomersPage() {
           />
         )}
 
-        {data && data.total > 0 && (
-          <div className="table-foot">
-            <span>
-              {data.total} {data.total === 1 ? "cliente" : "clientes"}
-            </span>
-            <div className="pager">
-              <button className="btn btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Anterior
-              </button>
-              <span>
-                {page} de {pages}
-              </span>
-              <button className="btn btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                Siguiente
-              </button>
-            </div>
-          </div>
-        )}
+        {data && data.total > 0 && <TableFoot total={data.total} noun={["cliente", "clientes"]} page={page} pageSize={data.pageSize} onPage={setPage} />}
       </section>
     </div>
   );

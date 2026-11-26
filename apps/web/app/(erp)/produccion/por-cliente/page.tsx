@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { isPickupBranch, PICKUP_BRANCHES, PICKUP_LABELS, type JobStatus } from "@viavinilo/contracts";
-import { api, ApiError } from "../../../lib/api";
-import { Badge, PageHead, ars, type Tone } from "../../ui";
+import { useApiQuery, useDebounced } from "../../hooks";
+import { Badge, EmptyState, Loading, PageHead, SearchBox, ars, type Tone } from "../../ui";
 
 /**
  * Trabajos por cliente (D-084): los pedidos en curso de cada cliente, de todos los sectores juntos.
@@ -54,14 +54,12 @@ const when = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, day: "2-digit", mo
 
 export default function JobsByCustomerPage() {
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
+  const query = useDebounced(search.trim());
   const [pickup, setPickup] = useState("");
   const [several, setSeveral] = useState(false);
   const [page, setPage] = useState(1);
   /** D-085: cada cliente arranca plegado; se abre con un clic. Con una búsqueda se abren todos. */
   const [opened, setOpened] = useState<Set<string>>(new Set());
-  const [data, setData] = useState<{ customers: Group[]; totalCustomers: number; totalJobs: number; pageSize: number } | null>(null);
-  const [error, setError] = useState("");
   useEffect(() => setPage(1), [query, pickup, several]);
   const toggle = (id: string) =>
     setOpened((prev) => {
@@ -71,24 +69,14 @@ export default function JobsByCustomerPage() {
       return next;
     });
 
-  useEffect(() => {
-    const t = setTimeout(() => setQuery(search.trim()), 350);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  useEffect(() => {
-    const params = new URLSearchParams({ page: String(page) });
-    if (query) params.set("search", query);
-    if (pickup) params.set("pickup", pickup);
-    if (several) params.set("several", "true");
-    let cancelled = false;
-    api<{ customers: Group[]; totalCustomers: number; totalJobs: number; pageSize: number }>(`/jobs/by-customer?${params}`)
-      .then((d) => !cancelled && (setData(d), setError("")))
-      .catch((e: unknown) => !cancelled && setError(e instanceof ApiError ? e.message : "No pudimos cargar los trabajos"));
-    return () => {
-      cancelled = true;
-    };
-  }, [query, pickup, several, page]);
+  const params = new URLSearchParams({ page: String(page) });
+  if (query) params.set("search", query);
+  if (pickup) params.set("pickup", pickup);
+  if (several) params.set("several", "true");
+  const { data, error } = useApiQuery<{ customers: Group[]; totalCustomers: number; totalJobs: number; pageSize: number }>(
+    `/jobs/by-customer?${params}`,
+    "No pudimos cargar los trabajos",
+  );
 
   const groups = data?.customers ?? [];
   const pages = data ? Math.max(1, Math.ceil(data.totalCustomers / data.pageSize)) : 1;
@@ -103,10 +91,7 @@ export default function JobsByCustomerPage() {
 
       <section className="panel">
         <div className="filters">
-          <label className="search">
-            <Search size={16} aria-hidden />
-            <input placeholder="Cliente, N.º de cliente o N.º de pedido" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Buscar cliente" autoFocus />
-          </label>
+          <SearchBox placeholder="Cliente, N.º de cliente o N.º de pedido" value={search} onChange={setSearch} label="Buscar cliente" autoFocus />
           <select value={pickup} onChange={(e) => setPickup(e.target.value)} aria-label="Sucursal de retiro">
             <option value="">Retiro en cualquier sucursal</option>
             {PICKUP_BRANCHES.map((b) => (
@@ -127,10 +112,8 @@ export default function JobsByCustomerPage() {
         </div>
 
         {error && <p className="error" style={{ padding: "0 16px" }}>{error}</p>}
-        {!data && !error && <div className="empty" style={{ padding: 32 }}>Cargando…</div>}
-        {data && groups.length === 0 && (
-          <div className="empty" style={{ padding: 32 }}>{query || pickup || several ? "No hay clientes con ese filtro." : "No hay trabajos en curso."}</div>
-        )}
+        {!data && !error && <Loading />}
+        {data && groups.length === 0 && <EmptyState>{query || pickup || several ? "No hay clientes con ese filtro." : "No hay trabajos en curso."}</EmptyState>}
 
         <div className="by-customer">
           {groups.map((g) => (

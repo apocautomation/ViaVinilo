@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { DEFAULT_ALERT_SETTINGS, ROLE_PERMISSIONS, USER_ROLE_LABELS, USER_ROLES, type AlertSettings, type UserRole } from "@viavinilo/contracts";
-import { api, ApiError, getUser } from "../../lib/api";
-import { Badge, PageHead } from "../ui";
+import { api } from "../../lib/api";
+import { errorText, useIsOwner } from "../hooks";
+import { Badge, OwnerGate, PageHead, TableMessage } from "../ui";
 
 /**
  * Configuración del ERP (D-067): usuarios con sus roles y tableros, máquinas, motivos de error y
@@ -43,8 +44,6 @@ interface Reason {
   label: string;
   active: boolean;
 }
-
-const errorText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal. Probá de nuevo.");
 
 /** Contraseña fácil de dictar: palabra-números-letras. */
 function generatePassword(): string {
@@ -197,7 +196,7 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function ConfiguracionPage() {
-  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  const isOwner = useIsOwner();
   const [tab, setTab] = useState<Tab>("Usuarios y roles");
   const [users, setUsers] = useState<StaffUser[] | null>(null);
   const [sectors, setSectors] = useState<SectorRef[]>([]);
@@ -212,7 +211,6 @@ export default function ConfiguracionPage() {
   const [reasonLabel, setReasonLabel] = useState("");
 
   useEffect(() => {
-    setIsOwner(getUser()?.roles.includes("OWNER") ?? false);
     // La campanita trae directo a los tiempos de los avisos.
     if (new URLSearchParams(window.location.search).get("tab") === "avisos") setTab("Avisos");
   }, []);
@@ -251,8 +249,7 @@ export default function ConfiguracionPage() {
     }
   }
 
-  if (isOwner === null) return <div className="page"><PageHead title="Configuración" /><div className="empty" style={{ padding: 32 }}>Cargando…</div></div>;
-  if (!isOwner) return <div className="page"><PageHead title="Configuración" /><div className="empty" style={{ padding: 32 }}>La configuración la maneja el dueño.</div></div>;
+  if (!isOwner) return <OwnerGate isOwner={isOwner} title="Configuración" denied="La configuración la maneja el dueño." />;
 
   return (
     <div className="page">
@@ -327,13 +324,7 @@ export default function ConfiguracionPage() {
                       </td>
                     </tr>
                   ))}
-                  {!users && (
-                    <tr>
-                      <td colSpan={6}>
-                        <div className="empty" style={{ padding: 32 }}>Cargando…</div>
-                      </td>
-                    </tr>
-                  )}
+                  {!users && <TableMessage colSpan={6}>Cargando…</TableMessage>}
                 </tbody>
               </table>
             </div>

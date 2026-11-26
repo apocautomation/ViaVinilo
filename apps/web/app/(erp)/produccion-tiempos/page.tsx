@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, ClipboardList, Factory, Timer } from "lucide-react";
 import { JOB_STATUS_LABELS, type JobStatus } from "@viavinilo/contracts";
-import { api, ApiError } from "../../lib/api";
+import { useApiQuery } from "../hooks";
 import { Badge, Kpi, PageHead } from "../ui";
 
 /**
@@ -41,15 +41,7 @@ const shortDay = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
 export default function TiemposPage() {
   const [days, setDays] = useState<(typeof PERIODS)[number]>(14);
   const [sector, setSector] = useState("");
-  const [data, setData] = useState<Times | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    setError("");
-    api<Times>(`/jobs/times?days=${days}`)
-      .then(setData)
-      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : "No pudimos cargar los tiempos."));
-  }, [days]);
+  const { data, error } = useApiQuery<Times>(`/jobs/times?days=${days}`, "No pudimos cargar los tiempos.");
 
   const perDay = (data?.perDay ?? []).map((d) => ({ date: d.date, count: sector ? (d.bySector[sector] ?? 0) : d.total }));
   const maxDay = Math.max(1, ...perDay.map((d) => d.count));

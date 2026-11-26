@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
-import { api, ApiError, getUser } from "../../../lib/api";
-import { Badge, PageHead } from "../../ui";
+import { api } from "../../../lib/api";
+import { errorText, useIsOwner } from "../../hooks";
+import { Badge, Loading, PageHead } from "../../ui";
 
 /**
  * Opciones de impresión por tablero (D-095, D-102, D-108): "Glitter" en DTF Textil, la tela en
@@ -30,14 +31,11 @@ interface Sector {
   variants: Variant[];
 }
 
-const errorText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal. Probá de nuevo.");
-
 export default function OpcionesPage() {
   const [sectors, setSectors] = useState<Sector[] | null>(null);
-  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  const isOwner = useIsOwner();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  useEffect(() => setIsOwner(getUser()?.roles.includes("OWNER") ?? false), []);
 
   const load = useCallback(async () => {
     try {
@@ -79,7 +77,7 @@ export default function OpcionesPage() {
       />
       {error && <p className="error">{error}</p>}
       {notice && <p className="notice">{notice}</p>}
-      {!sectors && !error && <div className="empty">Cargando…</div>}
+      {!sectors && !error && <Loading />}
       {sectors?.map((s) => (
         <SectorVariants key={s.id} sector={s} run={run} />
       ))}

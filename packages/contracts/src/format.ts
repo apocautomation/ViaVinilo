@@ -5,6 +5,12 @@
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
+/** +5493874669944 → 387 466-9944 (celulares argentinos, I-12). Otros números quedan como están. */
+export function formatPhone(phone: string): string {
+  const m = /^\+549(\d{3})(\d{3})(\d{4})$/.exec(phone);
+  return m ? `${m[1]} ${m[2]}-${m[3]}` : phone;
+}
+
 /** CUIT con guiones mientras se escribe: "20123" → "20-123", "20123456789" → "20-12345678-9". */
 export function maskCuit(input: string): string {
   const d = digits(input).slice(0, 11);

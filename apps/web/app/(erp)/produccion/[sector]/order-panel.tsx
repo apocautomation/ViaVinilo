@@ -1,546 +1,121 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Download, ExternalLink, Pencil, Trash2, X } from "lucide-react";
-import { parseAmount, parseSaltaDateTime, PICKUP_BRANCHES, PICKUP_LABELS } from "@viavinilo/contracts";
-import { api, downloadFile } from "../../../lib/api";
-import { ars, MoneyInput } from "../../ui";
+import { Trash2, X } from "lucide-react";
+import type { FileErrorReason, JobDetail, MachineRef } from "@viavinilo/contracts";
+import type { PanelMode } from "./board-rules";
+import { NextButton, SideActions } from "./job-actions";
+import {
+  CustomerBlock,
+  FilesBlock,
+  HistoryBlock,
+  ModeForm,
+  OrderBlock,
+  SettingsBlocks,
+} from "./order-sections";
+import { useOrderPanel, type OrderPanelState } from "./use-order-panel";
 
 /**
  * Panel del pedido (D-079). Al tocar una tarjeta del tablero se abre acá el pedido completo: lo que
  * escribió el cliente, los archivos, el control del archivo, el historial y las acciones. Reemplaza a
  * la ventana emergente que solo pedía el precio y a la tarjeta que se abría dentro de la columna.
  */
-
-export type PanelMode = "view" | "quote" | "error" | "cancel" | "force" | "delete";
-
-interface Detail {
-  id: string;
-  label: string;
-  /** D-109: "SET-000002"; sin opción, igual al VV-. */
-  code: string;
-  status: string;
-  statusLabel: string;
-  sector: { code: string; name: string };
-  /** Tablero y sub-servicios entre los que se puede mover el pedido (D-082). */
-  services: { code: string; name: string }[];
-  /** Material u opción de impresión (D-095). */
-  variant: { id: string; code: string; name: string } | null;
-  variants: { id: string; code: string; name: string }[];
-  customer: { id: string; number: number; name: string | null };
-  description: string | null;
-  measure: string | null;
-  quotedAmount: string | null;
-  depositRequired: boolean;
-  depositAmount: string | null;
-  depositPaidAt: string | null;
-  estimatedReadyAt: string | null;
-  pickupBranch: string | null;
-  fileCheck: { verdict: "ok" | "review" | "error" | "unknown"; detail: string; hint?: string; linkNote?: string } | null;
-  machine: { id: string; name: string } | null;
-  material: { id: string; name: string } | null;
-  createdAt: string;
-  next: string | null;
-  other: string[];
-  requestedSpecs: { subject?: string; body?: string; note?: string } | null;
-  externalLinks: string[];
-  files: { id: string; filename: string; sizeBytes: number; purgedAt: string | null }[];
-  events: { id: string; toLabel: string; user: string | null; reason: string | null; note: string | null; createdAt: string }[];
-}
-
-const NEXT_ACTION: Record<string, string> = {
-  RECEIVED: "Archivo corregido",
-  QUOTED: "Cotizar",
-  DEPOSIT_RECEIVED: "Registrar seña",
-  PRINTED: "Marcar impreso",
-  CALENDERING: "Pasar a calandra",
-  READY: "Marcar terminado",
-  DELIVERED: "Entregar",
-};
-
-const TZ = "America/Argentina/Salta";
-const when = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-
-function size(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-const CHECK_TITLE: Record<string, string> = {
-  ok: "Archivo controlado",
-  review: "Revisar el archivo",
-  error: "Archivo con problema",
-  unknown: "No se pudo controlar solo",
-};
-
 export function OrderPanel(props: {
   jobId: string;
   initialMode: PanelMode;
-  machines: { id: string; name: string }[];
-  reasons: { id: string; label: string }[];
+  machines: readonly MachineRef[];
+  reasons: readonly FileErrorReason[];
   isOwner: boolean;
   onClose: () => void;
   /** El pedido cambió: el tablero se recarga. */
   onChanged: () => void;
 }) {
-  const { jobId, onClose, onChanged } = props;
-  const [job, setJob] = useState<Detail | null>(null);
-  const [mode, setMode] = useState<PanelMode>(props.initialMode);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** D-086: la medida se corrige acá; null = no se está editando. */
-  const [measureDraft, setMeasureDraft] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setJob(await api<Detail>(`/jobs/${jobId}`));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, [jobId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  async function run(fn: () => Promise<unknown>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-      setMode("view");
-      onChanged();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      await load();
-      setBusy(false);
-    }
-  }
-
-  const move = (body: Record<string, unknown>) => run(() => api(`/jobs/${jobId}/transition`, { method: "POST", body: JSON.stringify(body) }));
-
-  function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!job) return;
-    const f = new FormData(e.currentTarget);
-    const text = (name: string) => String(f.get(name) || "").trim();
-    if (mode === "quote") {
-      const date = text("etaDate");
-      const eta = date ? parseSaltaDateTime(date, text("etaTime")) : null;
-      if (date && !eta) {
-        setError("Escribí la fecha como día/mes/año (por ejemplo 24/11/2026) y la hora en 24 h (18:00).");
-        return;
-      }
-      const price = parseAmount(text("amount"));
-      const deposit = text("deposit");
-      if (deposit && price && Number(parseAmount(deposit) ?? 0) > Number(price)) {
-        setError("La seña no puede ser mayor que el precio.");
-        return;
-      }
-      void move({ to: "QUOTED", quotedAmount: text("amount"), depositAmount: deposit || null, ...(eta ? { estimatedReadyAt: eta } : {}) });
-    } else if (mode === "error") {
-      void move({ to: "FILE_ERROR", reasonId: f.get("reason"), note: text("note") || undefined });
-    } else if (mode === "cancel") {
-      void move({ to: "CANCELLED", note: text("note") });
-    } else if (mode === "force") {
-      void move({ to: job.next === "DEPOSIT_RECEIVED" ? "PRINTED" : job.next, force: true, note: text("note") || undefined });
-    } else if (mode === "delete") {
-      // D-088: al eliminar no queda pedido que mostrar: se avisa al tablero y se cierra el panel.
-      setBusy(true);
-      setError(null);
-      api(`/jobs/${jobId}`, { method: "DELETE", body: JSON.stringify({ reason: text("note") }) })
-        .then(() => {
-          onChanged();
-          onClose();
-        })
-        .catch((err: unknown) => {
-          setError((err as Error).message);
-          setBusy(false);
-        });
-    }
-  }
-
-  function clickNext() {
-    if (!job?.next) return;
-    if (job.next === "QUOTED" && !job.quotedAmount) setMode("quote");
-    else void move({ to: job.next });
-  }
-
-  async function download(file: { id: string; filename: string }) {
-    try {
-      await downloadFile(`/jobs/${jobId}/files/${file.id}`, file.filename);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  const waitingDeposit = !!job && job.depositRequired && !job.depositPaidAt && job.status === "QUOTED";
-  const saveMeasure = () =>
-    run(async () => {
-      await api(`/jobs/${jobId}/measure`, { method: "PATCH", body: JSON.stringify({ measure: (measureDraft ?? "").trim() }) });
-      setMeasureDraft(null);
-    });
-  const message = job?.requestedSpecs?.body || job?.requestedSpecs?.note || "";
-
+  const p = useOrderPanel(props);
+  const { job } = p;
+  const { onClose } = props;
   return (
     <div className="drawer-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <aside className="drawer order-panel" role="dialog" aria-modal="true" aria-label={job ? `Pedido ${job.label}` : "Pedido"}>
-        <div className="drawer-head">
-          <span className="order-panel-title">
-            <strong>{job?.code ?? "Pedido"}</strong>
-            {job && job.code !== job.label && <span className="muted">{job.label}</span>}
-            {job && <span className="chip chip-brand">{waitingDeposit ? "Esperando seña" : job.statusLabel}</span>}
-            {job && <span className="muted">{job.sector.name}</span>}
-          </span>
-          <button className="btn btn-ghost btn-sm icon-only" aria-label="Cerrar el pedido" onClick={onClose}>
-            <X size={16} aria-hidden />
-          </button>
-        </div>
-
-        {!job && <p className="order-panel-body muted">{error ?? "Cargando el pedido…"}</p>}
-
+      <aside
+        className="drawer order-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={job ? `Pedido ${job.label}` : "Pedido"}
+      >
+        <PanelHead job={job} onClose={onClose} />
+        {!job && <p className="order-panel-body muted">{p.error ?? "Cargando el pedido…"}</p>}
         {job && (
           <div className="order-panel-body">
-            {error && (
+            {p.error && (
               <p className="file-check error" role="alert">
-                {error}
+                {p.error}
               </p>
             )}
-
-            <section className="order-block">
-              <h3>Cliente</h3>
-              <p className="order-strong">
-                {job.customer.name ?? "Cliente sin nombre"} <span className="muted">· Cliente N.º {job.customer.number}</span>
-              </p>
-              <p className="muted">Entró el {when.format(new Date(job.createdAt))}</p>
-            </section>
-
-            <section className="order-block">
-              <h3>Pedido</h3>
-              {job.description && <p className="order-strong">{job.description}</p>}
-              {message && <p className="order-message">{message}</p>}
-              <dl className="kv order-kv">
-                <dt>Medida</dt>
-                <dd>
-                  {measureDraft === null ? (
-                    <>
-                      {job.measure || "No la escribió"}{" "}
-                      <button type="button" className="btn btn-ghost btn-sm icon-only" aria-label="Corregir la medida" title="Corregir la medida" disabled={busy} onClick={() => setMeasureDraft(job.measure ?? "")}>
-                        <Pencil size={13} aria-hidden />
-                      </button>
-                    </>
-                  ) : (
-                    <span className="order-measure-edit">
-                      <input
-                        value={measureDraft}
-                        onChange={(e) => setMeasureDraft(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && void saveMeasure()}
-                        maxLength={80}
-                        placeholder="Ej.: 58 x 100 cm"
-                        aria-label="Medida pedida"
-                        autoFocus
-                      />
-                      <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void saveMeasure()}>
-                        Guardar
-                      </button>
-                      <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setMeasureDraft(null)}>
-                        Volver
-                      </button>
-                    </span>
-                  )}
-                </dd>
-                {job.material && (
-                  <>
-                    <dt>Opción de impresión</dt>
-                    <dd>{job.material.name}</dd>
-                  </>
-                )}
-                <dt>Precio</dt>
-                <dd>{job.quotedAmount ? ars.format(Number(job.quotedAmount)) : "Sin cotizar"}</dd>
-                {job.depositRequired && (
-                  <>
-                    <dt>Seña</dt>
-                    <dd>
-                      {job.depositAmount ? `${ars.format(Number(job.depositAmount))} · ` : ""}
-                      {job.depositPaidAt ? "recibida" : "pendiente"}
-                    </dd>
-                  </>
-                )}
-                {job.estimatedReadyAt && (
-                  <>
-                    <dt>Listo para retirar</dt>
-                    <dd>{when.format(new Date(job.estimatedReadyAt))}</dd>
-                  </>
-                )}
-              </dl>
-            </section>
-
-            <section className="order-block">
-              <h3>Archivos</h3>
-              {job.files.length === 0 && <p className="muted">Este pedido no tiene archivos guardados.</p>}
-              <ul className="order-files">
-                {job.files.map((f) => (
-                  <li key={f.id}>
-                    <span className="order-file-name" title={f.filename}>
-                      {f.filename} <small className="muted">{size(f.sizeBytes)}</small>
-                    </span>
-                    {f.purgedAt ? (
-                      <span className="muted">Ya no está disponible</span>
-                    ) : (
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void download(f)}>
-                        <Download size={14} aria-hidden /> Descargar
-                      </button>
-                    )}
-                  </li>
-                ))}
-                {job.externalLinks.map((link) => (
-                  <li key={link}>
-                    <a className="order-file-name" href={link} target="_blank" rel="noreferrer noopener" title={link}>
-                      <ExternalLink size={13} aria-hidden /> {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-              {job.fileCheck && (
-                <p className={`file-check ${job.fileCheck.verdict === "unknown" ? "hint" : job.fileCheck.verdict}`}>
-                  <b>{CHECK_TITLE[job.fileCheck.verdict]}:</b> {job.fileCheck.detail}
-                </p>
-              )}
-              {job.fileCheck?.linkNote && (
-                <p className="file-check review">
-                  <b>Link sin bajar:</b> {job.fileCheck.linkNote}
-                </p>
-              )}
-            </section>
-
-            {job.status !== "DELIVERED" && job.status !== "CANCELLED" && (
-              <section className="order-block">
-                <h3>Retiro</h3>
-                <select
-                  value={job.pickupBranch ?? ""}
-                  disabled={busy}
-                  aria-label="Sucursal donde retira"
-                  onChange={(e) => void run(() => api(`/jobs/${jobId}/pickup`, { method: "PATCH", body: JSON.stringify({ branch: e.target.value || null }) }))}
-                >
-                  <option value="">Sin definir</option>
-                  {PICKUP_BRANCHES.map((b) => (
-                    <option key={b} value={b}>
-                      Retira en {PICKUP_LABELS[b]}
-                    </option>
-                  ))}
-                </select>
-              </section>
-            )}
-
-            {(job.variants.length > 0 || job.variant) && (
-              <section className="order-block">
-                <h3>Opción de impresión</h3>
-                <select
-                  value={job.variant?.id ?? ""}
-                  disabled={busy || job.status === "DELIVERED" || job.status === "CANCELLED"}
-                  aria-label="Opción de impresión del pedido"
-                  onChange={(e) => void run(() => api(`/jobs/${jobId}/variant`, { method: "PATCH", body: JSON.stringify({ variantId: e.target.value || null }) }))}
-                >
-                  <option value="">Sin definir</option>
-                  {job.variants.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.code} · {v.name}
-                    </option>
-                  ))}
-                </select>
-              </section>
-            )}
-
-            {job.services.length > 0 && job.status !== "DELIVERED" && job.status !== "CANCELLED" && (
-              <section className="order-block">
-                <h3>Servicio</h3>
-                <select
-                  value={job.sector.code}
-                  disabled={busy}
-                  aria-label="Servicio del pedido"
-                  onChange={(e) => void run(() => api(`/jobs/${jobId}/service`, { method: "PATCH", body: JSON.stringify({ sector: e.target.value }) }))}
-                >
-                  {job.services.map((s) => (
-                    <option key={s.code} value={s.code}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </section>
-            )}
-
-            {job.status !== "DELIVERED" && job.status !== "CANCELLED" && props.machines.length > 0 && (
-              <section className="order-block">
-                <h3>Máquina</h3>
-                <select
-                  value={job.machine?.id ?? ""}
-                  disabled={busy}
-                  aria-label="Máquina del pedido"
-                  onChange={(e) => void run(() => api(`/jobs/${jobId}/machine`, { method: "PATCH", body: JSON.stringify({ machineId: e.target.value || null }) }))}
-                >
-                  <option value="">Sin máquina asignada</option>
-                  {props.machines.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </section>
-            )}
-
-            {mode !== "view" && (
-              <form className="order-block order-form" onSubmit={submit}>
-                {mode === "quote" && (
-                  <>
-                    <h3>Cotizar</h3>
-                    <label className="field">
-                      Precio (pesos)
-                      <MoneyInput name="amount" placeholder="Ej.: 20.000" defaultValue={job.quotedAmount ? job.quotedAmount.replace(".", ",") : ""} required autoFocus />
-                    </label>
-                    <label className="field">
-                      Seña que tiene que dejar (opcional)
-                      <MoneyInput name="deposit" placeholder="Ej.: 10.000 · vacío si no lleva seña" defaultValue={job.depositAmount ? job.depositAmount.replace(".", ",") : ""} />
-                      <small className="muted">Si cargás un monto, el cliente lo ve en su app y el pedido queda esperando la seña.</small>
-                    </label>
-                    <div className="order-two">
-                      <label className="field">
-                        Listo para retirar (opcional)
-                        <input name="etaDate" inputMode="numeric" placeholder="día/mes/año · 24/11/2026" maxLength={10} autoComplete="off" />
-                      </label>
-                      <label className="field">
-                        Hora (24 h)
-                        <input name="etaTime" inputMode="numeric" placeholder="18:00" maxLength={5} autoComplete="off" />
-                      </label>
-                    </div>
-                  </>
-                )}
-                {mode === "error" && (
-                  <>
-                    <h3>Error de archivo</h3>
-                    <label className="field">
-                      Motivo
-                      <select name="reason" required defaultValue="">
-                        <option value="" disabled>
-                          Elegí el motivo
-                        </option>
-                        {props.reasons.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      Detalle para el cliente (opcional)
-                      <textarea name="note" rows={2} maxLength={500} />
-                    </label>
-                  </>
-                )}
-                {mode === "cancel" && (
-                  <>
-                    <h3>Cancelar el pedido</h3>
-                    <label className="field">
-                      Motivo
-                      <textarea name="note" rows={2} maxLength={500} required autoFocus />
-                    </label>
-                  </>
-                )}
-                {mode === "delete" && (
-                  <>
-                    <h3>Eliminar el pedido</h3>
-                    <p className="file-check error">
-                      <b>{job.label} deja de verse</b> en el tablero, en los listados y en la app del cliente. No se le avisa al cliente y no se puede deshacer desde el sistema. Si el cliente lo dio de baja, usá «Cancelar».
-                    </p>
-                    <label className="field">
-                      ¿Por qué se elimina?
-                      <textarea name="note" rows={2} minLength={3} maxLength={300} required autoFocus placeholder="Ej.: pedido de prueba, duplicado, cargado por error" />
-                    </label>
-                  </>
-                )}
-                {mode === "force" && (
-                  <>
-                    <h3>Imprimir sin seña</h3>
-                    <p className="muted">Queda registrado que lo autorizaste vos.</p>
-                    <label className="field">
-                      Motivo (opcional)
-                      <textarea name="note" rows={2} maxLength={500} />
-                    </label>
-                  </>
-                )}
-                <div className="order-actions">
-                  <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => (setMode("view"), setError(null))}>
-                    Volver
-                  </button>
-                  <button className={mode === "delete" ? "btn btn-danger" : "btn btn-primary"} disabled={busy}>
-                    {mode === "delete" ? "Eliminar el pedido" : "Confirmar"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {mode === "view" && (job.next || job.other.length > 0) && (
-              <section className="order-block">
-                {job.next && (
-                  <button className="btn btn-primary btn-big" disabled={busy} onClick={clickNext}>
-                    {NEXT_ACTION[job.next] ?? "Avanzar"}
-                  </button>
-                )}
-                <div className="order-actions">
-                  {job.other.includes("FILE_ERROR") && (
-                    <button className="btn btn-danger" disabled={busy} onClick={() => setMode("error")}>
-                      Error de archivo
-                    </button>
-                  )}
-                  {props.isOwner && job.next === "DEPOSIT_RECEIVED" && (
-                    <button className="btn btn-ghost" disabled={busy} onClick={() => setMode("force")}>
-                      Imprimir sin seña
-                    </button>
-                  )}
-                  {job.other.includes("CANCELLED") && (
-                    <button className="btn btn-ghost" disabled={busy} onClick={() => setMode("cancel")}>
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              </section>
-            )}
-
-            {mode === "view" && props.isOwner && (
-              <button type="button" className="btn btn-ghost order-delete" disabled={busy} onClick={() => setMode("delete")}>
-                <Trash2 size={14} aria-hidden /> Eliminar pedido
-              </button>
-            )}
-
-            {job.events.length > 0 && (
-              <section className="order-block">
-                <h3>Historial</h3>
-                <ul className="order-history">
-                  {job.events.map((ev) => (
-                    <li key={ev.id}>
-                      <span>
-                        <b>{ev.toLabel}</b>
-                        {ev.reason ? ` · ${ev.reason}` : ""}
-                        {ev.note ? ` · ${ev.note}` : ""}
-                      </span>
-                      <small className="muted">
-                        {when.format(new Date(ev.createdAt))}
-                        {ev.user ? ` · ${ev.user}` : ""}
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+            <CustomerBlock job={job} />
+            <OrderBlock job={job} p={p} />
+            <FilesBlock job={job} p={p} />
+            <SettingsBlocks job={job} p={p} machines={props.machines} />
+            {p.mode !== "view" && <ModeForm job={job} p={p} reasons={props.reasons} />}
+            {p.mode === "view" && <ViewActions job={job} p={p} isOwner={props.isOwner} />}
+            <HistoryBlock job={job} />
           </div>
         )}
       </aside>
     </div>
+  );
+}
+
+function PanelTitle({ job }: { job: JobDetail }) {
+  const waitingDeposit = job.depositRequired && !job.depositPaidAt && job.status === "QUOTED";
+  return (
+    <>
+      {job.code !== job.label && <span className="muted">{job.label}</span>}
+      <span className="chip chip-brand">{waitingDeposit ? "Esperando seña" : job.statusLabel}</span>
+      <span className="muted">{job.sector.name}</span>
+    </>
+  );
+}
+
+function PanelHead({ job, onClose }: { job: JobDetail | null; onClose: () => void }) {
+  return (
+    <div className="drawer-head">
+      <span className="order-panel-title">
+        <strong>{job?.code ?? "Pedido"}</strong>
+        {job && <PanelTitle job={job} />}
+      </span>
+      <button className="btn btn-ghost btn-sm icon-only" aria-label="Cerrar el pedido" onClick={onClose}>
+        <X size={16} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+/** Avance, acciones del costado y, para el dueño, eliminar el pedido. */
+function ViewActions({ job, p, isOwner }: { job: JobDetail; p: OrderPanelState; isOwner: boolean }) {
+  return (
+    <>
+      {(job.next || job.other.length > 0) && (
+        <section className="order-block">
+          <NextButton next={job.next} size="big" disabled={p.busy} onClick={() => p.clickNext(job)} />
+          <div className="order-actions">
+            <SideActions
+              next={job.next}
+              other={job.other}
+              isOwner={isOwner}
+              disabled={p.busy}
+              onPick={p.setMode}
+            />
+          </div>
+        </section>
+      )}
+      {isOwner && (
+        <button
+          type="button"
+          className="btn btn-ghost order-delete"
+          disabled={p.busy}
+          onClick={() => p.setMode("delete")}
+        >
+          <Trash2 size={14} aria-hidden /> Eliminar pedido
+        </button>
+      )}
+    </>
   );
 }

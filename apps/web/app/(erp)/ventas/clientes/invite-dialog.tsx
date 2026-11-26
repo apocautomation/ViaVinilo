@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../../../lib/api";
-import type { CustomerPage } from "./customer";
+import type { CustomerListPage } from "@viavinilo/contracts";
 
 /** Mails por minuto que manda el worker (OUTBOX.perRun, D-049): para estimar cuánto tarda. */
 const PER_MINUTE = 10;
@@ -18,7 +18,7 @@ export function InviteDialog({ onClose, onDone }: { onClose: () => void; onDone:
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const total = (q: string) => api<CustomerPage>(`/customers?status=ACTIVE&pageSize=1&${q}`).then((d) => d.total);
+    const total = (q: string) => api<CustomerListPage>(`/customers?status=ACTIVE&pageSize=1&${q}`).then((d) => d.total);
     Promise.all([total("gap=NO_APP_PASSWORD"), total("gap=NO_EMAIL")])
       .then(([p, n]) => (setPending(p), setNoEmail(n)))
       .catch(() => setError("No pudimos contar los clientes pendientes."));

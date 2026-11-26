@@ -4,18 +4,19 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronRight, ClipboardList, Clock, PackageCheck } from "lucide-react";
 import { AppBar, PushPrompt, StatusPill, StepsBar } from "../components";
-import { ars, formatWhen, type Order } from "../data";
+import type { AppOrder } from "@viavinilo/contracts";
+import { ars, formatWhen } from "../data";
 import { api, useSession } from "../session";
 
 /** Mis pedidos: lo primero que ve el cliente al abrir la app (D-034). */
 export default function PedidosPage() {
   const { me } = useSession();
   const [tab, setTab] = useState<"curso" | "entregados">("curso");
-  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [orders, setOrders] = useState<AppOrder[] | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     const load = () =>
-      api<{ orders: Order[] }>("/app/jobs")
+      api<{ orders: AppOrder[] }>("/app/jobs")
         .then((r) => (setOrders(r.orders), setFailed(false)))
         .catch(() => setFailed(true));
     void load();
@@ -28,7 +29,7 @@ export default function PedidosPage() {
     };
   }, []);
   const all = orders ?? [];
-  const finished = (o: Order) => o.status === "DELIVERED" || o.status === "CANCELLED";
+  const finished = (o: AppOrder) => o.status === "DELIVERED" || o.status === "CANCELLED";
   const active = all.filter((o) => !finished(o));
   const list = tab === "curso" ? active : all.filter(finished);
   const ready = active.filter((o) => o.status === "READY").length;

@@ -54,3 +54,11 @@ export const setAppPasswordSchema = z.object({ password: customerPasswordSchema 
 
 /** Contraseñas del personal: mínimo 10 caracteres. */
 export const passwordSchema = z.string().min(10, "La contraseña tiene que tener al menos 10 caracteres").max(200);
+
+/** Usuario del personal con sesión iniciada, como lo devuelve `POST /auth/login`. */
+export interface SessionUser {
+  id: string;
+  email: string;
+  name: string;
+  roles: UserRole[];
+}

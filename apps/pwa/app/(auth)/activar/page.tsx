@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { MailCheck, Send } from "lucide-react";
 import { api } from "../../session";
+import { AuthShell, useAuthSubmit } from "../auth-parts";
 
 /**
  * El link que difunde Via Vinilo (D-049): el cliente pone su email y le llega un mail con un link
@@ -12,26 +13,18 @@ import { api } from "../../session";
 export default function ActivarPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { busy, error, run } = useAuthSubmit();
 
-  async function submit(e: FormEvent) {
+  function submit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
+    void run(async () => {
       await api("/app/auth/activation/request", { method: "POST", body: JSON.stringify({ email }) });
       setSent(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No pudimos mandar el mail.");
-    } finally {
-      setBusy(false);
-    }
+    }, "No pudimos mandar el mail.");
   }
 
   return (
-    <main className="shell auth">
-      <img className="auth-logo" src="/logo-mascota.svg" alt="Via Vinilo · Mayorista gráfico" />
+    <AuthShell>
       {sent ? (
         <>
           <div className="done-ico">
@@ -73,6 +66,6 @@ export default function ActivarPage() {
           </p>
         </>
       )}
-    </main>
+    </AuthShell>
   );
 }

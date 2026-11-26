@@ -16,4 +16,5 @@ export * from "./push";
 export * from "./business-hours";
 export * from "./pickup";
 export * from "./variants";
-export * from "./variants";
+export * from "./job-views";
+export * from "./app-views";

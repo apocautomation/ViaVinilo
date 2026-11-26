@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Bell, BellRing, ChevronLeft, ClipboardList, MessageCircle, Plus, UserRound } from "lucide-react";
-import { STATUS_CLASS, STATUS_LABEL, type Order, type Status } from "./data";
+import { JOB_STATUS_LABELS, type AppJobStatus, type AppOrder } from "@viavinilo/contracts";
+import { STATUS_CLASS } from "./data";
 import { enablePush, pushState } from "./push";
 import { api } from "./session";
 
@@ -74,12 +75,12 @@ export function AppBar({ title, back, right }: { title?: string; back?: boolean;
   );
 }
 
-export function StatusPill({ status }: { status: Status }) {
-  return <span className={`status ${STATUS_CLASS[status]}`}>{STATUS_LABEL[status]}</span>;
+export function StatusPill({ status }: { status: AppJobStatus }) {
+  return <span className={`status ${STATUS_CLASS[status]}`}>{JOB_STATUS_LABELS[status]}</span>;
 }
 
 /** Barra de avance: cuántos pasos de la secuencia del sector ya pasaron. */
-export function StepsBar({ order }: { order: Order }) {
+export function StepsBar({ order }: { order: AppOrder }) {
   const error = order.status === "FILE_ERROR";
   const pos = error ? 0 : order.steps.indexOf(order.status);
   return (
