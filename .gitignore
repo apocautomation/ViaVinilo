@@ -22,3 +22,6 @@ Thumbs.db
 # Datos de clientes (exportaciones de Runamatic, Tango): nunca al repo
 /*.csv
 /*.xlsx
+
+# Reportes de crapper, dryer y mutator
+.metrics/
