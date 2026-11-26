@@ -598,7 +598,7 @@ describe("materiales por tablero (D-095)", () => {
     expect(board.body.variants.map((v: { code: string }) => v.code)).not.toContain("T-JER");
     const card = board.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards).find((c: { id: string }) => c.id === a.id);
     expect(card.variant).toMatchObject({ code: "T-GLI", name: "Glitter" });
-    const filtered = await http("production").get(`/jobs/board?sector=DTF&variant=${glitter.id}`);
+    const filtered = await http("production").get("/jobs/board?sector=DTF&variant=T-GLI");
     expect(filtered.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards.map((x) => x.id))).toEqual([a.id]);
     const byCode = await http("production").get("/jobs/board?sector=DTF&q=t-gli");
     expect(byCode.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards.map((x) => x.id))).toEqual([a.id]);
@@ -634,6 +634,26 @@ describe("materiales por tablero (D-095)", () => {
     await prisma.jobOrder.update({ where: { id: job.id }, data: { variantId: lona.id } });
     const moved = await http("owner").patch(`/jobs/${job.id}/service`, { sector: "ECOSOLVENTE" });
     expect(moved.body.variant).toBeNull();
+  });
+
+  it("D-117: en Gran Formato el mismo material de dos sub-servicios es una sola opción: un filtro, un grupo y se conserva al mover", async () => {
+    const inLatex = await prisma.sectorVariant.create({ data: { sectorId: sectors.LATEX!.id, code: "TJBB", name: "Vinilo Jaspe base blanca" } });
+    const inEco = await prisma.sectorVariant.create({ data: { sectorId: sectors.ECOSOLVENTE!.id, code: "TJBB", name: "Vinilo Jaspe base blanca" } });
+    const latexJob = await newJob("LATEX");
+    const ecoJob = await newJob("ECOSOLVENTE");
+    await prisma.jobOrder.update({ where: { id: latexJob.id }, data: { variantId: inLatex.id } });
+    await prisma.jobOrder.update({ where: { id: ecoJob.id }, data: { variantId: inEco.id } });
+
+    const board = await http("owner").get("/jobs/board?sector=GRAN_FORMATO");
+    expect(board.body.variants.filter((v: { code: string }) => v.code === "TJBB")).toHaveLength(1);
+    const filtered = await http("owner").get("/jobs/board?sector=GRAN_FORMATO&variant=TJBB");
+    const ids = filtered.body.columns.flatMap((c: { cards: { id: string }[] }) => c.cards.map((x) => x.id));
+    expect(ids.sort()).toEqual([latexJob.id, ecoJob.id].sort());
+    const cards = filtered.body.columns.flatMap((c: { cards: { id: string; sameMaterialCount?: number }[] }) => c.cards);
+    expect(new Set(cards.map((c: { sameMaterialCount?: number }) => c.sameMaterialCount))).toEqual(new Set([1]));
+
+    const moved = await http("owner").patch(`/jobs/${latexJob.id}/service`, { sector: "ECOSOLVENTE" });
+    expect(moved.body.variant).toMatchObject({ id: inEco.id, code: "TJBB" });
   });
 });
 

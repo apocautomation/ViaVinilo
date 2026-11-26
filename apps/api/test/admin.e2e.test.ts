@@ -163,9 +163,20 @@ describe("opciones de impresión por tablero (D-095, D-108)", () => {
     expect(created.body).toMatchObject({ code: "ASET", tangoSku: "ZZTEST001", width: "160", usableWidth: "155" });
     const dup = await as("owner").post(`/sectors/${dtfId}/variants`, { code: "ASET2", name: "Otra", tangoSku: "ZZTEST001" });
     expect(dup.status).toBe(409);
-    expect(dup.body.message).toBe("Ese código de Tango ya lo tiene otra opción");
+    expect(dup.body.message).toBe("Ese código de Tango ya lo tiene otra opción de este tablero");
     const edited = await as("owner").patch(`/variants/${created.body.id}`, { width: "150", usableWidth: "145" });
     expect(edited.body).toMatchObject({ width: "150", usableWidth: "145", tangoSku: "ZZTEST001" });
+  });
+
+  it("D-117: el mismo material puede estar en otro tablero con el mismo código y el mismo código de Tango", async () => {
+    const inDtf = await as("owner").post(`/sectors/${dtfId}/variants`, { code: "AJBB", name: "Vinilo Jaspe base blanca", tangoSku: "ZZTEST002" });
+    expect(inDtf.status).toBe(201);
+    const inGranFormato = await as("owner").post(`/sectors/${granId}/variants`, { code: "AJBB", name: "Vinilo Jaspe base blanca", tangoSku: "ZZTEST002", width: "106, 127, 137, 152" });
+    expect(inGranFormato.status).toBe(201);
+    expect(inGranFormato.body).toMatchObject({ code: "AJBB", width: "106, 127, 137, 152" });
+    const dup = await as("owner").post(`/sectors/${granId}/variants`, { code: "AJBB", name: "Otro" });
+    expect(dup.status).toBe(409);
+    expect(dup.body.message).toBe("Ese código ya lo usa otra opción de este tablero");
   });
 });
 

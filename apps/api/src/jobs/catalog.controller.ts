@@ -7,11 +7,11 @@ import { ZodBody } from "../common/zod";
 import { PrismaService } from "../prisma/prisma.service";
 import { SectorAccess } from "./sector-access";
 
-/** Código o SKU repetido (D-108): dice cuál de los dos. */
+/** Código o SKU repetido en el tablero (D-108, D-117): dice cuál de los dos. */
 function duplicateVariant(err: unknown): unknown {
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
     const target = String((err.meta as { target?: unknown } | undefined)?.target ?? "");
-    return new ConflictException(target.includes("tangoSku") ? "Ese código de Tango ya lo tiene otra opción" : "Ese código ya lo usa otra opción");
+    return new ConflictException(target.includes("tangoSku") ? "Ese código de Tango ya lo tiene otra opción de este tablero" : "Ese código ya lo usa otra opción de este tablero");
   }
   return err;
 }

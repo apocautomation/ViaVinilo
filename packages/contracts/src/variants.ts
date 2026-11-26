@@ -12,7 +12,10 @@ export interface VariantSeed {
   name: string;
   /** Código del artículo en Tango (D-108). */
   tangoSku?: string;
-  /** Ancho del material y ancho útil de impresión, en cm (A4: "21x29,7"). */
+  /**
+   * Ancho del material y ancho útil de impresión, en cm (A4: "21x29,7"). En Gran Formato (D-117) el ancho
+   * es la lista de rollos separados por coma ("106, 127, 137, 152").
+   */
   width?: string;
   usableWidth?: string;
 }
@@ -27,6 +30,51 @@ const rows = (list: Row[]): VariantSeed[] =>
     ...(width ? { width } : {}),
     ...(usableWidth ? { usableWidth } : {}),
   }));
+
+/**
+ * Gran Formato (D-117, Excel "LONAS Y VINILOS" de Ricardo, 26/11): los mismos vinilos y lonas para
+ * Látex, Ecosolvente y UV rollo a rollo. Vinieron sin código de Tango ni ancho útil, y con varios anchos
+ * de rollo por material (en cm). TODO(spec): I-30, los SKU de Tango y los códigos cortos (los propuse yo).
+ */
+const VINYL_WIDTHS = "106, 127, 137, 152";
+const vinyl = (code: string, name: string): Row => [code, name, "", VINYL_WIDTHS, ""];
+const VINYLS: Row[] = [
+  vinyl("JBB", "Vinilo Jaspe base blanca"),
+  vinyl("JBG", "Vinilo Jaspe base gris"),
+  vinyl("JTR", "Vinilo Jaspe transparente"),
+  vinyl("JMBB", "Vinilo Jaspe mate base blanca"),
+  vinyl("JMBG", "Vinilo Jaspe mate base gris"),
+  vinyl("DBB", "Vinilo DPI base blanca"),
+  vinyl("DBG", "Vinilo DPI base gris"),
+  vinyl("DTR", "Vinilo DPI transparente"),
+  vinyl("DMBG", "Vinilo DPI mate base gris"),
+  vinyl("LG17BB", "Vinilo LG 1700 base blanca"),
+  vinyl("LG17BG", "Vinilo LG 1700 base gris"),
+  vinyl("LG17TR", "Vinilo LG 1700 transparente"),
+  vinyl("LG17MBB", "Vinilo LG 1700 mate base blanca"),
+  vinyl("LG2700", "Vinilo LG 2700 base blanca"),
+  vinyl("LG2710", "Vinilo LG 2710 base gris"),
+  vinyl("LG2812", "Vinilo LG 2812 transparente"),
+  vinyl("LG2710M", "Vinilo LG 2710M mate base gris"),
+  vinyl("INF6000", "Vinilo Inflex 6000 base blanca"),
+  vinyl("INF6200", "Vinilo Inflex 6200 base gris"),
+  vinyl("INF3200", "Vinilo Inflex i3200 bubble free"),
+  vinyl("MICRO", "Vinilo microperforado"),
+];
+/** Rollos de las máquinas rollo a rollo; la de gran formato de Ecosolvente suma los anchos de 1,82 a 3,20 m. */
+const ROLL_WIDTHS = "91, 100, 110, 125, 137, 152, 160";
+const WIDE_WIDTHS = "182, 200, 220, 250, 320";
+const banners = (widths: string): Row[] => [
+  ["L13B", "Lona 13 oz brillo", "", widths, ""],
+  ["L13M", "Lona 13 oz mate", "", widths, ""],
+  ["LBACK", "Lona backlight", "", widths, ""],
+];
+const WIDE_ONLY_BANNERS: Row[] = [
+  ["L8B", "Lona 8 oz brillo", "", "250, 320", ""],
+  ["LMESH", "Lona mesh", "", "220, 250, 320", ""],
+];
+/** Látex y UV rollo a rollo usan los mismos materiales. */
+const ROLL_TO_ROLL = rows([...VINYLS, ...banners(ROLL_WIDTHS)]);
 
 /**
  * Catálogo que pasó Ricardo el 25/11 en los Excel "DETALLE …" (D-108): nombre, ancho, ancho útil y código
@@ -94,6 +142,9 @@ export const DEFAULT_SECTOR_VARIANTS: Partial<Record<BaseSectorCode, VariantSeed
     ["P80A110", "Papel 80 gr (110 cm)", "IMSU00005", "110", "108"],
     ["A4", "A4", "IMSU00004", "21x29,7", "20x28"],
   ]),
+  LATEX: ROLL_TO_ROLL,
+  ECOSOLVENTE: rows([...VINYLS, ...banners(`${ROLL_WIDTHS}, ${WIDE_WIDTHS}`), ...WIDE_ONLY_BANNERS]),
+  UV_ROLLO: ROLL_TO_ROLL,
 };
 
 const code = z
@@ -112,7 +163,9 @@ const optional = (max: number) =>
     .nullable()
     .optional();
 
-export const createVariantSchema = z.object({ code, name, tangoSku: optional(30), width: optional(20), usableWidth: optional(20) });
+/** D-117: un material puede venir en varios anchos de rollo ("91, 100, 110, … 320"). */
+export const VARIANT_WIDTH_MAX = 80;
+export const createVariantSchema = z.object({ code, name, tangoSku: optional(30), width: optional(VARIANT_WIDTH_MAX), usableWidth: optional(20) });
 export const updateVariantSchema = z
   .object({
     code,
@@ -120,7 +173,7 @@ export const updateVariantSchema = z
     active: z.boolean(),
     sortOrder: z.number().int().min(0).max(999),
     tangoSku: optional(30),
-    width: optional(20),
+    width: optional(VARIANT_WIDTH_MAX),
     usableWidth: optional(20),
   })
   .partial()

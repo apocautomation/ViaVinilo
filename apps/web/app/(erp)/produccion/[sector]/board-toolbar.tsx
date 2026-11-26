@@ -39,7 +39,7 @@ export function BoardToolbar({
   onCompact: (value: boolean) => void;
 }) {
   const services = board?.services.map((s) => ({ value: s.code, text: s.name })) ?? [];
-  const variants = board?.variants.map((v) => ({ value: v.id, text: `${v.code} · ${v.name}` })) ?? [];
+  const variants = board?.variants.map((v) => ({ value: v.code, text: `${v.code} · ${v.name}` })) ?? [];
   const machines = board?.machines.map((m) => ({ value: m.id, text: m.name })) ?? [];
   return (
     <div className="toolbar">

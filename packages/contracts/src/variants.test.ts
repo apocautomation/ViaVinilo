@@ -22,13 +22,34 @@ describe("opciones de impresión por tablero (D-095, D-108)", () => {
     expect(DEFAULT_SECTOR_VARIANTS.CALANDRADO!.find((v) => v.code === "COOL")?.tangoSku).toBe("TECA00002");
   });
 
-  it("D-108: los códigos y los SKU no se repiten en todo el sistema, y los códigos valen para el formulario", () => {
-    const all = Object.values(DEFAULT_SECTOR_VARIANTS).flat();
-    expect(new Set(all.map((v) => v.code)).size).toBe(all.length);
-    const skus = all.flatMap((v) => (v.tangoSku ? [v.tangoSku] : []));
-    expect(new Set(skus).size).toBe(skus.length);
-    expect(all.filter((v) => !v.tangoSku).map((v) => v.code)).toEqual(["TCLI"]);
-    for (const v of all) expect(createVariantSchema.safeParse({ code: v.code, name: v.name }).success).toBe(true);
+  it("D-117: los códigos y los SKU no se repiten dentro de cada tablero, y valen para el formulario", () => {
+    for (const list of Object.values(DEFAULT_SECTOR_VARIANTS)) {
+      expect(new Set(list.map((v) => v.code)).size).toBe(list.length);
+      const skus = list.flatMap((v) => (v.tangoSku ? [v.tangoSku] : []));
+      expect(new Set(skus).size).toBe(skus.length);
+      for (const v of list) expect(createVariantSchema.safeParse({ code: v.code, name: v.name, width: v.width }).success).toBe(true);
+    }
+    // Solo la tela del cliente no tiene SKU; Gran Formato todavía no tiene los de Tango (TODO(spec): I-30).
+    const pendingSku = new Set(["LATEX", "ECOSOLVENTE", "UV_ROLLO"]);
+    const withoutSku = Object.entries(DEFAULT_SECTOR_VARIANTS)
+      .filter(([sector]) => !pendingSku.has(sector))
+      .flatMap(([, list]) => list.filter((v) => !v.tangoSku).map((v) => v.code));
+    expect(withoutSku).toEqual(["TCLI"]);
+  });
+
+  it("D-117: lonas y vinilos de Gran Formato con sus anchos de rollo (Excel de Ricardo del 26/11)", () => {
+    const latex = DEFAULT_SECTOR_VARIANTS.LATEX!;
+    // 21 vinilos y 3 lonas, iguales en Látex y UV rollo a rollo.
+    expect(latex).toHaveLength(24);
+    expect(DEFAULT_SECTOR_VARIANTS.UV_ROLLO).toEqual(latex);
+    expect(latex.find((v) => v.code === "JBB")).toEqual({ code: "JBB", name: "Vinilo Jaspe base blanca", width: "106, 127, 137, 152" });
+    expect(latex.find((v) => v.code === "L13B")?.width).toBe("91, 100, 110, 125, 137, 152, 160");
+    // Ecosolvente suma la máquina de gran formato: las lonas llegan a 3,20 m y hay lona 8 oz y mesh.
+    const eco = DEFAULT_SECTOR_VARIANTS.ECOSOLVENTE!;
+    expect(eco).toHaveLength(26);
+    expect(eco.find((v) => v.code === "L13B")?.width).toBe("91, 100, 110, 125, 137, 152, 160, 182, 200, 220, 250, 320");
+    expect(eco.find((v) => v.code === "L8B")).toEqual({ code: "L8B", name: "Lona 8 oz brillo", width: "250, 320" });
+    expect(eco.find((v) => v.code === "LMESH")?.width).toBe("220, 250, 320");
   });
 
   it("D-108: el código va en mayúsculas, sin espacios ni guiones; SKU y anchos son opcionales", () => {

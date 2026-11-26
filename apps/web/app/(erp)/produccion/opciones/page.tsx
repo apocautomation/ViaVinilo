@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
+import { VARIANT_WIDTH_MAX } from "@viavinilo/contracts";
 import { api } from "../../../lib/api";
 import { errorText, useIsOwner } from "../../hooks";
 import { Badge, Loading, PageHead } from "../../ui";
@@ -152,7 +153,7 @@ function SectorVariants({ sector, run }: { sector: Sector; run: (fn: () => Promi
         <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Código · ej.: SET" maxLength={10} aria-label={`Código de la opción para ${sector.name}`} required style={{ width: 140 }} />
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre · ej.: Jersey Set Premium" maxLength={40} aria-label={`Nombre de la opción para ${sector.name}`} required />
         <input value={tangoSku} onChange={(e) => setTangoSku(e.target.value.toUpperCase())} placeholder="Código Tango · ej.: TECA00001" maxLength={30} aria-label={`Código de Tango de la opción para ${sector.name}`} style={{ width: 190 }} />
-        <input value={width} onChange={(e) => setWidth(e.target.value)} placeholder="Ancho (cm)" maxLength={20} aria-label={`Ancho del material para ${sector.name}`} style={{ width: 110 }} />
+        <input value={width} onChange={(e) => setWidth(e.target.value)} placeholder="Ancho (cm) · varios rollos con coma" maxLength={VARIANT_WIDTH_MAX} aria-label={`Ancho del material para ${sector.name}`} style={{ width: 240 }} />
         <input value={usableWidth} onChange={(e) => setUsableWidth(e.target.value)} placeholder="Ancho útil (cm)" maxLength={20} aria-label={`Ancho útil para ${sector.name}`} style={{ width: 130 }} />
         <button className="btn btn-primary btn-sm" disabled={!code.trim() || name.trim().length < 2}>
           <Plus size={14} aria-hidden /> Agregar
