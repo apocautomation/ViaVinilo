@@ -29,8 +29,8 @@ describe("opciones de impresión por tablero (D-095, D-108)", () => {
       expect(new Set(skus).size).toBe(skus.length);
       for (const v of list) expect(createVariantSchema.safeParse({ code: v.code, name: v.name, width: v.width }).success).toBe(true);
     }
-    // Solo la tela del cliente no tiene SKU; Gran Formato todavía no tiene los de Tango (TODO(spec): I-30).
-    const pendingSku = new Set(["LATEX", "ECOSOLVENTE", "UV_ROLLO"]);
+    // Solo la tela del cliente no tiene SKU; Gran Formato todavía no tiene los de Tango (TODO(spec): I-30, I-31).
+    const pendingSku = new Set(["LATEX", "ECOSOLVENTE", "UV_ROLLO", "UV_RIGIDOS"]);
     const withoutSku = Object.entries(DEFAULT_SECTOR_VARIANTS)
       .filter(([sector]) => !pendingSku.has(sector))
       .flatMap(([, list]) => list.filter((v) => !v.tangoSku).map((v) => v.code));
@@ -50,6 +50,27 @@ describe("opciones de impresión por tablero (D-095, D-108)", () => {
     expect(eco.find((v) => v.code === "L13B")?.width).toBe("91, 100, 110, 125, 137, 152, 160, 182, 200, 220, 250, 320");
     expect(eco.find((v) => v.code === "L8B")).toEqual({ code: "L8B", name: "Lona 8 oz brillo", width: "250, 320" });
     expect(eco.find((v) => v.code === "LMESH")?.width).toBe("220, 250, 320");
+  });
+
+  it("D-118: placas de UV rígidos por material y espesor, con las medidas de placa en cm (Excel de Ricardo del 27/11)", () => {
+    const rigid = DEFAULT_SECTOR_VARIANTS.UV_RIGIDOS!;
+    expect(rigid).toHaveLength(26);
+    expect(rigid.find((v) => v.code === "CORR22")).toEqual({ code: "CORR22", name: "Corrugado 2,2 mm", width: "66x50, 100x100, 100x200" });
+    // Las placas de 610x1220 mm del Excel quedan en cm, como el resto de los anchos.
+    expect(rigid.find((v) => v.code === "PVC10")).toEqual({ code: "PVC10", name: "PVC espumado 10 mm", width: "61x61, 61x122, 122x122, 122x244" });
+    expect(rigid.find((v) => v.code === "AI15")?.width).toBe("50x100, 100x100, 100x200");
+    expect(rigid.find((v) => v.code === "ACB5")?.name).toBe("Acrílico blanco traslúcido 5 mm");
+    // Cortes vino sin materiales, solo las unidades de cobro. TODO(spec): I-31, cambiar esto si Ricardo manda opciones.
+    expect(DEFAULT_SECTOR_VARIANTS.CORTES).toBeUndefined();
+  });
+
+  it("D-118: un mail que nombra la placa con su espesor elige esa opción, y sin espesor no elige ninguna", () => {
+    const rigid = withIds(DEFAULT_SECTOR_VARIANTS.UV_RIGIDOS);
+    expect(detectVariant("cartel en alto impacto 1,5 mm, 100x200", rigid)).toBe("AI15");
+    expect(detectVariant("cartel en alto impacto 1 mm", rigid)).toBe("AI1");
+    expect(detectVariant("cartel en PVC espumado", rigid)).toBeNull();
+    // Sin espacio antes de "mm" no coincide con el nombre: lo elige el taller a mano.
+    expect(detectVariant("cartel en alto impacto 3mm", rigid)).toBeNull();
   });
 
   it("D-108: el código va en mayúsculas, sin espacios ni guiones; SKU y anchos son opcionales", () => {

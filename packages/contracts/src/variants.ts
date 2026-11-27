@@ -14,7 +14,8 @@ export interface VariantSeed {
   tangoSku?: string;
   /**
    * Ancho del material y ancho útil de impresión, en cm (A4: "21x29,7"). En Gran Formato (D-117) el ancho
-   * es la lista de rollos separados por coma ("106, 127, 137, 152").
+   * es la lista de rollos separados por coma ("106, 127, 137, 152"); en UV rígidos (D-118), las medidas de
+   * placa ("61x122, 122x244").
    */
   width?: string;
   usableWidth?: string;
@@ -75,6 +76,50 @@ const WIDE_ONLY_BANNERS: Row[] = [
 ];
 /** Látex y UV rollo a rollo usan los mismos materiales. */
 const ROLL_TO_ROLL = rows([...VINYLS, ...banners(ROLL_WIDTHS)]);
+
+/**
+ * UV rígidos (D-118, Excel "UV RIGIDO" de Ricardo, 27/11): una opción por material y espesor, con las
+ * medidas de placa en cm (el Excel trae las placas de 610x1220 en mm). Sin SKU de Tango ni ancho útil.
+ * TODO(spec): I-31, los SKU y los códigos cortos (los propuse yo).
+ */
+const SHEET_SIZES = "61x61, 61x122, 122x122, 122x244";
+const CORRUGATED_SMALL_SIZES = "66x50, 100x100, 100x200";
+const HIGH_IMPACT_SIZES = "50x100, 100x100, 100x200";
+const sheet = (code: string, material: string, thickness: string, sizes = SHEET_SIZES): Row => [
+  code,
+  `${material} ${thickness} mm`,
+  "",
+  sizes,
+  "",
+];
+const UV_RIGID_SHEETS: Row[] = [
+  sheet("CORR22", "Corrugado", "2,2", CORRUGATED_SMALL_SIZES),
+  sheet("CORR24", "Corrugado", "2,4"),
+  sheet("CORR25", "Corrugado", "2,5", CORRUGATED_SMALL_SIZES),
+  sheet("CORR3", "Corrugado", "3"),
+  sheet("CORR4", "Corrugado", "4"),
+  sheet("CORR6", "Corrugado", "6"),
+  sheet("CORR7", "Corrugado", "7"),
+  sheet("CORR8", "Corrugado", "8"),
+  sheet("AI03", "Alto impacto", "0,3", HIGH_IMPACT_SIZES),
+  sheet("AI05", "Alto impacto", "0,5", HIGH_IMPACT_SIZES),
+  sheet("AI08", "Alto impacto", "0,8", HIGH_IMPACT_SIZES),
+  sheet("AI1", "Alto impacto", "1", HIGH_IMPACT_SIZES),
+  sheet("AI15", "Alto impacto", "1,5", HIGH_IMPACT_SIZES),
+  sheet("AI2", "Alto impacto", "2", HIGH_IMPACT_SIZES),
+  sheet("AI3", "Alto impacto", "3", HIGH_IMPACT_SIZES),
+  sheet("PVC2", "PVC espumado", "2"),
+  sheet("PVC3", "PVC espumado", "3"),
+  sheet("PVC5", "PVC espumado", "5"),
+  sheet("PVC10", "PVC espumado", "10"),
+  sheet("ACT2", "Acrílico transparente", "2"),
+  sheet("ACT3", "Acrílico transparente", "3"),
+  sheet("ACT5", "Acrílico transparente", "5"),
+  sheet("ACB2", "Acrílico blanco traslúcido", "2"),
+  sheet("ACB3", "Acrílico blanco traslúcido", "3"),
+  sheet("ACB5", "Acrílico blanco traslúcido", "5"),
+  sheet("FOAM5", "Foam board", "5"),
+];
 
 /**
  * Catálogo que pasó Ricardo el 25/11 en los Excel "DETALLE …" (D-108): nombre, ancho, ancho útil y código
@@ -145,6 +190,7 @@ export const DEFAULT_SECTOR_VARIANTS: Partial<Record<BaseSectorCode, VariantSeed
   LATEX: ROLL_TO_ROLL,
   ECOSOLVENTE: rows([...VINYLS, ...banners(`${ROLL_WIDTHS}, ${WIDE_WIDTHS}`), ...WIDE_ONLY_BANNERS]),
   UV_ROLLO: ROLL_TO_ROLL,
+  UV_RIGIDOS: rows(UV_RIGID_SHEETS),
 };
 
 const code = z

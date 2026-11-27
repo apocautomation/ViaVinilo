@@ -497,10 +497,13 @@ export class JobsService {
 
     return {
       sector: { id: sector.id, code: sector.code, name: sector.name },
-      /** Materiales de los tableros que se ven, para filtrar (D-095). Uno por código (D-117). */
+      /**
+       * Materiales de los tableros que se ven, para filtrar (D-095). Uno por código (D-117), agrupados por
+       * sub-servicio para que las placas de UV rígidos no queden entre los vinilos (D-118).
+       */
       variants: await this.prisma.sectorVariant.findMany({
         where: { active: true, sectorId: { in: family.map((f) => f.id) } },
-        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        orderBy: [{ sector: { name: "asc" } }, { sortOrder: "asc" }, { name: "asc" }],
         select: { id: true, code: true, name: true },
         distinct: ["code"],
       }),
