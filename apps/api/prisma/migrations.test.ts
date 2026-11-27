@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 import { JOB_STATUSES, SECTOR_CODES } from "@viavinilo/contracts";
+import { SECTOR_VARIANTS } from "./seed-data";
 
 const prismaDir = __dirname;
 const schema = readFileSync(join(prismaDir, "schema.prisma"), "utf8");
@@ -49,6 +50,29 @@ describe("migraciones", () => {
     expect((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM "JobOrder" WHERE "sectorId" = 's2'`)).rows[0]!.n).toBe(1);
   });
 
+
+  it("D-117, D-118: las migraciones de opciones cargan en producción lo mismo que el seed", async () => {
+    const db = new PGlite();
+    const dir = join(prismaDir, "migrations");
+    const all = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+    const cut = all.indexOf("20261126180000_gran_formato_materials");
+    expect(cut).toBeGreaterThan(0);
+    for (const m of all.slice(0, cut)) await db.exec(readFileSync(join(dir, m, "migration.sql"), "utf8"));
+    // Producción ya tiene los tableros: las migraciones solo agregan sus opciones.
+    const sectors = ["LATEX", "ECOSOLVENTE", "UV_ROLLO", "UV_RIGIDOS"];
+    for (const code of sectors) {
+      await db.exec(`INSERT INTO "Sector" (id, code, name, "updatedAt") VALUES ('${code}', '${code}', '${code}', now())`);
+    }
+    for (const m of all.slice(cut)) await db.exec(readFileSync(join(dir, m, "migration.sql"), "utf8"));
+    const { rows } = await db.query<Record<string, unknown>>(
+      `SELECT "sectorId" AS sector, code, name, "tangoSku", width, "usableWidth", "sortOrder"
+       FROM "SectorVariant" ORDER BY "sectorId", "sortOrder"`,
+    );
+    const seeded = SECTOR_VARIANTS.filter((v) => sectors.includes(v.sector));
+    const bySector = (list: { sector: string; sortOrder: number }[]) =>
+      [...list].sort((a, b) => a.sector.localeCompare(b.sector) || a.sortOrder - b.sortOrder);
+    expect(rows).toEqual(bySector(seeded));
+  });
 
   it("se aplican en orden sobre un Postgres vacío y crean las tablas de la E1", async () => {
     const db = new PGlite();

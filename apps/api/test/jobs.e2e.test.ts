@@ -655,6 +655,19 @@ describe("materiales por tablero (D-095)", () => {
     const moved = await http("owner").patch(`/jobs/${latexJob.id}/service`, { sector: "ECOSOLVENTE" });
     expect(moved.body.variant).toMatchObject({ id: inEco.id, code: "TJBB" });
   });
+
+  it("D-118: en Gran Formato el filtro agrupa las opciones por sub-servicio, no las mezcla por su orden", async () => {
+    const variant = (sector: "LATEX" | "UV_RIGIDOS", code: string, sortOrder: number) =>
+      prisma.sectorVariant.create({ data: { sectorId: sectors[sector]!.id, code, name: `Opción ${code}`, sortOrder } });
+    await variant("UV_RIGIDOS", "TPLA1", 1);
+    await variant("LATEX", "TVIN1", 1);
+    await variant("UV_RIGIDOS", "TPLA2", 2);
+    await variant("LATEX", "TVIN2", 2);
+
+    const board = await http("owner").get("/jobs/board?sector=GRAN_FORMATO");
+    const codes = board.body.variants.map((v: { code: string }) => v.code).filter((c: string) => /^T(PLA|VIN)\d$/.test(c));
+    expect(codes).toEqual(["TVIN1", "TVIN2", "TPLA1", "TPLA2"]);
+  });
 });
 
 describe("asignación de máquina", () => {
